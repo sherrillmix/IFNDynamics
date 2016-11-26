@@ -41,4 +41,27 @@ for(ii in 1:nrow(props[[1]])){
 }
 dev.off()
 
+out2<-data.frame('sample'=samples,'IC50_1'=NA,'IC50_2'=NA,'Vres_1'=NA,'Vres_2'=NA,'analVres_1'=NA,'analVres_2'=NA,row.names=samples)
+pdf('check2.pdf',height=5,width=10)
+for(ii in 1:nrow(splits[[1]])){
+  message(samples[ii])
+  fit1<-suppressWarnings(nlminb(c(1,1,1,0),LS,x=conc,y=splits[[1]][ii,],lower=c(0,-Inf,-Inf,0))$par)
+  fit2<-suppressWarnings(nlminb(c(1,1,1,0),LS,x=conc,y=splits[[2]][ii,],lower=c(0,-Inf,-Inf,0))$par)
+  fitLine1<-f(fit1,fakeConc)
+  fitLine2<-f(fit2,fakeConc)
+  ic1<-approx(fitLine1,fakeConc,.5)$y
+  ic2<-approx(fitLine2,fakeConc,.5)$y
+  plot(1,1,type='n',log='x',xlim=range(conc[-1])*c(1e-3,1e3),ylim=range(c(splits[[1]][ii,],splits[[2]][ii,])),xlab='Concentration',ylab='Proportion',xaxt='n',main=samples[ii])
+  logAxis(1)
+  points(conc[conc>0],splits[[1]][ii,-1],pch=21,bg='#FF000099',cex=1.5,col=NA)
+  points(conc[conc>0],splits[[2]][ii,-1],pch=21,bg='#0000FF99',cex=1.5,col=NA)
+  lines(fakeConc,fitLine1,col='#FF000066')
+  lines(fakeConc,fitLine2,col='#0000FF66')
+  abline(h=.5,lty=2)
+  segments(ic1,par('usr')[3],ic1,.5,col='#FF000066',lty=2)
+  segments(ic2,par('usr')[3],ic2,.5,col='#0000FF66',lty=2)
+  out2[samples[ii],c('IC50_1','IC50_2','Vres_1','Vres_2','analVres_1','analVres_2')]<-c(ic1,ic2,props[[1]][ii,length(conc)],props[[2]][ii,length(conc)],fit1[4],fit2[4])
+}
+dev.off()
+
 
