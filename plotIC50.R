@@ -12,8 +12,13 @@ cols2<-rainbow.lab(length(unique(patient)),alpha=.2)
 names(cols)<-names(cols2)<-unique(patient)
 pdf('ic50_vs_time.pdf',height=4,width=6)
 par(mar=c(3.3,3.3,1.2,.2))
-plot(ic50df$day,ic50df$ic50,log='y',yaxt='n',pch=21,bg=cols[ic50df$patient],cex=1.4,col=cols[ic50df$patient],xlab='Days after infection',ylab='IFNa2 IC50',mgp=c(2.3,.8,0))
+fit<-lm(I(log(ic50))~day+day2,data=ic50df)
+fakeDays<-2^2:2^12
+pred<-exp(predict(fit,data.frame('day'=fakeDays,'day2'=fakeDays^2),interval='prediction'))
+plot(ic50df$day,ic50df$ic50,log='y',yaxt='n',pch=21,bg=cols[ic50df$patient],cex=1.4,col=cols[ic50df$patient],xlab='Days after infection',ylab='IFNa2 IC50',mgp=c(2.3,.8,0),main=sprintf('All r^2=%0.3f',summary(fit)$adj.r.squared))
 logAxis(2,las=1,mgp=c(3,.8,0))
+lines(fakeDays,pred[,1],col='#00000022')
+polygon(c(fakeDays,rev(fakeDays)),c(pred[,2],rev(pred[,3])),col='#00000011',border=NA)
 #axis(1,2^(1:12),mgp=c(3,.8,0))
 legend('topright',names(cols),pch=21,pt.bg=cols,col=cols,pt.cex=1.4,inset=.02)
 for(ii in unique(patient)){
@@ -21,7 +26,6 @@ for(ii in unique(patient)){
   plot(ic50df$day,ic50df$ic50,log='y',yaxt='n',xlab='Days after infection',ylab='IFNa2 IC50',mgp=c(2.3,.8,0),type='n',main=sprintf('%s r^2=%0.3f',ii,summary(fit)$adj.r.squared))
   logAxis(2,las=1,mgp=c(3,.8,0))
   #axis(1,2^(1:12),mgp=c(3,.8,0))
-  fakeDays<-2^2:2^12
   #pred<-fit$coef['(Intercept)']+fit$coef['day']*fakeDays+fit$coef['I(day^2)']*fakeDays^2
   pred<-exp(predict(fit,data.frame('day'=fakeDays,'day2'=fakeDays^2),interval='prediction'))
   lines(fakeDays,pred[,1],col=cols[ii])
