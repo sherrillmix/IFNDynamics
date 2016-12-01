@@ -13,7 +13,7 @@ readHeadedCsv<-function(fileName){
   return(ic50df) 
 }
 
-plotIc50<-function(ic50,ylab='IFNa2 IC50',outFile='out.pdf',fitAll=FALSE,legendPos='topright'){
+plotIc50<-function(ic50,ylab='IFNa2 IC50',outFile='out.pdf',fitAll=FALSE,legendPos='topright',isLog=TRUE){
   cols<-rainbow.lab(length(unique(ic50$patient)),alpha=.6)
   cols2<-rainbow.lab(length(unique(ic50$patient)),alpha=.2)
   names(cols)<-names(cols2)<-unique(ic50$patient)
@@ -22,8 +22,8 @@ plotIc50<-function(ic50,ylab='IFNa2 IC50',outFile='out.pdf',fitAll=FALSE,legendP
     fit<-lm(I(log(ic50))~day+day2,data=ic50)
     fakeDays<-2^2:2^12
     pred<-exp(predict(fit,data.frame('day'=fakeDays,'day2'=fakeDays^2),interval='prediction'))
-    plot(ic50$day,ic50$ic50,log='y',yaxt='n',pch=21,bg=cols[ic50$patient],cex=1.4,col=cols[ic50$patient],xlab='Days after infection',ylab=ylab,mgp=c(2.3,.8,0))
-    logAxis(2,las=1,mgp=c(3,.8,0))
+    plot(ic50$day,ic50$ic50,log=ifelse(isLog,'y',''),yaxt=ifelse(isLog,'n','s'),pch=21,bg=cols[ic50$patient],cex=1.4,col=cols[ic50$patient],xlab='Days after infection',ylab=ylab,mgp=c(2.3,.8,0))
+    if(isLog)logAxis(2,las=1,mgp=c(3,.8,0))
     if(fitAll){
       lines(fakeDays,pred[,1],col='#00000022')
       polygon(c(fakeDays,rev(fakeDays)),c(pred[,2],rev(pred[,3])),col='#00000011',border=NA)
@@ -32,8 +32,8 @@ plotIc50<-function(ic50,ylab='IFNa2 IC50',outFile='out.pdf',fitAll=FALSE,legendP
     legend(legendPos,names(cols),pch=21,pt.bg=cols,col=cols,pt.cex=1.4,inset=.02)
     for(ii in unique(ic50$patient)){
       fit<-lm(I(log(ic50))~day+day2,data=ic50[ic50$patient==ii,])
-      plot(ic50$day,ic50$ic50,log='y',yaxt='n',xlab='Days after infection',ylab='IFNa2 IC50',mgp=c(2.3,.8,0),type='n',main=sprintf('%s r^2=%0.3f',ii,summary(fit)$adj.r.squared))
-      logAxis(2,las=1,mgp=c(3,.8,0))
+      plot(ic50$day,ic50$ic50,log=ifelse(isLog,'y',''),yaxt=ifelse(isLog,'n','s'),xlab='Days after infection',ylab=ylab,mgp=c(2.3,.8,0),type='n',main=sprintf('%s r^2=%0.3f',ii,summary(fit)$adj.r.squared))
+      if(isLog)logAxis(2,las=1,mgp=c(3,.8,0))
       pred<-exp(predict(fit,data.frame('day'=fakeDays,'day2'=fakeDays^2),interval='prediction'))
       lines(fakeDays,pred[,1],col=cols[ii])
       polygon(c(fakeDays,rev(fakeDays)),c(pred[,2],rev(pred[,3])),col=cols2[ii],border=NA)
@@ -48,7 +48,7 @@ betaIc50<-readHeadedCsv('data/IC50s for all subjects_2_beta.csv')
 betaVres<-readHeadedCsv('data/IC50s for all subjects_2_betaVres.csv')
 
 plotIc50(alphaIc50,'IFNa2 IC50','out/ifna2_ic50.pdf')
-plotIc50(alphaVres,'IFNa2 Vres','out/ifna2_vres.pdf',legendPos='bottomleft')
+plotIc50(alphaVres,'IFNa2 Vres','out/ifna2_vres.pdf',isLog=FALSE)
 plotIc50(betaIc50,'IFNb IC50','out/ifnb_ic50.pdf')
-plotIc50(betaVres,'IFNb Vres','out/ifnb_vres.pdf')
+plotIc50(betaVres,'IFNb Vres','out/ifnb_vres.pdf',isLog=FALSE)
 
