@@ -13,7 +13,7 @@ f<-function(B,x)(B[1]-B[4])/(1+(x/B[3])^B[2])+B[4]
 fFixMax<-function(B,x,max=1)f(c(B,max),x)
 LS<-function(B,y,x)sum((y-f(B,x))^2)
 
-args<-c('ic50.csv','conc.csv')
+args<-c('data/ic50.csv','data/conc.csv')
 ic50s<-read.csv(args[[1]],stringsAsFactors=FALSE,header=FALSE)
 conc<-unlist(read.csv(args[[2]],header=FALSE)[1,])
 samples<-ic50s[,1]
@@ -23,7 +23,7 @@ props<-lapply(splits,function(xx)sweep(xx,1,xx[,1],'/'))
 if(any(dim(props[[1]])!=dim(props[[2]])))stop("Mismatch in IC50 dimensions between replicates")
 fakeConc<-10^seq(-10,10,.001)
 out<-data.frame('sample'=samples,'IC50_1'=NA,'IC50_2'=NA,'Vres_1'=NA,'Vres_2'=NA,'analVres_1'=NA,'analVres_2'=NA,row.names=samples)
-pdf('check.pdf',height=5,width=10)
+pdf('out/check.pdf',height=5,width=10)
 for(ii in 1:nrow(props[[1]])){
   message(samples[ii])
   fit1<-suppressWarnings(nlminb(c(1,1,1,0),LS,x=conc[-1],y=props[[1]][ii,-1],lower=c(0,-Inf,-Inf,0),upper=c(1,Inf,Inf,1))$par)
@@ -46,7 +46,7 @@ for(ii in 1:nrow(props[[1]])){
 dev.off()
 
 out2<-data.frame('sample'=samples,'IC50_1'=NA,'IC50_2'=NA,'Vres_1'=NA,'Vres_2'=NA,'analVres_1'=NA,'analVres_2'=NA,row.names=samples)
-pdf('check2.pdf',height=5,width=10)
+pdf('out/check2.pdf',height=5,width=10)
 for(ii in 1:nrow(splits[[1]])){
   message(samples[ii])
   fit1<-suppressWarnings(nlminb(c(max(splits[[1]][ii,]),1,1,1),LS,x=conc,y=splits[[1]][ii,],lower=c(0,-Inf,-Inf,0))$par)

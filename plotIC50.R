@@ -1,6 +1,6 @@
 library(dnar)
 library(vipor)
-ic50<-read.csv('IC50s for all subjects.csv',header=FALSE,stringsAsFactors=FALSE)[,-1:-2]
+ic50<-read.csv('data/IC50s for all subjects.csv',header=FALSE,stringsAsFactors=FALSE)[,-1:-2]
 day<-as.numeric(as.vector(ic50[3,]))
 patient<-unlist(ic50[1,])
 ic50<-apply(ic50[-1:-3,],2,as.numeric)
@@ -10,7 +10,7 @@ ic50df$day2<-ic50df$day^2
 cols<-rainbow.lab(length(unique(patient)),alpha=.6)
 cols2<-rainbow.lab(length(unique(patient)),alpha=.2)
 names(cols)<-names(cols2)<-unique(patient)
-pdf('ic50_vs_time.pdf',height=4,width=6)
+pdf('out/ic50_vs_time.pdf',height=4,width=6)
 par(mar=c(3.3,3.3,1.2,.2))
 fit<-lm(I(log(ic50))~day+day2,data=ic50df)
 fakeDays<-2^2:2^12
