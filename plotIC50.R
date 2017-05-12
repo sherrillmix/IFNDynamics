@@ -1,12 +1,13 @@
 library(dnar)
 library(vipor)
-readHeadedCsv<-function(fileName){
+readHeadedCsv<-function(fileName,hasDays=TRUE){
   ic50<-read.csv(fileName,header=FALSE,stringsAsFactors=FALSE)[,-1]
   labs<-ic50[,1]
   ic50<-ic50[,-1]
-  day<-as.numeric(as.vector(ic50[3,]))
+  if(hasDays)day<-as.numeric(as.vector(ic50[3,]))
+  else day<-as.numeric(as.vector(ic50[2,]))*7
   patient<-unlist(ic50[1,])
-  ic50<-apply(ic50[-1:-3,],2,as.numeric)
+  ic50<-apply(ic50[-1:-ifelse(hasDays,3,2),],2,as.numeric)
   ic50df<-data.frame('ic50'=as.vector(ic50),'patient'=rep(patient,each=nrow(ic50)),'day'=rep(day,each=nrow(ic50)),stringsAsFactors=FALSE)
   ic50df<-ic50df[!is.na(ic50df$ic50),]
   ic50df$day2<-ic50df$day^2
@@ -42,8 +43,14 @@ plotIc50<-function(ic50,ylab='IFNa2 IC50',outFile='out.pdf',fitAll=TRUE,legendPo
   dev.off()
 }
 
-alphaIc50<-readHeadedCsv('data/IC50s for all subjects_2_alpha.csv')
-alphaVres<-readHeadedCsv('data/IC50s for all subjects_2_alphaVres.csv')
+alphaIc50<-rbind(
+  readHeadedCsv('data/IC50s for all subjects_2_alpha.csv'),
+  readHeadedCsv('data/IC50_patient5_alpha.csv',FALSE)
+)
+alphaVres<-rbind(
+  readHeadedCsv('data/IC50s for all subjects_2_alphaVres.csv'),
+  readHeadedCsv('data/IC50_patient5_alphaVres.csv',FALSE)
+)
 betaIc50<-readHeadedCsv('data/IC50s for all subjects_2_beta.csv')
 betaVres<-readHeadedCsv('data/IC50s for all subjects_2_betaVres.csv')
 
