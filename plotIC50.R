@@ -13,7 +13,7 @@ readHeadedCsv<-function(fileName){
   return(ic50df) 
 }
 
-plotIc50<-function(ic50,ylab='IFNa2 IC50',outFile='out.pdf',fitAll=FALSE,legendPos='topright',isLog=TRUE){
+plotIc50<-function(ic50,ylab='IFNa2 IC50',outFile='out.pdf',fitAll=TRUE,legendPos='topright',isLog=TRUE){
   cols<-rainbow.lab(length(unique(ic50$patient)),alpha=.6)
   cols2<-rainbow.lab(length(unique(ic50$patient)),alpha=.2)
   names(cols)<-names(cols2)<-unique(ic50$patient)
