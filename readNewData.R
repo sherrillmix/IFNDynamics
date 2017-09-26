@@ -86,7 +86,8 @@ dev.off()
 plot3vars<-function(var,lab,dat,logX=FALSE){
   logAdd<-ifelse(logX,'x','')
   logAddY<-sprintf('%sy',logAdd)
-  par(mfrow=c(2,3),mar=c(3.6,4.2,1.1,11))
+  layout(matrix(c(1,1,2,2,3,3,0,4,4,5,5,0),nrow=2,byrow=TRUE))
+  par(mar=c(3.6,6.2,1.1,11))
   for(ii in unique(dat$pat)){
     withAs(xx=dat[dat$pat==ii,],plot(xx$time/7,xx[,var],bg=patCols[xx$pat],pch=21,las=1,log=logAddY,yaxt='n',xlab='',ylab=lab,main=ii,xlim=range(dat$time/7),ylim=range(dat[,var],na.rm=TRUE)))
     title(xlab='Time (weeks)',mgp=c(2,1,0))
@@ -103,7 +104,6 @@ plot3vars<-function(var,lab,dat,logX=FALSE){
     text(convertLineToUser(8,4),mean(par('usr')[3:4]),'CD4 count',srt=-90,xpd=NA,col='red')
   }
   #changing scales
-  par(mfrow=c(2,3))
   for(ii in unique(dat$pat)){
     withAs(xx=dat[dat$pat==ii,],plot(xx$time/7,xx[,var],bg=patCols[xx$pat],pch=21,las=1,log=logAddY,yaxt='n',xlab='',ylab=lab,main=ii))
     title(xlab='Time (weeks)',mgp=c(2,1,0))
@@ -204,28 +204,38 @@ for(ii in names(fits)){
 
 fitsBeta<-lapply(unique(dat$pat),function(xx)lm(I(log(beta))~time+time2+log(vl):I(time>35*7)+CD4:I(time>35*7),dat=dat[dat$pat==xx&!is.na(dat$beta),]))
 
-pdf('out/predictions.pdf',width=7.5,height=4)
-  plot(dat$time/7,dat$ic50,yaxt='n',log='y',bg=patCols[dat$pat],pch=21,type='n',xlab='',ylab='Interferon alpha IC50')
-  title(xlab='Time following onset of symptoms (weeks)',mgp=c(2,1,0))
-  #logAxis(1,addExtra=TRUE,exponent=FALSE)
-  logAxis(2,las=2)
-  patTimeMeans<-tapply(dat$ic50,list(dat$pat,dat$time),mean,na.rm=TRUE)
-  patTimeSd<-tapply(dat$ic50,list(dat$pat,dat$time),sd,na.rm=TRUE)
-  patTimeSe<-patTimeSd/tapply(dat$ic50,list(dat$pat,dat$time),function(xx)sum(!is.na(xx)))
-  for(xx in rownames(patTimeMeans)){
-    thisFit<-simpleFits[[xx]]
-    fakeDays<-(min(dat[dat$pat==xx,'time'])):(max(dat[dat$pat==xx,'time'])+50)
-    predIc50<-predict(thisFit,data.frame('time'=fakeDays,'time2'=fakeDays^2,'logTime'=log(fakeDays),'logTime2'=log(fakeDays)^2,'logTime3'=log(fakeDays)^3,'logTime4'=log(fakeDays)^4),interval='confidence')
-    #predIc50<-predict(thisFit,data.frame('time'=fakeDays,'time2'=fakeDays^2),interval='confidence')
-    lines(fakeDays/7,exp(predIc50[,'fit']),col=patCols[xx])
-    polygon(c(fakeDays/7,rev(fakeDays)/7),c(exp(predIc50[,'lwr']),rev(exp(predIc50[,'upr']))),col=patCols2[xx],border=NA)
+pdf('out/predictions.pdf',width=4.5,height=4.5)
+  par(mar=c(3.5,3.7,.1,.1))
+  for(ii in names(ifnVars)){
+    isVres<-grepl('Vres',ii)
+    plot(dat$time/7,dat[,ifnVars[ii]],las=1,yaxt='n',log=ifelse(isVres,'','y'),type='n',xlab='',ylab=ii,yaxt=ifelse(isVres,'s','n'),mgp=c(2.5,1,0))
+    title(xlab='Time following onset of symptoms (weeks)',mgp=c(2.2,1,0))
+    if(!isVres)logAxis(2,las=1)
+    #logAxis(1,addExtra=TRUE,exponent=FALSE)
+    patTimeMeans<-tapply(dat[,ifnVars[ii]],list(dat$pat,dat$time),mean,na.rm=TRUE)
+    patTimeSd<-tapply(dat[,ifnVars[ii]],list(dat$pat,dat$time),sd,na.rm=TRUE)
+    patTimeSe<-patTimeSd/tapply(dat[,ifnVars[ii]],list(dat$pat,dat$time),function(xx)sum(!is.na(xx)))
+    for(xx in rownames(patTimeMeans)){
+      thisDat<-dat[dat$pat==xx,]
+      thisDat$target<-thisDat[,ifnVars[ii]]
+      if(!isVres)thisDat$target<-log10(thisDat$target)
+      else thisDat$target<-log(thisDat$target/100/(1-thisDat$target/100))
+      thisFit<-lm(target~time+time2,data=thisDat)
+      fakeDays<-(min(dat[dat$pat==xx,'time'])):(max(dat[dat$pat==xx,'time'])+50)
+      predIc50<-predict(thisFit,data.frame('time'=fakeDays,'time2'=fakeDays^2,'logTime'=log(fakeDays),'logTime2'=log(fakeDays)^2,'logTime3'=log(fakeDays)^3,'logTime4'=log(fakeDays)^4),interval='confidence')
+      if(!isVres)predIc50<-10^predIc50
+      else predIc50<-1/(1+exp(-predIc50))*100
+      #predIc50<-predict(thisFit,data.frame('time'=fakeDays,'time2'=fakeDays^2),interval='confidence')
+      lines(fakeDays/7,predIc50[,'fit'],col=patCols[xx])
+      polygon(c(fakeDays/7,rev(fakeDays)/7),c(predIc50[,'lwr'],rev(predIc50[,'upr'])),col=patCols2[xx],border=NA)
+    }
+    for(xx in rownames(patTimeMeans)){
+      #segments(as.numeric(colnames(patTimeMeans))/7,patTimeMeans[xx,]+1.96*patTimeSd[xx,],as.numeric(colnames(patTimeMeans))/7,patTimeMeans[xx,]-1.96*patTimeSd[xx,],pch='-',col=patCols[xx],lwd=3)
+      segments(as.numeric(colnames(patTimeMeans))/7,patTimeMeans[xx,]+patTimeSe[xx,]*1.96,as.numeric(colnames(patTimeMeans))/7,patTimeMeans[xx,]+patTimeSe[xx,]*-1.96,col=patCols[xx],lwd=2)
+      points(as.numeric(colnames(patTimeMeans))/7,patTimeMeans[xx,],pch=21,bg=patCols[xx],cex=1)
+    }
+    legend('top',names(patCols),col=patCols,inset=.01,ncol=3,lty=1,lwd=2,bty='n')
   }
-  for(xx in rownames(patTimeMeans)){
-    #points(as.numeric(colnames(patTimeMeans))/7,patTimeMeans[xx,],pch=21,bg=patCols[xx],cex=1)
-    #segments(as.numeric(colnames(patTimeMeans))/7/1.02,patTimeMeans[xx,],as.numeric(colnames(patTimeMeans))/7*1.02,patTimeMeans[xx,],pch='-',col=patCols[xx],lwd=3)
-    #segments(as.numeric(colnames(patTimeMeans))/7,patTimeMeans[xx,]+patTimeSe[xx,]*1.96,as.numeric(colnames(patTimeMeans))/7,patTimeMeans[xx,]+patTimeSe[xx,]*-1.96,col=patCols[xx],lwd=2)
-  }
-  legend('top',names(patCols),col=patCols,inset=.01,ncol=2,lty=1)
 dev.off()
 
 pdf('out/indivPredictions.pdf',width=5,height=4)
@@ -294,25 +304,25 @@ pdf('out/data.pdf',width=6,height=4.5)
       title(xlab='Time (weeks)',mgp=c(2.2,1,0))
       if(!isVres)logAxis(2,las=1)
       legend('top',names(patCols),pch=21,pt.bg=patCols,inset=.01,ncol=3)
-    thisDat<-dat
-    thisDat$target<-thisDat[,ifnVars[ii]]
-    if(!isVres)thisDat$target<-log10(thisDat$target)
-    thisDat$time3<-thisDat$time^3
-    thisDat$time4<-thisDat$time^4
-    #thisFit<-lm(target~time+time2+time3+time4,data=thisDat)
-    thisFit<-lm(target~time+time2,data=thisDat)
-    print(summary(step(thisFit)))
-    fakeDays<-1:(max(dat$time)+50)
-    fakeDat<-data.frame('time'=fakeDays,'time2'=fakeDays^2,'time3'=fakeDays^3,'time4'=fakeDays^4,'logTime'=log(fakeDays),'logTime2'=log(fakeDays)^2,'logTime3'=log(fakeDays)^3,'logTime4'=log(fakeDays)^4)
-    predIc50<-predict(thisFit,fakeDat,interval='confidence')
-    if(!isVres)predIc50<-10^predIc50
-    if(jj>=2){
-      lines(fakeDays/7,(predIc50[,'fit']))
-      polygon(c(fakeDays/7,rev(fakeDays)/7),c((predIc50[,'lwr']),rev((predIc50[,'upr']))),col='#00000033',border=NA)
-      predIc50<-predict(thisFit,fakeDat,interval='prediction')
+      thisDat<-dat
+      thisDat$target<-thisDat[,ifnVars[ii]]
+      if(!isVres)thisDat$target<-log10(thisDat$target)
+      thisDat$time3<-thisDat$time^3
+      thisDat$time4<-thisDat$time^4
+      #thisFit<-lm(target~time+time2+time3+time4,data=thisDat)
+      thisFit<-lm(target~time+time2,data=thisDat)
+      print(summary(step(thisFit)))
+      fakeDays<-1:(max(dat$time)+50)
+      fakeDat<-data.frame('time'=fakeDays,'time2'=fakeDays^2,'time3'=fakeDays^3,'time4'=fakeDays^4,'logTime'=log(fakeDays),'logTime2'=log(fakeDays)^2,'logTime3'=log(fakeDays)^3,'logTime4'=log(fakeDays)^4)
+      predIc50<-predict(thisFit,fakeDat,interval='confidence')
       if(!isVres)predIc50<-10^predIc50
-      if(jj==3)polygon(c(fakeDays/7,rev(fakeDays)/7),c((predIc50[,'lwr']),rev((predIc50[,'upr']))),col='#00000011',border=NA)
-    }
+      if(jj>=2){
+        lines(fakeDays/7,(predIc50[,'fit']))
+        polygon(c(fakeDays/7,rev(fakeDays)/7),c((predIc50[,'lwr']),rev((predIc50[,'upr']))),col='#00000033',border=NA)
+        predIc50<-predict(thisFit,fakeDat,interval='prediction')
+        if(!isVres)predIc50<-10^predIc50
+        if(jj==3)polygon(c(fakeDays/7,rev(fakeDays)/7),c((predIc50[,'lwr']),rev((predIc50[,'upr']))),col='#00000011',border=NA)
+      }
     }
   }
 dev.off()
