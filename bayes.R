@@ -11,60 +11,62 @@ stanCode<-'
     int<lower=0> nPat;
     int<lower=0> alphaPatientId[alphaN];
     int<lower=0> betaPatientId[betaN];
-    int<lower=0> alphaDay[alphaN];
-    vector<lower=0>[alphaN] alphaDayReal;
-    int<lower=0> betaDay[betaN];
+    vector<lower=0>[alphaN] alphaDay;
+    vector<lower=0>[betaN] betaDay;
+    vector<lower=0>[alphaN] alphaDay2;
+    vector<lower=0>[betaN] betaDay2;
     real ic50Alpha[alphaN];
     real ic50Beta[betaN];
-    vector[alphaN] alphaVl;
-    vector[betaN] betaVl;
-    vector<lower=0>[alphaN] alphaCd4;
-    vector<lower=0>[betaN] betaCd4;
-    int<lower=0> nTotals[nPat];
-    int<lower=0> totalStarts[nPat];
-    int<lower=0> alphaStartObs[nPat];
-    int<lower=0> alphaNObs[nPat];
-    int<lower=0> betaStartObs[nPat];
-    int<lower=0> betaNObs[nPat];
+    //vector[alphaN] alphaVl;
+    //vector[betaN] betaVl;
+    //vector<lower=0>[alphaN] alphaCd4;
+    //vector<lower=0>[betaN] betaCd4;
   }
   parameters {
-    vector[sum(nTotals)] trueAlpha;
-    vector[sum(nTotals)] trueBeta;
-    real<lower=0> alphaAutoCor;
     real<lower=0> alphaError;
-    real<lower=0> betaAutoCor;
     real<lower=0> betaError;
     real metaAlpha;
-    real<lower=0> metaAlphaSd;
-    vector[nPat] rawAlphas;
     real metaAlpha2;
+    real<lower=0> metaAlphaSd;
     real<lower=0> metaAlpha2Sd;
+    vector[nPat] rawAlphas;
     vector[nPat] rawAlphas2;
+    real metaBeta;
+    real metaBeta2;
+    real<lower=0> metaBetaSd;
+    real<lower=0> metaBeta2Sd;
+    vector[nPat] rawBetas;
+    vector[nPat] rawBetas2;
+    vector[nPat] alphaIntercepts;
+    vector[nPat] betaIntercepts;
   }
   transformed parameters{
     vector[nPat] betaAlphas;
     vector[nPat] betaAlphas2;
+    vector[nPat] betaBetas;
+    vector[nPat] betaBetas2;
+    vector[alphaN] alphaMus;
+    vector[betaN] betaMus;
     betaAlphas = metaAlpha + rawAlphas*metaAlphaSd;
     betaAlphas2 = metaAlpha2 + rawAlphas2*metaAlpha2Sd;
+    betaBetas = metaBeta + rawBetas*metaBetaSd;
+    betaBetas2 = metaBeta2 + rawBetas2*metaBeta2Sd;
+    alphaMus=alphaIntercepts[alphaPatientId];//betaAlphas2[alphaPatientId].*alphaDay2+betaAlphas[alphaPatientId].*alphaDay;
+    betaMus=betaIntercepts[betaPatientId];//+betaBetas2[betaPatientId].*betaDay2+betaBetas[betaPatientId].*betaDay;
   }
   model {
     rawAlphas~normal(0,1);
     rawAlphas2~normal(0,1);
-    metaAlphaSd~gamma(1,.01);
-    metaAlpha2Sd~gamma(1,.01);
-    alphaAutoCor~gamma(1,1);
-    alphaError~gamma(1,1);
-    betaAutoCor~gamma(1,1);
-    betaError~gamma(1,1);
-    trueAlpha[totalStarts]~normal(0,3);
-    trueBeta[totalStarts]~normal(0,3);
-    for(ii in 1:nPat){
-      segment(trueAlpha,totalStarts[ii]+1,nTotals[ii]-1)~normal(segment(trueAlpha,totalStarts[ii],nTotals[ii]-1),alphaAutoCor);
-      segment(trueBeta,totalStarts[ii]+1,nTotals[ii]-1)~normal(segment(trueBeta,totalStarts[ii],nTotals[ii]-1),betaAutoCor);
-      //should linear interpolate
-      segment(ic50Alpha,alphaStartObs[ii],alphaNObs[ii])~normal(betaAlphas[ii]*segment(alphaDayReal,alphaStartObs[ii],alphaNObs[ii])+betaAlphas2[ii]*segment(alphaDayReal,alphaStartObs[ii],alphaNObs[ii]).*segment(alphaDayReal,alphaStartObs[ii],alphaNObs[ii])+trueAlpha[segment(alphaDay,alphaStartObs[ii],alphaNObs[ii])],alphaError);
-      segment(ic50Beta,betaStartObs[ii],betaNObs[ii])~normal(trueBeta[segment(betaDay,betaStartObs[ii],betaNObs[ii])],betaError);
-    }
+    rawBetas~normal(0,1);
+    rawBetas2~normal(0,1);
+    metaAlphaSd~gamma(1,1);
+    metaAlpha2Sd~gamma(1,1);
+    metaBetaSd~gamma(1,1);
+    metaBeta2Sd~gamma(1,1);
+    alphaError~gamma(1,10);
+    betaError~gamma(1,10);
+    ic50Alpha~normal(alphaMus,alphaError);
+    ic50Beta~normal(betaMus,betaError);
   }
 '
 
@@ -96,33 +98,21 @@ input<-list(
   nPat=max(alpha$patId),
   alphaPatientId=alpha$patId,
   betaPatientId=beta$patId,
-  alphaDay=alpha$week,
-  alphaDayReal=alpha$week,
-  betaDay=beta$week,
+  alphaDay=alpha$time,
+  betaDay=beta$time,
+  alphaDay2=alpha$time^2,
+  betaDay2=beta$time^2,
   ic50Alpha=log10(alpha$ic50),
-  ic50Beta=log10(beta$beta),
-  alphaVl=log10(alpha$vl),
-  betaVl=log10(beta$vl),
-  alphaCd4=alpha$CD4,
-  betaCd4=beta$CD4,
-  nTotals=nTotals,
-  totalStarts=totalStarts,
-  alphaStartObs=alphaStartObs,
-  alphaNObs=alphaNObs,
-  betaStartObs=betaStartObs,
-  betaNObs=betaNObs
+  ic50Beta=log10(beta$beta)
+  #alphaVl=log10(alpha$vl),
+  #betaVl=log10(beta$vl),
+  #alphaCd4=alpha$CD4,
+  #betaCd4=beta$CD4
 )
 
-fit <- stan(model_code = stanCode, data = input, iter=10000, chains=nThreads,thin=20)
+fit <- stan(model_code = stanCode, data = input, iter=2000, chains=nThreads,thin=10)
 
 sims<-extract(fit)
 pdf('test.pdf',width=20)
-plot(apply(sims[['trueAlpha']],2,mean),type='l')
-lines(apply(sims[['trueAlpha']],2,quantile,.95),col='blue')
-lines(apply(sims[['trueAlpha']],2,quantile,.05),col='blue')
-abline(v=input$totalStarts,col='red')
-plot(apply(sims[['trueBeta']],2,mean),type='l')
-lines(apply(sims[['trueBeta']],2,quantile,.95),col='blue')
-lines(apply(sims[['trueBeta']],2,quantile,.05),col='blue')
-abline(v=input$totalStarts,col='red')
+print(traceplot(fit,c('metaBeta','metaAlpha','metaBeta2','metaAlpha2')))
 dev.off()
