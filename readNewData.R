@@ -235,6 +235,7 @@ for(ii in names(fits)){
 fitsBeta<-lapply(unique(dat$pat),function(xx)lm(I(log(beta))~time+time2+log(vl):I(time>35*7)+CD4:I(time>35*7),dat=dat[dat$pat==xx&!is.na(dat$beta),]))
 
 pdf('out/predictions.pdf',width=4.5,height=4.5)
+for(pats in list(rownames(patTimeMeans),rownames(patTimeMeans)[!rownames(patTimeMeans) %in% meta2$id],rownames(patTimeMeans)[rownames(patTimeMeans) %in% meta2$id])){
   par(mar=c(3.5,3.7,.1,.1))
   for(ii in names(ifnVars)){
     isVres<-grepl('Vres',ii)
@@ -245,7 +246,7 @@ pdf('out/predictions.pdf',width=4.5,height=4.5)
     patTimeMeans<-tapply(dat[,ifnVars[ii]],list(dat$pat,dat$time),mean,na.rm=TRUE)
     patTimeSd<-tapply(dat[,ifnVars[ii]],list(dat$pat,dat$time),sd,na.rm=TRUE)
     patTimeSe<-patTimeSd/tapply(dat[,ifnVars[ii]],list(dat$pat,dat$time),function(xx)sum(!is.na(xx)))
-    for(xx in rownames(patTimeMeans)){
+    for(xx in pats){
       thisDat<-dat[dat$pat==xx,]
       thisDat$target<-thisDat[,ifnVars[ii]]
       if(!isVres)thisDat$target<-log10(thisDat$target)
@@ -259,13 +260,14 @@ pdf('out/predictions.pdf',width=4.5,height=4.5)
       lines(fakeDays/7,predIc50[,'fit'],col=patCols[xx])
       polygon(c(fakeDays/7,rev(fakeDays)/7),c(predIc50[,'lwr'],rev(predIc50[,'upr'])),col=patCols2[xx],border=NA)
     }
-    for(xx in rownames(patTimeMeans)){
+    for(xx in pats){
       #segments(as.numeric(colnames(patTimeMeans))/7,patTimeMeans[xx,]+1.96*patTimeSd[xx,],as.numeric(colnames(patTimeMeans))/7,patTimeMeans[xx,]-1.96*patTimeSd[xx,],pch='-',col=patCols[xx],lwd=3)
       segments(as.numeric(colnames(patTimeMeans))/7,patTimeMeans[xx,]+patTimeSe[xx,]*1.96,as.numeric(colnames(patTimeMeans))/7,patTimeMeans[xx,]+patTimeSe[xx,]*-1.96,col=patCols[xx],lwd=2)
       points(as.numeric(colnames(patTimeMeans))/7,patTimeMeans[xx,],pch=21,bg=patCols[xx],cex=1)
     }
     legend('top',names(patCols),col=patCols,inset=.01,ncol=3,lty=1,lwd=2,bty='n')
   }
+}
 dev.off()
 
 pdf('out/indivPredictions.pdf',width=5,height=4)
