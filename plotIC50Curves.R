@@ -12,33 +12,38 @@ lowerLimit<-50
 #c = the point of inflection (i.e. the point on the S shaped curve halfway between a and d)
 #d = the maximum value that can be obtained (i.e. what happens at infinite dose)
 #f<-function(B,x,transformX=function(x)x){if(any(x<=0))browser();exp(log(B[1]-B[4])-log(1+(transformX(x)/B[3])^B[2]))+B[4]}
-f5<-function(B,x,transformX=function(x)x){exp(log(B[1]-B[4])-B[5]*log(1+(transformX(x)/B[3])^B[2]))+B[4]}
+f5<-function(B,x,transformX=function(x)x){
+  #if(x==-Inf)return(B[1])
+  exp(log(B[1]-B[4])-B[5]*log(1+(transformX(x)/B[3])^B[2]))+B[4]
+}
+#f5<-function(B,x,transformX=log){exp(log(B[1]-B[4])-B[5]*log(1+(transformX(x)/B[3])^B[2]))+B[4]}
 f4<-function(B,x,transformX=function(x)x){exp(log(B[1]-B[4])-log(1+(transformX(x)/B[3])^B[2]))+B[4]}
-LS<-function(B,y,x){sum((log(y)-log(f4(B,x)))^2)}
-LS5<-function(B,y,x){sum((log(y)-log(f5(B,x)))^2)}
-optIc50<-function(B)optim(1,function(x,B){(B[1]*.5-f5(B,x))^2},B=B,method='Brent',lower=10^-10,upper=10^2)$par
+LS<-function(B,y,x){sum((log(y)-log(fitFunc(B,x)))^2)}
+optIc50<-function(B)optim(1,function(x,B){(B[1]*.5-fitFunc(B,x))^2},B=B,method='Brent',lower=10^-10,upper=10^2)$par
 fit4par<-function(concs,p24s){
-  p24s<-p24s[concs>0]
-  concs<-concs[concs>0]
+  #p24s<-p24s[concs>0]
+  #concs<-concs[concs>0]
   fits<-lapply(list(c(max(p24s),1,1,min(p24s)),c(max(p24s)*2,1,1,min(p24s)/10),c(mean(p24s),1,1,mean(p24s)),c(max(p24s),.01,1,1)),function(starts)suppressWarnings(nlminb(starts,LS,x=concs,y=p24s,lower=c(0,-Inf,-Inf,0))))
   #fit<-suppressWarnings(nlminb(c(max(p24s),1,1,min(p24s)),LS,x=concs,y=p24s,lower=c(0,-Inf,-Inf,0))$par)
   obj<-sapply(fits,'[[','objective')
   return(fits[[which.min(obj)]]$par)
 }
 fit5par<-function(concs,p24s){
-  p24s<-p24s[concs>0]
-  concs<-concs[concs>0]
+  #p24s<-p24s[concs>0]
+  #concs<-concs[concs>0]
   fits<-lapply(list(c(max(p24s),1,1,min(p24s),1),c(max(p24s)*2,1,1,min(p24s)/10),c(mean(p24s),1,1,mean(p24s),1),c(max(p24s),.01,1,1),1),function(starts)suppressWarnings(nlminb(starts,LS5,x=concs,y=p24s,lower=c(0,-Inf,-Inf,0,-Inf))))
   #fit<-suppressWarnings(nlminb(c(max(p24s),1,1,min(p24s)),LS,x=concs,y=p24s,lower=c(0,-Inf,-Inf,0))$par)
   obj<-sapply(fits,'[[','objective')
   return(fits[[which.min(obj)]]$par)
 }
+fitFunc<-f5
+fitter<-fit5par
 
 findVresIc50<-function(concAlpha,p24s){
   origConcs<-rep(concAlpha,each=2*nrow(p24s))
   p24s<-unlist(p24s)
-  fit<-fit5par(origConcs,p24s)
-  vres<-f5(fit,max(origConcs))
+  fit<-fitter(origConcs,p24s)
+  vres<-fitFunc(fit,max(origConcs))
   ic50<-optIc50(fit)
   percVres<-vres/fit[1]*100
   return(c('ic50'=ic50,'vres'=vres,'percVres'=percVres))
@@ -94,27 +99,28 @@ plotIfn<-function(concAlpha,p24s,main='',xlab='',ylims=range(p24s),log='xy',scal
   else maxs<-1
   vresIc50<-findVresIc50(concAlpha,p24s)
   p24s<-unlist(p24s)
-  concs[concs==0]<-min(concs[concs>0])*.1
-  fit<-fit5par(origConcs,p24s)
+  zeroOffset<-.01
+  concs[concs==0]<-min(concs[concs>0])*zeroOffset
+  fit<-fitter(origConcs,p24s)
   plot(concs,p24s/maxs,xlab=xlab,ylab='',log=log,las=1,xaxt='n',main=main,bg=c('red','blue','pink','cyan'),pch=21,mgp=c(2.5,1,0),ylim=ylims/mean(maxs),yaxt='n')
   #fit2<-suppressWarnings(nlminb(c(max(p24s),1,1,min(p24s)),LS,x=concs[origConcs!=0],y=p24s[origConcs!=0],lower=c(0,-Inf,-Inf,0))$par)
   fakeConc<-10^seq(-10,10,.001)
-  fitLine<-f5(fit,fakeConc)
+  fitLine<-fitFunc(fit,fakeConc)
   lines(fakeConc,fitLine/mean(maxs),col='#FF000066',lwd=3)
   if(scaleMax)title(ylab='Proportion maximum p24',mgp=c(3.5,1,0))
   else title(ylab='p24 concentration (ng/ml)',mgp=c(3.5,1,0))
-  if(grepl('y',log))logAxis(1,axisMin=min(origConcs[origConcs>0]))
+  if(grepl('x',log))logAxis(1,axisMin=min(origConcs[origConcs>0]))
   else axis(1,pretty(par('usr')[1:2]))
   if(grepl('y',log))logAxis(2,las=1)
   else axis(2,pretty(par('usr')[3:4]),las=1)
-  axis(1,min(origConcs[origConcs>0])*.1,0)
+  axis(1,min(origConcs[origConcs>0])*zeroOffset,0)
   #abline(h=c(fit[c(1,4)]),lty=3,col='#00000055')
   #abline(v=fit[3],lty=3,col='#00000055')
   abline(v=vresIc50['ic50'],lty=3,col='#00000055')
   #if(fit[4]<par('usr')[4])
-  vres<-f5(fit,max(origConcs))
-  abline(h=vresIc50['vres'],lty=3,col='#00000055')
-  text(10^par('usr')[1]*2,10^par('usr')[3]*2,sprintf('Vres=%s IC50=%s',format(vresIc50['percVres']*100,digits=2),format(vresIc50['ic50'],digits=2)),adj=0)
+  vres<-fitFunc(fit,max(origConcs))
+  abline(h=vresIc50['vres']/mean(maxs),lty=3,col='#00000055')
+  text(10^par('usr')[1]*2,10^par('usr')[3]*2,sprintf('Vres=%s IC50=%s',format(vresIc50['percVres'],digits=2,width=3),format(vresIc50['ic50'],digits=2)),adj=0)
   #if(thisSample=='MM55.12.2B1 bulk')browser()
   return(fit)
 }
