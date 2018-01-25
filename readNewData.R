@@ -1,6 +1,19 @@
 library(dnar)
+library(lubridate)
+
+lay<-matrix(0,nrow=5,ncol=5)
+lay[2:4,2:4]<-matrix(1:9,nrow=3,byrow=TRUE)
+
+patCols<-c('MM23'='#e41a1c','MM33'='#4daf4a','MM34'='#984ea3','MM39'='#377eb8','MM40'='#FF7f00','MM14'='#FFD700','MM15'='#f781bf','MM55'='#a65628','MM62'='#708090')
+patCols2<-sprintf('%s33',patCols)
+patCols3<-sprintf('%s11',patCols)
+names(patCols2)<-names(patCols3)<-names(patCols)
+cols<-rainbow.lab(length(unique(dat$pat)))
+names(cols)<-unique(dat$pat)
+
 #dat<-read.csv('data/Data Master MG, Sept_2.csv')
-dat<-read.csv('data/MM cohort cata master 11.29.2017.csv')
+#dat<-read.csv('data/MM cohort cata master 11.29.2017.csv')
+dat<-read.csv('data/for Scott_2017_12_13.csv')
 dat<-dat[!is.na(dat$ID.for.Publications)&dat$ID.for.Publications!='',]
 
 meta<-read.csv('data/For Scot, Complete Master table AUG.2017_meta.csv',stringsAsFactors=FALSE)[,-1:-2]
@@ -22,11 +35,18 @@ tmp<-sub('\\.([0-9])$','.0\\1',mapply(function(xx,yy)sub('^MM[0-9]+',xx,yy),meta
 meta2$Time.Points<-tmp
 rownames(meta2)<-meta2$Time.Points
 
-
 meta<-rbind(meta,meta2)
 
+#EJ79/MM33 not in big spreadsheet
+#EJ85/MM39 not listed
+#EJ86/MM40 not listed
+artDates<-c('MM14'='','MM15'='','MM23'='29/06/06','MM33'='','MM34'='14/09/09','MM39'='','MM40'='','MM55'='','MM62'='')
+artDays<-sapply(names(artDates)[artDates!=''],function(ii)withAs(zz=meta[grep(sprintf('%s\\*',ii),meta$id)[1],],dmy(artDates[ii])-mdy(zz$Date)+as.numeric(zz$DFOSx)))
+
+
 #Standardize BULK naming and catch _BULK with no .
-dat$id<-sub(' bulk|_Bulk|_BULK','-BULK',sub('  +bulk','.ZZZ-BULK',sub('\\.([0-9]+)_Bulk','.\\1.BULK',dat$ID.for.Publications)))
+dat$qvoa<-grepl('QVOA',dat$ID.for.Publications)
+dat$id<-sub('QVOA ','',sub(' bulk|_Bulk|_BULK','-BULK',sub('  +bulk','.ZZZ-BULK',sub('\\.([0-9]+)_Bulk','.\\1.BULK',dat$ID.for.Publications))))
 dat$sample<-sub('[._][^._]*$','',dat$id)
 dat$sample<-sub('\\.([0-9])$','.0\\1',dat$sample)
 dat$sample<-sub('\\.([0-9])\\.','.0\\1.',dat$sample)
@@ -55,19 +75,37 @@ if(any(dat$betaVres==0)){
 dat$replication<-dat$Replicative.capacity.Pooled.Donor.cells.p24.d7..from.June.2017.repeat.
 ifnVars<-c('Interferon alpha 2 IC50'='ic50','Interferon beta IC50'='beta','Interferon alpha 2 Vres'='vres','Interferon beta Vres'='betaVres','Replication capacity'='replication')
 
-#patCols<-c('MM23'='#FF0000','MM33'='#00FF00','MM34'='#8000FF','MM39'='#0000FF','MM40'='#FF8000','MM14'='#FFD700','MM15'='#f781bf','MM55'='#984ea3','MM62'='#a65628')
-patCols<-c('MM23'='#e41a1c','MM33'='#4daf4a','MM34'='#984ea3','MM39'='#377eb8','MM40'='#FF7f00','MM14'='#FFD700','MM15'='#f781bf','MM55'='#a65628','MM62'='#708090')
-#uniqPat<-unique(dat$pat)
-#newCols<-rainbow.lab(sum(!uniqPat %in% names(patCols)))
-#names(newCols)<-uniqPat[!uniqPat %in% names(patCols)]
-#patCols<-c(patCols,newCols)
-#patCols<-c('#e41a1c','#377eb8','#4daf4a','#984ea3','#ff7f00','#FFD700','#a65628','#f781bf','#999999')
-#names(patCols)<-uniqPat
-patCols2<-sprintf('%s33',patCols)
-patCols3<-sprintf('%s11',patCols)
-names(patCols2)<-names(patCols3)<-names(patCols)
-cols<-rainbow.lab(length(unique(dat$pat)))
-names(cols)<-unique(dat$pat)
+
+condenseArrows<-function(dat,ic50Name,clinicalName,xlab,ylab,xlog=FALSE){
+  par(mar=c(0,0,0,0))
+  layout(lay,width=c(.34,rep(1,3),.01),height=c(.01,rep(1,3),.4))
+  counter<-1
+  for(ii in sort(unique(dat$pat))){
+    ylim<-range(dat[,ic50Name],na.rm=TRUE)*10^(c(-.02,.2)*diff(log10(range(dat[,ic50Name],na.rm=TRUE))))
+    plot(dat[dat$pat==ii,clinicalName],dat[dat$pat==ii,ic50Name],log=sprintf('%sy',ifelse(xlog,'x','')),bg=patCols[ii],pch=21,las=1,xlab='',ylab=ylab,yaxt='n',xlim=range(dat[,clinicalName],na.rm=TRUE)*c(1,1.1),ylim=ylim,xaxt='n',cex=1.3)
+    title(ii,line=-1)
+    if(counter>6&!xlog)axis(1,pretty(dat[,clinicalName],n=3),cex.axis=1.2,mgp=c(2.75,.7,0))
+    if(counter>6&xlog)logAxis(1,las=1,cex.axis=1.1,mgp=c(3,.7,0))
+    if(counter%%3==1)logAxis(2,las=1,cex.axis=1.1,mgp=c(3,.7,0))
+    if(counter==4)text(ifelse(xlog,function(xx)10^xx,function(xx)xx)(par('usr')[1]-.27*diff(par('usr')[1:2])),10^mean(par('usr')[3:4]),ylab,srt=90,xpd=NA,cex=2)
+    if(counter==8)text(ifelse(xlog,function(xx)10^xx,function(xx)xx)(mean(par('usr')[1:2])),10^(par('usr')[3]-.3*diff(par('usr')[3:4])),xlab,xpd=NA,cex=2)
+    times<-withAs(xx=dat[dat$pat==ii,],cbind('clinic'=tapply(xx[,clinicalName],xx$time,mean),'ic50'=10^tapply(log10(xx[,ic50Name]),xx$time,mean,na.rm=TRUE)))
+    withAs(times=times[!is.na(times[,'clinic'])&!is.na(times[,'ic50']),],arrows(times[-nrow(times),'clinic'],times[-nrow(times),'ic50'],times[-1,'clinic'],times[-1,'ic50'],col='#00000033',length=.09))
+    #if(counter==9)legend(par('usr')[2]-diff(par('usr')[1:2])*.05,10^(par('usr')[3]-diff(par('usr')[3:4])*.26),c('Quadratic regression','95% confidence interval','95% prediction interval'),col=c(patCols[1],NA,NA),pt.bg=c(NA,patCols2[1],patCols3[1]),lty=c(1,NA,NA),pch=c(NA,22,22),border=NA,pt.cex=3.2,cex=1.2,xjust=1,yjust=1,xpd=NA)
+    counter<-counter+1
+  }
+}
+pdf('out/CD4_vs_IC50_condense.pdf',width=6,height=4)
+  condenseArrows(dat[!dat$qvoa,],'ic50','CD4','CD4 count','Interferon alpha 2 IC50 (pg/ml)') 
+  condenseArrows(dat[!dat$qvoa,],'beta','CD4','CD4 count','Interferon beta IC50 (pg/ml)') 
+dev.off()
+pdf('out/VL_vs_IC50_condense.pdf',width=6,height=4)
+  condenseArrows(dat[!dat$qvoa,],'ic50','vl','Viral load','Interferon alpha 2 IC50 (pg/ml)',xlog=TRUE) 
+  condenseArrows(dat[!dat$qvoa,],'beta','vl','Viral load','Interferon beta IC50 (pg/ml)',xlog=TRUE) 
+dev.off()
+
+
+
 pdf('out/CD4_vs_IC50.pdf',width=6,height=4)
   par(mar=c(4,4,.1,.1))
   plot(dat$CD4,dat$ic50,log='y',pch=21,bg=patCols[dat$pat],xlab='CD4 count',ylab='Interferon alpha IC50',las=1,yaxt='n')
@@ -121,7 +159,7 @@ plot3vars<-function(var,lab,dat,logX=FALSE){
   #layout(matrix(c(1,1,2,2,3,3,0,4,4,5,5,0),nrow=2,byrow=TRUE))
   par(mar=c(3.6,6.2,1.1,11),mfrow=c(3,3))
   for(ii in unique(dat$pat)){
-    withAs(xx=dat[dat$pat==ii,],plot(xx$time/7,xx[,var],bg=patCols[xx$pat],pch=21,las=1,log=logAddY,yaxt='n',xlab='',ylab=lab,main=ii,xlim=range(dat$time/7),ylim=range(dat[,var],na.rm=TRUE)))
+    withAs(xx=dat[dat$pat==ii,],plot(xx$time/7,xx[,var],bg=patCols[xx$pat],pch=ifelse(xx$qvoa,23,ifelse(xx$bulk,22,21)),las=1,log=logAddY,yaxt='n',xlab='',ylab=lab,main=ii,xlim=range(dat$time/7),ylim=range(dat[,var],na.rm=TRUE)))
     title(xlab='Time (weeks)',mgp=c(2,1,0))
     logAxis(las=1)
     thisDat<-dat[dat$pat==ii,]
@@ -236,7 +274,7 @@ for(ii in names(fits)){
 fitsBeta<-lapply(unique(dat$pat),function(xx)lm(I(log(beta))~time+time2+log(vl):I(time>35*7)+CD4:I(time>35*7),dat=dat[dat$pat==xx&!is.na(dat$beta),]))
 
 pdf('out/predictions.pdf',width=4.5,height=4.5)
-for(pats in list(rownames(patTimeMeans),rownames(patTimeMeans)[!rownames(patTimeMeans) %in% meta2$id],rownames(patTimeMeans)[rownames(patTimeMeans) %in% meta2$id])){
+for(pats in list(unique(dat$pat),unique(dat$pat[!dat$pat %in% meta2$id]),unique(dat$pat[dat$pat %in% meta2$id]))){
   par(mar=c(3.5,3.7,.1,.1))
   for(ii in names(ifnVars)){
     isVres<-grepl('Vres',ii)
@@ -311,6 +349,41 @@ pdf('out/indivPredictions_beta.pdf',width=5,height=4)
   }
 dev.off()
 
+plotCondenseIfn<-function(dat,ic50,ylab){
+  par(mar=c(0,0,0,0))
+  layout(lay,width=c(.25,rep(1,3),.01),height=c(.01,rep(1,3),.9))
+  counter<-1
+  for(ii in sort(unique(dat$pat))){
+    plot(dat$time/7,ic50,yaxt='n',log='y',bg=patCols[dat$pat],pch=21,type='n',xlab='',ylab=ylab,xaxt='n')
+    title(ii,line=-1)
+    if(counter>6)axis(1,pretty(dat$time/7),cex.axis=1.2,mgp=c(2.75,.7,0))
+    if(counter%%3==1)logAxis(2,las=1,cex.axis=1.1,mgp=c(3,.7,0))
+    title(xlab='Time (weeks)',mgp=c(2,1,0))
+    thisDat<-dat[dat$pat==ii,]
+    thisFit<-simpleFits[[ii]]
+    fakeDays<-(min(dat[dat$pat==ii,'time'])):(max(dat[dat$pat==ii,'time'])+50)
+    fakeDf<-data.frame('time'=fakeDays,'time2'=fakeDays^2,'logTime'=log(fakeDays),'logTime2'=log(fakeDays)^2,'logTime3'=log(fakeDays)^3,'logTime4'=log(fakeDays)^4)
+    predIc50<-predict(thisFit,fakeDf,interval='confidence')
+    #predIc50<-predict(thisFit,data.frame('time'=fakeDays,'time2'=fakeDays^2),interval='confidence')
+    lines(fakeDays/7,exp(predIc50[,'fit']),col=patCols[ii])
+    polygon(c(fakeDays/7,rev(fakeDays)/7),c(exp(predIc50[,'lwr']),rev(exp(predIc50[,'upr']))),col=patCols2[ii],border=NA)
+    thisDat<-dat[dat$pat==ii&!dat$qvoa,]
+    predIc50<-predict(thisFit,fakeDf,interval='prediction')
+    polygon(c(fakeDays/7,rev(fakeDays)/7),c(exp(predIc50[,'lwr']),rev(exp(predIc50[,'upr']))),col=patCols3[ii],border=NA)
+    points(thisDat$time/7,thisDat$ic50,pch=21+thisDat$bulk,bg=patCols[ii])
+    if(counter==4)text(par('usr')[1]-.19*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),'IFNa2 IC50 (pg/ml)',srt=90,xpd=NA,cex=2)
+    if(counter==8)text(mean(par('usr')[1:2]),10^(par('usr')[3]-.4*diff(par('usr')[3:4])),'Weeks after onset of symptoms',xpd=NA,cex=2)
+    if(counter==9)legend(par('usr')[2]-diff(par('usr')[1:2])*.05,10^(par('usr')[3]-diff(par('usr')[3:4])*.26),c('Quadratic regression','95% confidence interval','95% prediction interval'),col=c(patCols[1],NA,NA),pt.bg=c(NA,patCols2[1],patCols3[1]),lty=c(1,NA,NA),pch=c(NA,22,22),border=NA,pt.cex=3.2,cex=1.2,xjust=1,yjust=1,xpd=NA)
+    counter<-counter+1
+  }
+}
+pdf('out/indivPredict_condense.pdf',width=9,height=4)
+plotCondenseIfn(dat[!dat$qvoa,],dat$ic50[!dat$qvoa],ylab='Interferon alpha 2 IC50')
+dev.off()
+pdf('out/indivPredict_beta_condense.pdf',width=9,height=4)
+  plotCondenseIfn(dat[!dat$qvoa,],dat$beta[!dat$qvoa],ylab='Interferon beta IC50')
+dev.off()
+
 
 pdf('out/subjects.pdf',width=11,height=8)
   par(mar=c(4.3,4,1.5,4.5),mfrow=c(3,3))
@@ -324,6 +397,31 @@ pdf('out/subjects.pdf',width=11,height=8)
     withAs(xx=unique(dat[dat$pat==ii,c('time','vl')]),plot(xx$time/7,xx$vl,type='l',log='y',yaxt='n',xlab='',ylab='',xlim=range(dat$time/7),ylim=range(dat$vl,na.rm=TRUE),xaxt='n',col='red',lwd=2))
     logAxis(4,mgp=c(3,1,0),las=1)
     text(convertLineToUser(3,4),10^mean(par('usr')[3:4]),'Viral load',srt=-90,xpd=NA,col='red')
+  }
+dev.off()
+
+pdf('out/subjects_condense.pdf',width=9,height=4)
+  par(mar=c(0,0,0,0))
+  layout(lay,width=c(.25,rep(1,3),.25),height=c(.01,rep(1,3),.43))
+  counter<-1
+  for(ii in sort(unique(dat$pat))){
+    withAs(xx=dat[dat$pat==ii&!is.na(dat$CD4),],plot(xx$time/7,xx$CD4,pty='l',las=1,log='',xlab='',ylab='',xlim=range(dat$time/7),ylim=range(dat$CD4,na.rm=TRUE)+c(-30,90),col='blue',type='l',lwd=2,xaxt='n',yaxt='n'))
+    title(ii,line=-1)
+    if(counter>6)(axis(1,pretty(dat$time/7),cex.axis=1.2))
+    if(counter%%3==1)(axis(2,pretty(dat$CD4,n=5),las=1,col.axis='blue',cex.axis=1.1))
+    title(xlab='Time (weeks)',mgp=c(2,1,0))
+    thisDat<-dat[dat$pat==ii,]
+    par(new=TRUE)
+    withAs(xx=unique(dat[dat$pat==ii&!is.na(dat$vl),c('time','vl')]),plot(xx$time/7,xx$vl,type='l',log='y',yaxt='n',xlab='',ylab='',xlim=range(dat$time/7),ylim=range(dat$vl,na.rm=TRUE),xaxt='n',col='red',lwd=2))
+    if(counter%%3==0)logAxis(4,mgp=c(3,1,0),las=1,col.axis='red',cex.axis=1.3)
+    if(counter==6)text(par('usr')[2]+.21*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),'Viral load',srt=-90,xpd=NA,col='red',cex=2)
+    if(counter==4)text(par('usr')[1]-.21*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),'CD4 count',srt=90,xpd=NA,col='blue',cex=2)
+    if(counter==8)text(mean(par('usr')[1:2]),10^(par('usr')[3]-.32*diff(par('usr')[3:4])),'Weeks after onset of symptoms',xpd=NA,cex=2)
+    counter<-counter+1
+    if(any(dat[dat$pat==ii,'qvoa'])){
+      rect(artDays[ii]/7,10^par('usr')[3],par('usr')[2],10^par('usr')[4],col='#00000022',border=NA)
+      text(mean(c(artDays[ii]/7,par('usr')[2])),10^(par('usr')[4]-diff(par('usr')[3:4])*.4),'ART treatment',xpd=NA)
+    }
   }
 dev.off()
 
