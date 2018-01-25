@@ -46,7 +46,7 @@ findVresIc50<-function(concAlpha,p24s){
   vres<-fitFunc(fit,max(origConcs))
   ic50<-optIc50(fit)
   percVres<-vres/fit[1]*100
-  return(c('ic50'=ic50,'vres'=vres,'percVres'=percVres))
+  return(c('ic50'=ic50,'vres'=vres,'percVres'=percVres,'max'=fit[1]))
 }
 calcIc50s<-function(dilutes,concAlpha){
   out<-do.call(rbind,lapply(unique(dilutes$sample),function(thisSample){
@@ -102,34 +102,50 @@ plotIfn<-function(concAlpha,p24s,main='',xlab='',ylims=range(p24s),log='xy',scal
   zeroOffset<-.01
   concs[concs==0]<-min(concs[concs>0])*zeroOffset
   fit<-fitter(origConcs,p24s)
-  plot(concs,p24s/maxs,xlab=xlab,ylab='',log=log,las=1,xaxt='n',main=main,bg=c('red','blue','pink','cyan'),pch=21,mgp=c(2.5,1,0),ylim=ylims/mean(maxs),yaxt='n')
+  cols<-rainbow.lab(12)[c(1:2,11:12)]
+  names(cols)<-c('Bio replicate 1\nTech replicate 1','Bio replicate 1\nTech replicate 2','Bio replicate 2\nTech replicate 1','Bio replicate 2\nTech replicate 2')
+  plot(concs,p24s/maxs,xlab=xlab,ylab='',log=log,las=1,xaxt='n',main=main,bg=cols,pch=21,mgp=c(2,1,0),ylim=ylims/mean(maxs),yaxt='n')
   #fit2<-suppressWarnings(nlminb(c(max(p24s),1,1,min(p24s)),LS,x=concs[origConcs!=0],y=p24s[origConcs!=0],lower=c(0,-Inf,-Inf,0))$par)
   fakeConc<-10^seq(-10,10,.001)
   fitLine<-fitFunc(fit,fakeConc)
-  lines(fakeConc,fitLine/mean(maxs),col='#FF000066',lwd=3)
-  if(scaleMax)title(ylab='Proportion maximum p24',mgp=c(3.5,1,0))
-  else title(ylab='p24 concentration (ng/ml)',mgp=c(3.5,1,0))
-  if(grepl('x',log))logAxis(1,axisMin=min(origConcs[origConcs>0]))
-  else axis(1,pretty(par('usr')[1:2]))
-  if(grepl('y',log))logAxis(2,las=1)
-  else axis(2,pretty(par('usr')[3:4]),las=1)
-  axis(1,min(origConcs[origConcs>0])*zeroOffset,0)
+  lines(fakeConc,fitLine/mean(maxs),col='#00000066',lwd=3)
+  if(scaleMax)title(ylab='Proportion maximum p24',mgp=c(2,1,0))
+  else title(ylab='p24 concentration (ng/ml)',mgp=c(2.25,1,0))
+  if(grepl('x',log))logAxis(1,axisMin=min(origConcs[origConcs>0]),mgp=c(2.5,.7,0))
+  else axis(1,pretty(par('usr')[1:2]),mgp=c(2.5,.7,0))
+  if(grepl('y',log))logAxis(2,las=1,mgp=c(2.5,.7,0))
+  else axis(2,pretty(par('usr')[3:4]),las=1,mgp=c(2.5,.7,0))
+  axis(1,min(origConcs[origConcs>0])*zeroOffset,0,mgp=c(2.5,.7,0))
   #abline(h=c(fit[c(1,4)]),lty=3,col='#00000055')
   #abline(v=fit[3],lty=3,col='#00000055')
-  abline(v=vresIc50['ic50'],lty=3,col='#00000055')
+  isAbove<-vresIc50['ic50']>10^(par('usr')[3]*.75+par('usr')[4]*.25)
+  abline(v=vresIc50['ic50'],lty=2,col='#FF000055')
   #if(fit[4]<par('usr')[4])
   vres<-fitFunc(fit,max(origConcs))
-  abline(h=vresIc50['vres']/mean(maxs),lty=3,col='#00000055')
-  text(10^par('usr')[1]*2,10^par('usr')[3]*2,sprintf('Vres=%s IC50=%s',format(vresIc50['percVres'],digits=2,width=3),format(vresIc50['ic50'],digits=2)),adj=0)
+  abline(h=vresIc50['vres']/mean(maxs),lty=2,col='#0000FF55')
+  yCoord<-vresIc50['vres']/2^ifelse(isAbove,1,-1)
+  xCoord<-10^(par('usr')[1]*.72+par('usr')[2]*.28)
+  text(xCoord,yCoord,sprintf('Vres=%s',format(vresIc50['percVres'],digits=2,width=3)),adj=c(1,0.5),col='blue')
+  segments(xCoord*1.1,yCoord,10^(par('usr')[1]*.65+par('usr')[2]*.35),vresIc50['vres']/mean(maxs),col='blue')
+  #ic50 label
+  isAbove<-vresIc50['vres']>10^mean(par('usr')[3:4])
+  yCoord<-ifelse(isAbove,10^(par('usr')[3]*.2+par('usr')[4]*.8),10^(par('usr')[3]*.55+par('usr')[4]*.45)*1.2)
+  text(vresIc50['ic50']/1.85,yCoord,sprintf('IC50=%s',format(vresIc50['ic50'],digits=2)),adj=c(1,0.5),col='red')
+  segments(vresIc50['ic50']/1.75,yCoord,vresIc50['ic50'],yCoord*ifelse(isAbove,1.2,.8),col='red')
+  axis(4,vresIc50['max']/c(1,2,10,100,1000),as.character(c(1,.5,.1,.01,.001)*100),las=1,tcl=-.2,mgp=c(0,.6,0))
+  abline(h=vresIc50['max']/2,lty=3,col='#00000055')
+  text(convertLineToUser(2.6,4),10^mean(par('usr')[3:4]),'Percent of maximum',xpd=NA,srt=-90)
+  par('lheight'=.72)
+  legend('topright',names(cols),pch=21,pt.bg=cols,inset=.01,cex=.5,pt.cex=1,y.intersp=1.5)
   #if(thisSample=='MM55.12.2B1 bulk')browser()
   return(fit)
 }
-plotIfns<-function(dilutes,concAlpha,xlab=''){
+plotIfns<-function(dilutes,concAlpha,xlab='',...){
   ylims<-range(dilutes[,1:20],na.rm=TRUE)
-  par(mar=c(3.5,4.5,1.5,1))
+  par(mar=c(3,3.25,.25,3))
   for(thisSample in unique(dilutes$sample)){
     xx<-dilutes[dilutes$sample==thisSample,1:20]
-    plotIfn(concAlpha,xx,thisSample,xlab=xlab,ylims=ylims)
+    plotIfn(concAlpha,xx,'',xlab=xlab,ylims=ylims,...)
   }
 }
 plotDualIfns<-function(dilutes,dilutesBeta,concAlpha,concBeta){
@@ -145,11 +161,9 @@ plotDualIfns<-function(dilutes,dilutesBeta,concAlpha,concBeta){
     plotIfn(concBeta,yy,thisSample,xlab='IFNb concentration (pg/ml)',ylims=ylims2)
   }
 }
-
-pdf('out/allCurves.pdf',width=5,height=5)
+pdf('out/allCurves.pdf',width=4,height=4)
   plotIfns(dilutes,concAlpha,'IFNa2 concentration (pg/ml)')
 dev.off()
-
 pdf('out/allCurvesBeta.pdf',width=5,height=5)
   plotIfns(dilutesBeta,concBeta,'IFNb concentration (pg/ml)')
 dev.off()
