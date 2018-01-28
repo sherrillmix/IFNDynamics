@@ -95,11 +95,11 @@ condenseArrows<-function(dat,ic50Name,clinicalName,xlab,ylab,xlog=FALSE){
     counter<-counter+1
   }
 }
-pdf('out/CD4_vs_IC50_condense.pdf',width=6,height=4)
+pdf('out/CD4_vs_IC50_condense.pdf',width=7,height=4)
   condenseArrows(dat[!dat$qvoa,],'ic50','CD4','CD4 count','Interferon alpha 2 IC50 (pg/ml)') 
   condenseArrows(dat[!dat$qvoa,],'beta','CD4','CD4 count','Interferon beta IC50 (pg/ml)') 
 dev.off()
-pdf('out/VL_vs_IC50_condense.pdf',width=6,height=4)
+pdf('out/VL_vs_IC50_condense.pdf',width=7,height=4)
   condenseArrows(dat[!dat$qvoa,],'ic50','vl','Viral load','Interferon alpha 2 IC50 (pg/ml)',xlog=TRUE) 
   condenseArrows(dat[!dat$qvoa,],'beta','vl','Viral load','Interferon beta IC50 (pg/ml)',xlog=TRUE) 
 dev.off()
@@ -349,39 +349,39 @@ pdf('out/indivPredictions_beta.pdf',width=5,height=4)
   }
 dev.off()
 
-plotCondenseIfn<-function(dat,ic50,ylab){
+plotCondenseIfn<-function(dat,ic50,ylab,simpleFits,showLegend=TRUE){
   par(mar=c(0,0,0,0))
-  layout(lay,width=c(.25,rep(1,3),.01),height=c(.01,rep(1,3),.9))
+  layout(lay,width=c(.25,rep(1,3),.01),height=c(.01,rep(1,3),1.04))
   counter<-1
   for(ii in sort(unique(dat$pat))){
-    plot(dat$time/7,ic50,yaxt='n',log='y',bg=patCols[dat$pat],pch=21,type='n',xlab='',ylab=ylab,xaxt='n')
+    plot(dat$time/7,ic50,yaxt='n',log='y',bg=patCols[dat$pat],pch=21,type='n',xlab='',ylab=ylab,xaxt='n',cex=1.4)
     title(ii,line=-1)
     if(counter>6)axis(1,pretty(dat$time/7),cex.axis=1.2,mgp=c(2.75,.7,0))
     if(counter%%3==1)logAxis(2,las=1,cex.axis=1.1,mgp=c(3,.7,0))
     title(xlab='Time (weeks)',mgp=c(2,1,0))
     thisDat<-dat[dat$pat==ii,]
-    thisFit<-simpleFits[[ii]]
+    thisFit<-lm(I(log(ic50))~time+time2,dat=dat[dat$pat==ii&!is.na(dat$ic50)&!dat$qvoa,])
     fakeDays<-(min(dat[dat$pat==ii,'time'])):(max(dat[dat$pat==ii,'time'])+50)
     fakeDf<-data.frame('time'=fakeDays,'time2'=fakeDays^2,'logTime'=log(fakeDays),'logTime2'=log(fakeDays)^2,'logTime3'=log(fakeDays)^3,'logTime4'=log(fakeDays)^4)
     predIc50<-predict(thisFit,fakeDf,interval='confidence')
-    #predIc50<-predict(thisFit,data.frame('time'=fakeDays,'time2'=fakeDays^2),interval='confidence')
     lines(fakeDays/7,exp(predIc50[,'fit']),col=patCols[ii])
     polygon(c(fakeDays/7,rev(fakeDays)/7),c(exp(predIc50[,'lwr']),rev(exp(predIc50[,'upr']))),col=patCols2[ii],border=NA)
     thisDat<-dat[dat$pat==ii&!dat$qvoa,]
     predIc50<-predict(thisFit,fakeDf,interval='prediction')
     polygon(c(fakeDays/7,rev(fakeDays)/7),c(exp(predIc50[,'lwr']),rev(exp(predIc50[,'upr']))),col=patCols3[ii],border=NA)
     points(thisDat$time/7,thisDat$ic50,pch=21+thisDat$bulk,bg=patCols[ii])
-    if(counter==4)text(par('usr')[1]-.19*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),'IFNa2 IC50 (pg/ml)',srt=90,xpd=NA,cex=2)
+    if(counter==4)text(par('usr')[1]-.19*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),ylab,srt=90,xpd=NA,cex=2)
     if(counter==8)text(mean(par('usr')[1:2]),10^(par('usr')[3]-.4*diff(par('usr')[3:4])),'Weeks after onset of symptoms',xpd=NA,cex=2)
-    if(counter==9)legend(par('usr')[2]-diff(par('usr')[1:2])*.05,10^(par('usr')[3]-diff(par('usr')[3:4])*.26),c('Quadratic regression','95% confidence interval','95% prediction interval'),col=c(patCols[1],NA,NA),pt.bg=c(NA,patCols2[1],patCols3[1]),lty=c(1,NA,NA),pch=c(NA,22,22),border=NA,pt.cex=3.2,cex=1.2,xjust=1,yjust=1,xpd=NA)
+    if(counter==9&showLegend)legend(par('usr')[2]-diff(par('usr')[1:2])*.05,10^(par('usr')[3]-diff(par('usr')[3:4])*.26),c('Quadratic regression','95% confidence interval','95% prediction interval','Limiting dilution isolate','Bulk isolate'),col=c(patCols[1],NA,NA,'black','black'),pt.bg=c(NA,patCols2[1],patCols3[1],patCols[1],patCols[1]),lty=c(1,NA,NA,NA,NA),pch=c(NA,22,22,21,22),border=NA,pt.cex=c(3.2,3.2,3.2,1.4,1.4),cex=1.2,xjust=1,yjust=1,xpd=NA)
     counter<-counter+1
   }
 }
-pdf('out/indivPredict_condense.pdf',width=9,height=4)
-plotCondenseIfn(dat[!dat$qvoa,],dat$ic50[!dat$qvoa],ylab='Interferon alpha 2 IC50')
+pdf('out/indivPredict_condense.pdf',width=9,height=5)
+plotCondenseIfn(dat[!dat$qvoa,],dat$ic50[!dat$qvoa],ylab='Interferon alpha 2 IC50 (pg/ml)',simpleFits)
 dev.off()
-pdf('out/indivPredict_beta_condense.pdf',width=9,height=4)
-  plotCondenseIfn(dat[!dat$qvoa,],dat$beta[!dat$qvoa],ylab='Interferon beta IC50')
+pdf('out/indivPredict_beta_condense.pdf',width=9,height=5)
+  plotCondenseIfn(dat[!dat$qvoa,],dat$beta[!dat$qvoa],ylab='Interferon beta IC50 (pg/ml)',simpleFitsBeta)
+  plotCondenseIfn(dat[!dat$qvoa,],dat$beta[!dat$qvoa],ylab='Interferon beta IC50 (pg/ml)',simpleFitsBeta,showLegend=FALSE)
 dev.off()
 
 
@@ -464,6 +464,42 @@ selector<-!apply(is.na(dat[,ifnVars]),1,any)
 tmp<-dat[selector,ifnVars]
 pca<-prcomp(tmp,scale.=TRUE)
 biplot(pca)
+dev.off()
+
+
+
+plotVoa<-function(dat,ic50,ylab,addLegend=TRUE){
+  par(mar=c(2.9,3.8,.1,.1))
+  pats<-sort(unique(dat$pat[dat$qvoa]))
+  for(ii in pats){
+    plot(dat$time/7,ic50,yaxt='n',log='y',bg=patCols[dat$pat],pch=21,type='n',xlab='',ylab=ylab,mgp=c(2.8,.6,0),cex=1.2)
+    logAxis(las=1)
+    title(ii,line=-1)
+    title(xlab='Time (weeks)',mgp=c(1.8,1,0))
+    thisDat<-dat[dat$pat==ii&!dat$qvoa,]
+    thisVoa<-dat[dat$pat==ii&dat$qvoa,]
+    thisVoaIc50<-ic50[dat$pat==ii&dat$qvoa]
+    thisFit<-lm(I(log(ic50))~time+time2,dat=dat[dat$pat==ii&!is.na(dat$ic50)&!dat$qvoa,])
+    fakeDays<-(min(thisDat[,'time'])):(max(thisDat[,'time'])+50)
+    fakeDf<-data.frame('time'=fakeDays,'time2'=fakeDays^2,'logTime'=log(fakeDays),'logTime2'=log(fakeDays)^2,'logTime3'=log(fakeDays)^3,'logTime4'=log(fakeDays)^4)
+    predIc50<-predict(thisFit,fakeDf,interval='confidence')
+    #predIc50<-predict(thisFit,data.frame('time'=fakeDays,'time2'=fakeDays^2),interval='confidence')
+    lines(fakeDays/7,exp(predIc50[,'fit']),col=patCols[ii])
+    polygon(c(fakeDays/7,rev(fakeDays)/7),c(exp(predIc50[,'lwr']),rev(exp(predIc50[,'upr']))),col=patCols2[ii],border=NA)
+    thisDat<-dat[dat$pat==ii&!dat$qvoa,]
+    predIc50<-predict(thisFit,fakeDf,interval='prediction')
+    polygon(c(fakeDays/7,rev(fakeDays)/7),c(exp(predIc50[,'lwr']),rev(exp(predIc50[,'upr']))),col=patCols3[ii],border=NA)
+    points(thisDat$time/7,thisDat$ic50,pch=21+thisDat$bulk,bg=patCols[ii])
+    rect(artDays[ii]/7,10^par('usr')[3],par('usr')[2],10^par('usr')[4],col='#00000022',border=NA)
+    text(mean(c(artDays[ii]/7,par('usr')[2])),10^(par('usr')[4]-diff(par('usr')[3:4])*.15),'ART treatment',xpd=NA)
+    abline(h=thisVoaIc50,lty=2,col='#00000055')
+    points(thisVoa$time/7,thisVoaIc50,cex=1.3,bg=patCols[ii],pch=23,lwd=3)
+    if(ii==tail(pats,1)&addLegend)legend('bottomright',c('Limiting dilution','Viral outgrowth'),pch=c(21,23),pt.cex=c(1.2,1.3),pt.lwd=c(1,2),pt.bg=patCols[ii],inset=c(.01,.02),bg='white',cex=.9)
+  }
+}
+pdf('out/voa.pdf',width=6,height=2.4)
+  plotVoa(dat,dat$ic50,ylab='Interferon alpha 2 IC50',addLegend=FALSE)
+  plotVoa(dat,dat$beta,ylab='Interferon beta IC50')
 dev.off()
 
 #withAs(xx=dat[dat$time>35*7,],plot(ave(xx$vl,xx$pat,FUN=function(xx)(xx-min(xx,na.rm=TRUE))/max(xx-min(xx,na.rm=TRUE),na.rm=TRUE)),xx$ic50,bg=patCols[xx$pat],log='y',pch=21,cex=2))

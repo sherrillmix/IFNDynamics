@@ -161,10 +161,10 @@ plotDualIfns<-function(dilutes,dilutesBeta,concAlpha,concBeta){
     plotIfn(concBeta,yy,thisSample,xlab='IFNb concentration (pg/ml)',ylims=ylims2)
   }
 }
-pdf('out/allCurves.pdf',width=4,height=4)
+pdf('out/allCurves.pdf',width=6,height=4)
   plotIfns(dilutes,concAlpha,'IFNa2 concentration (pg/ml)')
 dev.off()
-pdf('out/allCurvesBeta.pdf',width=5,height=5)
+pdf('out/allCurvesBeta.pdf',width=6,height=4)
   plotIfns(dilutesBeta,concBeta,'IFNb concentration (pg/ml)')
 dev.off()
 
@@ -174,3 +174,4 @@ dev.off()
 
 ic50Fits<-calcIc50s(dilutes,concAlpha)
 ic50FitsBeta<-calcIc50s(dilutesBeta,concBeta)
+
