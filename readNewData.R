@@ -193,7 +193,7 @@ plot3vars<-function(var,lab,dat,logX=FALSE){
     withAs(xx=unique(dat[dat$pat==ii&!is.na(dat$vl),c('time','vl')]),plot(xx$time/7,xx$vl,type='l',log=logAddY,yaxt='n',xlab='',ylab='',xlim=range(dat$time/7),ylim=range(dat$vl,na.rm=TRUE),xaxt='n',col='#00000077'))
     withAs(xx=unique(dat[dat$pat==ii&!is.na(dat$vl),c('time','vl')]),points(xx$time/7,xx$vl,col='black',pch='.',cex=5))
     if(counter%%3==0)logAxis(4,las=1)
-    if(counter==6)text(par('usr')[2]+.14*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),'Viral load',srt=-90,xpd=NA,cex=2)
+    if(counter==6)text(par('usr')[2]+.14*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),'Viral load (copies/ml)',srt=-90,xpd=NA,cex=2)
     if(counter==6)text(par('usr')[2]+.42*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),'CD4 count',srt=-90,xpd=NA,cex=2,col='red')
     par(new=TRUE)
     withAs(xx=unique(dat[dat$pat==ii&!is.na(dat$CD4),c('time','CD4')]),plot(xx$time/7,xx$CD4,type='l',log=logAdd,yaxt='n',xlab='',ylab='',xlim=range(dat$time/7),ylim=range(dat$CD4,na.rm=TRUE),xaxt='n',col='red'))
