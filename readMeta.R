@@ -1,8 +1,9 @@
+library(dnar)
 library(xlsx)
 library(lubridate)
 wb <- loadWorkbook("meta/EJ MM plasma cytokine data CORRECTED updated VL CD4 Jan2018.xlsx")
 
-metas<-lapply(getSheets(wb),function(sheet){
+rawMetas<-lapply(getSheets(wb),function(sheet){
   rows<-getCells(getRows(sheet),simplify=FALSE)
   vals<-lapply(rows,function(row){
     tmp<-sapply(row,function(xx)ifelse(is.null(xx),NA,getCellValue(xx)))
@@ -28,10 +29,13 @@ metas<-lapply(getSheets(wb),function(sheet){
   dat<-as.data.frame(dat,stringsAsFactors=FALSE)
   dat[,grepl('^ifn',colnames(dat))]<- apply(dat[,grepl('^ifn',colnames(dat))],2,as.numeric)
   dat$dfosx<-as.numeric(dat$dfosx)
+  if(any(colnames(dat)=='newDate')){
+    if(any(!is.na(dat$newDate)&(abs(as.numeric(dat$newDate)-as.numeric(dat$oldDate))>10)))stop('Big difference in old and new date')
+    dat[!is.na(dat$newDate),'date']<-dat[!is.na(dat$newDate),'newDate']
+  }
   if(isStringDate)dat$rDate<-dmy(dat$date)
   else dat$rDate<-as.Date(as.numeric(dat$date),origin='1899-12-30')
-  #print(dat$cd4)
-  dat$cd4<-as.numeric(ifelse(dat$cd4 %in% c('not done','no data'),NA,dat$cd4))
+  dat$cd4<-as.numeric(ifelse(dat$cd4 %in% c('not done','no data','NA'),NA,dat$cd4))
   dat$vl<-as.numeric(ifelse(dat$viralLoad %in% c('not done','no data'),NA,gsub('[><,]','',dat$viralLoad)))
   if(any(colnames(dat)=='oldViralLoad')){
     oldVl<-as.numeric(gsub('[<>,]','',dat$oldViralLoad))
@@ -40,6 +44,23 @@ metas<-lapply(getSheets(wb),function(sheet){
   }
   return(dat)
 })
-names(metas)<-names(getSheets(wb))
-lapply(metas,'[','cd4')
+names(rawMetas)<-names(getSheets(wb))
 
+colCounts<-table(unlist(sapply(rawMetas,colnames)))
+targetCols<-names(colCounts)[colCounts==length(rawMetas)]
+ifnMeta<-do.call(rbind,lapply(rawMetas,'[',targetCols[orderIn(targetCols,colnames(rawMetas[[1]]))]))
+ifnMeta$ej<-sapply(strsplit(rownames(ifnMeta),' '),'[',1)
+ifnMeta$mm<-sapply(strsplit(rownames(ifnMeta),'[ .]'),'[',2)
+ifnMeta$visit<-sapply(strsplit(rownames(ifnMeta),'[ .]'),'[',3)
+baseDate<-by(ifnMeta[,c('dfosx','rDate')],ifnMeta$mm,function(xx){zz<-table(xx$rDate-xx$dfosx);names(zz)[which.max(zz)]})
+
+
+sorts<-read.csv('meta/AFM MM data summary Jan2018.csv',stringsAsFactors=FALSE)
+colnames(sorts)[1]<-'patient'
+sorts$patient<-fillDown(sorts$patient)
+newColnames<-sub('\\.\\.3\\.replicate\\.values\\.|\\.\\.\\..+cells\\.','',fillDown(ifelse(grepl('^X\\.[0-9]+$',colnames(sorts)),NA,colnames(sorts))))
+newColnames<-sprintf('%s%s',newColnames,ave(newColnames,newColnames,FUN=function(xx)if(length(xx)==1)'' else sprintf('__%d',1:length(xx))))
+colnames(sorts)<-newColnames
+sorts$ej<-sub(' ','',sapply(strsplit(sorts$Donor,'[.]'),'[',1))
+paste(sorts$ej,sorts$DFOSx) %in% paste(meta$ej,meta$dfosx)
+sorts$rDate<-as_date(sapply(sorts$Visit.Date,function(xx)ifelse(grepl('/',xx),mdy(xx),dmy(xx))))
