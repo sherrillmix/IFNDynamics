@@ -23,7 +23,8 @@ dat<-do.call(rbind,allDats)
 
 meta<-read.csv('data/For Scot, Complete Master table AUG.2017_meta.csv',stringsAsFactors=FALSE)[,-1:-2]
 meta<-meta[,1:6]
-meta$id<-fillDown(meta$ID)
+#meta$id<-fillDown(meta$ID)
+meta$id<-sapply(strsplit(meta$Time.Points,'\\.'),'[',1)
 meta<-meta[meta$Time.Points!='Total number of sequences',]
 rownames(meta)<-meta$Time.Points
 
@@ -41,6 +42,7 @@ meta2$Time.Points<-tmp
 rownames(meta2)<-meta2$Time.Points
 
 meta<-rbind(meta,meta2)
+meta$mm<-meta$id
 
 #EJ79/MM33 not in big spreadsheet
 #EJ85/MM39 not listed
@@ -194,7 +196,7 @@ plot3vars<-function(var,lab,dat,logX=FALSE){
     withAs(xx=unique(dat[dat$pat==ii&!is.na(dat$vl),c('time','vl')]),points(xx$time/7,xx$vl,col='black',pch='.',cex=5))
     if(counter%%3==0)logAxis(4,las=1)
     if(counter==6)text(par('usr')[2]+.14*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),'Viral load (copies/ml)',srt=-90,xpd=NA,cex=2)
-    if(counter==6)text(par('usr')[2]+.42*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),'CD4 count',srt=-90,xpd=NA,cex=2,col='red')
+    if(counter==6)text(par('usr')[2]+.42*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),'CD4 count (cells/mm3)',srt=-90,xpd=NA,cex=2,col='red')
     par(new=TRUE)
     withAs(xx=unique(dat[dat$pat==ii&!is.na(dat$CD4),c('time','CD4')]),plot(xx$time/7,xx$CD4,type='l',log=logAdd,yaxt='n',xlab='',ylab='',xlim=range(dat$time/7),ylim=range(dat$CD4,na.rm=TRUE),xaxt='n',col='red'))
     withAs(xx=unique(dat[dat$pat==ii&!is.na(dat$CD4),c('time','CD4')]),points(xx$time/7,xx$CD4,col='red',pch='.',cex=5))
@@ -415,7 +417,7 @@ pdf('out/subjects_condense.pdf',width=9,height=4)
     withAs(xx=unique(dat[dat$pat==ii&!is.na(dat$vl),c('time','vl')]),plot(xx$time/7,xx$vl,type='l',log='y',yaxt='n',xlab='',ylab='',xlim=range(dat$time/7),ylim=range(dat$vl,na.rm=TRUE),xaxt='n',col='red',lwd=2))
     if(counter%%3==0)logAxis(4,mgp=c(3,1,0),las=1,col.axis='red',cex.axis=1.3)
     if(counter==6)text(par('usr')[2]+.21*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),'Viral load',srt=-90,xpd=NA,col='red',cex=2)
-    if(counter==4)text(par('usr')[1]-.21*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),'CD4 count',srt=90,xpd=NA,col='blue',cex=2)
+    if(counter==4)text(par('usr')[1]-.21*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),'CD4 count (cells/mm3)',srt=90,xpd=NA,col='blue',cex=2)
     if(counter==8)text(mean(par('usr')[1:2]),10^(par('usr')[3]-.32*diff(par('usr')[3:4])),'Weeks after onset of symptoms',xpd=NA,cex=2)
     counter<-counter+1
     if(any(dat[dat$pat==ii,'qvoa'])){
