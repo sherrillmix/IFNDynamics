@@ -1,6 +1,8 @@
 library(dnar)
 library(lubridate)
 
+if(!exists('meta'))source('readMeta.R')
+
 lay<-matrix(0,nrow=5,ncol=5)
 lay[2:4,2:4]<-matrix(1:9,nrow=3,byrow=TRUE)
 
@@ -20,29 +22,6 @@ dat<-do.call(rbind,allDats)
 
 #dat<-read.csv('data/for Scott_2017_12_13.csv')
 #dat2<-read.csv('data/For Scott - All bulk isol. alpha and beta.csv')
-
-meta<-read.csv('data/For Scot, Complete Master table AUG.2017_meta.csv',stringsAsFactors=FALSE)[,-1:-2]
-meta<-meta[,1:6]
-#meta$id<-fillDown(meta$ID)
-meta$id<-sapply(strsplit(meta$Time.Points,'\\.'),'[',1)
-meta<-meta[meta$Time.Points!='Total number of sequences',]
-rownames(meta)<-meta$Time.Points
-
-meta2<-read.csv('data/New MM cohort patients.csv',stringsAsFactors=FALSE)
-#meta2<-meta2[meta2$Date!=''&!is.na(meta2$Date)&meta2$Date!='Date',]
-meta2<-meta2[meta2[,2]!='',]
-colnames(meta2)[1:2]<-c('ID','Time.Points')
-colnames(meta2)[colnames(meta2)=='Viral.load']<-'VL'
-colnames(meta2)[colnames(meta2)=='CD4.count']<-'CD4'
-meta2<-meta2[,1:6]
-meta2$id<-fillDown(meta2$ID)
-meta2$Time.Points<-sprintf('MM%s',meta2$Time.Points)
-tmp<-sub('\\.([0-9])$','.0\\1',mapply(function(xx,yy)sub('^MM[0-9]+',xx,yy),meta2$id,meta2$Time.Points))
-meta2$Time.Points<-tmp
-rownames(meta2)<-meta2$Time.Points
-
-meta<-rbind(meta,meta2)
-meta$mm<-meta$id
 
 #EJ79/MM33 not in big spreadsheet
 #EJ85/MM39 not listed
