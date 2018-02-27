@@ -52,6 +52,7 @@ dat$logTime2<-log(dat$time)^2
 dat$logTime3<-log(dat$time)^3
 dat$logTime4<-log(dat$time)^4
 dat$logVl<-log(dat$vl)
+dat$rt<-as.numeric(sub('N/A','',dat$RT.activity..ηg.μl.))
 
 
 cols<-rainbow.lab(length(unique(dat$pat)))
