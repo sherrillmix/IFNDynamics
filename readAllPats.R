@@ -14,6 +14,8 @@ ejs$dfosx<-as.numeric(ejs$dfosx)
 ejs$cd4<-as.numeric(sub('[A-Za-z].*$','',sub('\\(.*','',sub('[?,]','',ejs$cd4))))
 ejs$vl<-as.numeric(sub('[A-Za-z].*$','',sub('N/D|\\?','',gsub('[,><] *','',ejs$vl))))
 ejs$ej<-sprintf('EJ%s',ejs$pat)
+ejs$date[ejs$date==' 12/07/2001'&ejs$ej=='EJ50']<-'7/12/2001'
+ejs$date[ejs$date=='6/9/2001'&ejs$ej=='EJ52']<-'9/6/2001'
 #ejs$firstBelow500<-ave(ejs$cd4,ejs$pat,FUN=function(xx)(1:length(xx))==min(c(Inf,which(xx<500))))
 perEj<-data.frame('maxCd4'=tapply(ejs$cd4,ejs$pat,function(xx)max(c(-Inf,xx),na.rm=TRUE)))
 perEj$firstBelow400<-sapply(rownames(perEj),function(xx){id<-min(c(Inf,which(ejs[ejs$pat==xx,'cd4']<400)));ejs[ejs$pat==xx,][id,'dfosx']})
