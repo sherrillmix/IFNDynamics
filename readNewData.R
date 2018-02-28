@@ -23,11 +23,6 @@ dat<-do.call(rbind,allDats)
 #dat<-read.csv('data/for Scott_2017_12_13.csv')
 #dat2<-read.csv('data/For Scott - All bulk isol. alpha and beta.csv')
 
-#EJ79/MM33 not in big spreadsheet
-#EJ85/MM39 not listed
-#EJ86/MM40 not listed
-artDates<-c('MM14'='','MM15'='','MM23'='29/06/06','MM33'='','MM34'='14/09/09','MM39'='','MM40'='','MM55'='','MM62'='')
-artDays<-sapply(names(artDates)[artDates!=''],function(ii)withAs(zz=meta[grep(sprintf('%s\\*',ii),meta$id)[1],],dmy(artDates[ii])-mdy(zz$Date)+as.numeric(zz$DFOSx)))
 
 
 #Standardize BULK naming and catch _BULK with no .
@@ -73,6 +68,9 @@ if(any(dat$betaVres==0)){
 }
 dat$replication<-dat$Replicative.capacity.Pooled.Donor.cells.p24.d7..from.June.2017.repeat.
 ifnVars<-c('Interferon alpha 2 IC50'='ic50','Interferon beta IC50'='beta','Interferon alpha 2 Vres'='vres','Interferon beta Vres'='betaVres','Replication capacity'='replication')
+
+dat$time<-sapply(dat$sample,function(xx)comboMeta[paste(comboMeta$mm,comboMeta$visit,sep='.')==xx,'time'])
+if(any(is.na(dat$time)))stop('Missing time metadata')
 
 
 
