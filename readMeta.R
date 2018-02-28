@@ -1,6 +1,14 @@
 library(dnar)
 library(xlsx)
 library(lubridate)
+
+#EJ79/MM33 not in big spreadsheet
+#EJ85/MM39 not listed
+#EJ86/MM40 not listed
+artDates<-c('MM23'=dmy('29/06/06'),'MM34'=dmy('14/09/09'))
+#artDates<-c('MM14'='','MM15'='','MM23'='29/06/06','MM33'='','MM34'='14/09/09','MM39'='','MM40'='','MM55'='','MM62'='')
+#artDays<-sapply(names(artDates)[artDates!=''],function(ii)withAs(zz=meta[grep(sprintf('%s\\*',ii),meta$id)[1],],dmy(artDates[ii])-mdy(zz$Date)+as.numeric(zz$DFOSx)))
+
 fixDecimals<-function(xx,maxVisit=29){
   splits<-strsplit(xx,'\\.')
   visits<-as.numeric(sub('[oO]','0',sapply(splits,'[',2)))
@@ -48,6 +56,7 @@ rownames(meta2)<-meta2$Time.Points
 
 meta<-rbind(meta1,meta2)
 meta$mm<-meta$id
+meta$Date[meta$Date==' 12/07/2001'&meta$id=='MM14']<-'7/12/2001'
 meta$Date[meta$Date=='07/0806']<-'07/08/2006'
 meta$Date[meta$Date==' 08/21/08']<-'08/21/2008'
 meta$rDate<-as_date(sapply(meta$Date,function(xx)ifelse(grepl('/[0-9]{4}',xx),mdy(xx),dmy(xx))))
@@ -82,7 +91,7 @@ rawMetas<-lapply(getSheets(wb),function(sheet){
   ifnCols<-grep('IFN',vals[[1]])
   colnames(dat)[1:length(cols)]<-cols
   dat<-dat[,cols[cols!='XXX']]
-  dat[dat=='BDL']<- -Inf
+  dat[dat=='BDL']<- 1
   dat<-as.data.frame(dat,stringsAsFactors=FALSE)
   dat[,grepl('^ifn',colnames(dat))]<- apply(dat[,grepl('^ifn',colnames(dat))],2,as.numeric)
   dat$dfosx<-as.numeric(dat$dfosx)
@@ -114,10 +123,11 @@ ifnMeta$oldSample<-ifnMeta$sample
 ifnMeta$sample[isVisitSample]<-fixDecimals(ifnMeta$sample[isVisitSample])
 ifnMeta$visit<-sapply(strsplit(ifnMeta$sample,'[.]'),'[',2)
 ifnMeta<-ifnMeta[ifnMeta$mm %in% meta$mm,]
+#fix inconsistent date formatting
+ifnMeta[ifnMeta$ej=='EJ52'&ifnMeta$rDate=='2001-06-09','rDate']<-ymd('2001-09-06')
 tmp<-unique(ifnMeta[,c('mm','ej')])
 ejLookup<-structure(tmp$ej,.Names=tmp$mm)
 
-baseDate<-by(ifnMeta[,c('dfosx','rDate')],ifnMeta$mm,function(xx){zz<-table(xx$rDate-xx$dfosx);names(zz)[which.max(zz)]})
 
 
 ## cell sorting ##
@@ -139,7 +149,6 @@ trans$sample<-fixDecimals(as.character(trans$Sample))
 if(!exists('ejs'))source('readAllPats.R')
 
 
-
 ## Joining ##
 
 ##combine ifnMeta and meta
@@ -155,7 +164,9 @@ meta$ej<-ejLookup[meta$mm]
 metaMerge<-meta
 metaMerge[,colnames(ifnMeta)[!colnames(ifnMeta) %in% colnames(meta)]]<-NA
 metaMerge[,c('sample','date','dfosx','viralLoad')]<-metaMerge[,c('Time.Points','Date','DFOSx','VL')]
+metaMerge$source<-'meta'
 
+ifnMeta$source<-'ifn'
 comboMeta<-rbind(ifnMeta,metaMerge[newMeta,colnames(ifnMeta)])
 
 #combine ejs
@@ -170,6 +181,7 @@ thisEjs<-thisEjs[!thisEjs$id %in% c('EJ 85.14','EJ85.11'),]
 minDiff<-apply(thisEjs[,c('mm','rDate')],1,function(xx)min(c(Inf,abs(comboMeta[comboMeta$mm==xx[1],'rDate']-ymd(xx[2])))))
 if(any(minDiff<10))stop('Close date in ejs')
 thisEjs[,colnames(comboMeta)[!colnames(comboMeta) %in% colnames(thisEjs)]]<-NA
+thisEjs$source<-'ej'
 
 comboMeta<-rbind(comboMeta,thisEjs[,colnames(comboMeta)])
 
@@ -187,8 +199,20 @@ sortCols<-colnames(sorts)[grepl('BST|HLA|CD38|__',colnames(sorts))]
 if(any(sortCols %in% colnames(comboMeta)))stop('Duplicate column in trans')
 rownames(sorts)<-paste(sorts$ej,sorts$rDate)
 comboMeta[,sortCols]<-sorts[paste(comboMeta$ej,comboMeta$rDate),sortCols]
+comboMeta<-comboMeta[order(comboMeta$mm,comboMeta$rDate),]
+comboMeta$dfosx<-as.numeric(comboMeta$dfosx)
+comboMeta$qvoa<-comboMeta$rDate>as_date(ifelse(comboMeta$mm %in% names(artDates),artDates[comboMeta$mm],Inf))
 
+
+sapply(by(comboMeta[,c('dfosx','rDate')],comboMeta$mm,function(xx){zz<-table(xx$rDate-xx$dfosx)}),function(xx)diff(range(ymd(names(xx)))))
+baseDate<-by(comboMeta[,c('dfosx','rDate')],comboMeta$mm,function(xx){zz<-table(xx$rDate-xx$dfosx);names(zz)[which.max(zz)]})
+comboMeta$time<-comboMeta$rDate-ymd(baseDate[comboMeta$mm])
+comboMeta[comboMeta$visit=='12 MW'&comboMeta$mm=='MM39','visit']<-'13'
+
+if(any(apply(table(comboMeta$visit,comboMeta$mm)>1,2,any)))stop('Duplicate visit found')
 write.csv(comboMeta,'out/combinedMeta.csv')
+
+
 
 
 
