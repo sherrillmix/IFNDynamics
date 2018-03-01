@@ -65,7 +65,8 @@ for(ii in sort(unique(dat$pat))){
 dev.off()
 
 
-pdf('out/virus_vs_meta.pdf',height=10,width=10)
+for(dayCut in c(0,180)){
+pdf(sprintf('out/virus_vs_meta%s.pdf',ifelse(dayCut==0,'',sprintf('_after%ddays',dayCut))),height=10,width=10)
   for(jj in names(metaCols)){
     for(ii in names(virusCols)){
       xlim<-range(10^apply(log10(comboMeta[,metaCols[[jj]],drop=FALSE]),1,mean,na.rm=TRUE),na.rm=TRUE)
@@ -77,8 +78,8 @@ pdf('out/virus_vs_meta.pdf',height=10,width=10)
       logAxis(1,addExtra=TRUE)
       allMeans<-data.frame('mMean'=-99,'vMean'=-99)[0,]
       for(pat in sort(unique(dat$pat))){
-        thisDat<-dat[dat$pat==pat&!dat$qvoa,]
-        thisMeta<-comboMeta[comboMeta$mm==pat&!comboMeta$qvoa,]
+        thisDat<-dat[dat$pat==pat&!dat$qvoa&dat$time>dayCut,]
+        thisMeta<-comboMeta[comboMeta$mm==pat&!comboMeta$qvoa&comboMeta$time>dayCut,]
         vMeans<-10^tapply(log10(thisDat[!thisDat$qvoa,virusCols[ii]]),thisDat[!thisDat$qvoa,'time'],mean,na.rm=TRUE)
         mMeans<-10^apply(log10(thisMeta[,metaCols[[jj]],drop=FALSE]),1,mean,na.rm=TRUE)
         vMeans<-vMeans[as.character(thisMeta$time)]
@@ -93,4 +94,5 @@ pdf('out/virus_vs_meta.pdf',height=10,width=10)
     }
   }
 dev.off()
+}
 
