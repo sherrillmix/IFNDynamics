@@ -2,13 +2,6 @@ library(dnar)
 library(xlsx)
 library(lubridate)
 
-#EJ79/MM33 not in big spreadsheet
-#EJ85/MM39 not listed
-#EJ86/MM40 not listed
-artDates<-c('MM23'=dmy('29/06/06'),'MM34'=dmy('14/09/09'))
-#artDates<-c('MM14'='','MM15'='','MM23'='29/06/06','MM33'='','MM34'='14/09/09','MM39'='','MM40'='','MM55'='','MM62'='')
-#artDays<-sapply(names(artDates)[artDates!=''],function(ii)withAs(zz=meta[grep(sprintf('%s\\*',ii),meta$id)[1],],dmy(artDates[ii])-mdy(zz$Date)+as.numeric(zz$DFOSx)))
-
 fixDecimals<-function(xx,maxVisit=29){
   splits<-strsplit(xx,'\\.')
   visits<-as.numeric(sub('[oO]','0',sapply(splits,'[',2)))
@@ -148,6 +141,19 @@ trans$sample<-fixDecimals(as.character(trans$Sample))
 ## messy all combined list
 if(!exists('ejs'))source('readAllPats.R')
 
+## Post ART data
+pbmc<-read.csv('meta/EJ post ART PBMC available.csv',header=FALSE,stringsAsFactors=FALSE)
+pbmc[,1]<-trimws(pbmc[,1])
+pbmc<-pbmc[grepl('^E?J?[0-9]+\\.[0-9]+$',pbmc[,1]),]
+colnames(pbmc)<-c('sample','date','DFOSx','viralLoad','CD4','vials','postArt')
+pbmc$ej<-sprintf('EJ%s',sub('EJ','',sub('\\.[0-9]+$','',pbmc$sample)))
+pbmc$visit<-sub('.*\\.([0-9]+)$','\\1',pbmc$sample)
+pbmc$vl<-as.numeric(sub('<','',pbmc$viralLoad))
+pbmc$cd4<-as.numeric(sub('N/A','',pbmc$CD4))
+
+
+art<-read.csv('data/artDates.csv',stringsAsFactors=FALSE)
+artDates<-withAs(xx=art[!is.na(art$date)&art$mm %in% meta$mm,],structure(dmy(xx$date),.Names=xx$mm))
 
 ## Joining ##
 
@@ -185,6 +191,15 @@ thisEjs$source<-'ej'
 
 comboMeta<-rbind(comboMeta,thisEjs[,colnames(comboMeta)])
 
+#combine pbmc
+thisPbmc<-pbmc[pbmc$ej %in% comboMeta$ej & !paste(pbmc$ej,pbmc$visit) %in% paste(comboMeta$ej,comboMeta$visit),]
+thisPbmc$rDate<-dmy(thisPbmc$date)
+thisPbmc$mm<-sapply(thisPbmc$ej,function(xx)names(ejLookup)[ejLookup==xx])
+thisPbmc[,colnames(comboMeta)[!colnames(comboMeta) %in% colnames(thisPbmc)]]<-NA
+thisPbmc$source<-'pbmc'
+
+comboMeta<-rbind(comboMeta,thisPbmc[,colnames(comboMeta)])
+
 ##combine trans
 if(any(!trans$sample %in% sprintf('%s.%s',sub('EJ','',comboMeta$ej),comboMeta$visit)))stop('Found unknown sample in trans data')
 rownames(trans)<-trans$sample
@@ -209,10 +224,17 @@ baseDate<-by(comboMeta[,c('dfosx','rDate')],comboMeta$mm,function(xx){zz<-table(
 comboMeta$time<-comboMeta$rDate-ymd(baseDate[comboMeta$mm])
 comboMeta[comboMeta$visit=='12 MW'&comboMeta$mm=='MM39','visit']<-'13'
 
+comboMeta[comboMeta$vl==37611600&!is.na(comboMeta$vl),'vl']<-NA
+
 if(any(apply(table(comboMeta$visit,comboMeta$mm)>1,2,any)))stop('Duplicate visit found')
 write.csv(comboMeta,'out/combinedMeta.csv')
 
+artDfosx<-sapply(names(artDates),function(xx)artDates[xx]-ymd(baseDate[xx]))
+names(artDfosx)<-names(artDates)
 
-
-
+customCols<-read.csv('data/Hex color no. for MM cohort colorcode.csv',stringsAsFactors=FALSE,header=FALSE)[,1:2]
+customCols<-customCols[customCols[,1]!='',]
+colnames(customCols)<-c('sample','color')
+customCols$name<-fixDecimals(sub(' ?\\(.*$','',customCols$sample))
+rownames(customCols)<-customCols$name
 
