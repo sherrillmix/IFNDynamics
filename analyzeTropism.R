@@ -6,7 +6,6 @@ readCounts<-function(countFile){
   counts$row<-sub('[0-9]+$','',counts$well)
   return(counts)
 }
-
 readPlateViruses<-function(plateFile,virusFile){
   plate<-read.csv(plateFile,row.names=1,check.names=FALSE,stringsAsFactors=FALSE)
   viruses<-read.csv(virusFile,stringsAsFactors=FALSE)
@@ -67,7 +66,6 @@ pdf('out/iceMeans.pdf')
   plot(dat[rownames(iceMeans),'time'],iceProps[,'48h'],ylab='Proportion TZM-BL infectivity after 8h on ice',xlab='Days after onset of symptoms',pch=21,bg=patCols[dat[rownames(iceMeans),'pat']],las=1,cex=1.4,mgp=c(2.5,.7,0))
   axis(4,iceProps[!rownames(iceMeans) %in% rownames(dat),'48h'],sub('CoJRFL_','',rownames(iceProps)[!rownames(iceMeans) %in% rownames(dat)]),las=1)
   legend('top',icePats,pt.bg=patCols[icePats],pch=21,inset=.01)
-
 dev.off()
 
 
@@ -108,4 +106,8 @@ receptor<-receptor[!is.na(receptor$drug),]
 drugMeans<-tapply(receptor$n,list(receptor$virus,receptor$drug),mean)
 drugMeans[drugViruses,drugs]
 
+iceTrop<-readCounts('ice/out/2018-04-02-iceTropism2/counts.csv')
+tapply(iceTrop$n,list(iceTrop$row,iceTrop$col,iceTrop$plate),c)
 
+iceLuc<-read.csv('ice/2018-04-02-iceTropism/2018-04-02_ice.csv',check.names=FALSE,row.names=1)[,-13]
+tropLuc<-read.csv('ice/2018-04-02-iceTropism/2018-04-02_tropism.csv',check.names=FALSE,row.names=1)[,-13]
