@@ -31,7 +31,7 @@ fit4par<-function(concs,p24s){
 fit5par<-function(concs,p24s){
   #p24s<-p24s[concs>0]
   #concs<-concs[concs>0]
-  fits<-lapply(list(c(max(p24s),1,1,min(p24s),1),c(max(p24s)*2,1,1,min(p24s)/10),c(mean(p24s),1,1,mean(p24s),1),c(max(p24s),.01,1,1),1),function(starts)suppressWarnings(nlminb(starts,LS5,x=concs,y=p24s,lower=c(0,-Inf,-Inf,0,-Inf))))
+  fits<-lapply(list(c(max(p24s),1,1,min(p24s),1),c(max(p24s)*2,1,1,min(p24s)/10),c(mean(p24s),1,1,mean(p24s),1),c(max(p24s),.01,1,1),1),function(starts)suppressWarnings(nlminb(starts,LS,x=concs,y=p24s,lower=c(0,-Inf,-Inf,0,-Inf))))
   #fit<-suppressWarnings(nlminb(c(max(p24s),1,1,min(p24s)),LS,x=concs,y=p24s,lower=c(0,-Inf,-Inf,0))$par)
   obj<-sapply(fits,'[[','objective')
   return(fits[[which.min(obj)]]$par)
@@ -57,33 +57,39 @@ calcIc50s<-function(dilutes,concAlpha){
   return(out)
 }
 
+readIfns<-function(file,exclude=1){
+  wb <- loadWorkbook(file)
+  counter<-0
+  ic50Curves<-lapply(getSheets(wb),function(sheet){
+    counter<<-counter+1
+    if(counter %in% exclude)return(NULL)
+    #can get weird error otherwise
+    #rows<-lapply(1:40,function(xx)tryCatch(getCells(getRows(sheet)[xx])[[1]],error=function(e)return(NULL)))
+    rows<-getCells(getRows(sheet)[1:40],simplify=FALSE)
+    vals<-lapply(rows,function(row){
+      tmp<-sapply(row,function(xx)ifelse(is.null(xx),NA,getCellValue(xx)))
+      #100 is arbitrary number to make all same width
+      out<-rep(NA,100)
+      names(out)<-1:100
+      out[names(tmp)[names(tmp)!='']]<-tmp[names(tmp)!='']
+      return(out)
+    })
+    lastRow<-2+max(which(!is.na(sapply(vals[3:12],'[[',4))))
+    dat<-as.data.frame(apply(do.call(rbind,lapply(vals[3:lastRow],function(zz)zz[3:22])),2,function(xx){ifelse(xx==''|is.na(xx),NA,as.numeric(sub('[><]','',xx)))}),stringsAsFactors=FALSE)
+    dat$sample<-fillDown(sapply(vals[3:lastRow],'[[',2))
+    return(dat)
+  })
+  names(ic50Curves)<-names(getSheets(wb))
+  dilutes<-do.call(rbind,ic50Curves)
+  return(dilutes)
+}
+
 if(!exists('dilutes')){
   dilutions<-read.csv('VOA MM-cohort/dilutions.csv',stringsAsFactors=FALSE)
-  readIfns<-function(file){
-    wb <- loadWorkbook(file)
-    counter<-0
-    ic50Curves<-lapply(getSheets(wb),function(sheet){
-      counter<<-counter+1
-      if(counter==1)return(NULL)
-      rows<-getCells(getRows(sheet)[1:40],simplify=FALSE)
-      vals<-lapply(rows,function(row){
-        tmp<-sapply(row,function(xx)ifelse(is.null(xx),NA,getCellValue(xx)))
-        #100 is arbitrary number to make all same width
-        out<-rep(NA,100)
-        names(out)<-1:100
-        out[names(tmp)[names(tmp)!='']]<-tmp[names(tmp)!='']
-        return(out)
-      })
-      lastRow<-2+max(which(!is.na(sapply(vals[3:12],'[[',4))))
-      dat<-as.data.frame(apply(do.call(rbind,lapply(vals[3:lastRow],function(zz)zz[3:22])),2,function(xx){ifelse(xx==''|is.na(xx),NA,as.numeric(sub('[><]','',xx)))}),stringsAsFactors=FALSE)
-      dat$sample<-fillDown(sapply(vals[3:lastRow],'[[',2))
-      return(dat)
-    })
-    names(ic50Curves)<-names(getSheets(wb))
-    dilutes<-do.call(rbind,ic50Curves)
-    return(dilutes)
-  }
   dilutes<-readIfns("VOA MM-cohort/IC50 Alpha for New patients BULK isol. .xls")
+  newDilutes<-readIfns('data/For Scott 03.06.2018.xlsx',c(1:2,5:20))
+  newDilutes$sample<-sprintf('%s new',newDilutes$sample)
+  dilutes<-rbind(dilutes,newDilutes)
   dilutes[,1:20][dilutes[,1:20]<lowerLimit]<-lowerLimit
   dilutes$dilution<-sapply(dilutes$sample,function(xx)if(xx %in% dilutions$sample[dilutions$ifn=='alpha']) dilutions[dilutions$ifn=='alpha'&dilutions$sample==xx,'dilution'] else 50)
   dilutes[,1:20]<-dilutes[,1:20]*dilutes$dilution/1000
@@ -93,17 +99,27 @@ if(!exists('dilutes')){
   dilutesBeta[,1:20]<-dilutesBeta[,1:20]*dilutesBeta$dilution/1000
 }
 
+#assuming 
+#bio#1-tech#1 bio#2-tech#1
+#bio#1-tech#2 bio#2-tech#2
 plotIfn<-function(concAlpha,p24s,main='',xlab='',ylims=range(p24s),log='xy',scaleMax=FALSE){
   origConcs<-concs<-rep(concAlpha,each=2*nrow(p24s))
   if(scaleMax)maxs<-unlist(p24s[,1:2])
   else maxs<-1
   vresIc50<-findVresIc50(concAlpha,p24s)
-  p24s<-unlist(p24s)
   zeroOffset<-.01
   concs[concs==0]<-min(concs[concs>0])*zeroOffset
+  if(nrow(p24s)==2){
+    cols<-rainbow.lab(12)[c(1:2,11:12)]
+    names(cols)<-c('Bio replicate 1\nTech replicate 1','Bio replicate 1\nTech replicate 2','Bio replicate 2\nTech replicate 1','Bio replicate 2\nTech replicate 2')
+  }else if(nrow(p24s)==1){
+    cols<-rainbow.lab(2)
+    names(cols)<-c('Replicate 1','Replicate 2')
+  }else{
+    stop('p24s not 2 or 4 columns')
+  }
+  p24s<-unlist(p24s)
   fit<-fitter(origConcs,p24s)
-  cols<-rainbow.lab(12)[c(1:2,11:12)]
-  names(cols)<-c('Bio replicate 1\nTech replicate 1','Bio replicate 1\nTech replicate 2','Bio replicate 2\nTech replicate 1','Bio replicate 2\nTech replicate 2')
   plot(concs,p24s/maxs,xlab=xlab,ylab='',log=log,las=1,xaxt='n',main=main,bg=cols,pch=21,mgp=c(2,1,0),ylim=ylims/mean(maxs),yaxt='n')
   #fit2<-suppressWarnings(nlminb(c(max(p24s),1,1,min(p24s)),LS,x=concs[origConcs!=0],y=p24s[origConcs!=0],lower=c(0,-Inf,-Inf,0))$par)
   fakeConc<-10^seq(-10,10,.001)
@@ -142,10 +158,11 @@ plotIfn<-function(concAlpha,p24s,main='',xlab='',ylims=range(p24s),log='xy',scal
 }
 plotIfns<-function(dilutes,concAlpha,xlab='',...){
   ylims<-range(dilutes[,1:20],na.rm=TRUE)
-  par(mar=c(3,3.25,.25,3))
-  for(thisSample in unique(dilutes$sample)){
+  par(mar=c(3,3.25,1,3))
+  for(thisSample in sort(unique(dilutes$sample))){
     xx<-dilutes[dilutes$sample==thisSample,1:20]
-    plotIfn(concAlpha,xx,'',xlab=xlab,ylims=ylims,...)
+    plotIfn(concAlpha,xx,main=thisSample,xlab=xlab,ylims=ylims,...)
+    plotIfn(concAlpha,array(apply(xx,2,mean),dim=c(1,ncol(xx))),main=thisSample,xlab=xlab,ylims=ylims,...)
   }
 }
 plotDualIfns<-function(dilutes,dilutesBeta,concAlpha,concBeta){
@@ -175,3 +192,6 @@ dev.off()
 ic50Fits<-calcIc50s(dilutes,concAlpha)
 ic50FitsBeta<-calcIc50s(dilutesBeta,concBeta)
 
+pdf('out/newCurves.pdf',width=6,height=4)
+  plotIfns(newDilutes,concAlpha,'IFNa2 concentration (pg/ml)')
+dev.off()
