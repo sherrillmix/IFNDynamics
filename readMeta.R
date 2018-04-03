@@ -154,6 +154,8 @@ pbmc$cd4<-as.numeric(sub('N/A','',pbmc$CD4))
 
 art<-read.csv('data/artDates.csv',stringsAsFactors=FALSE)
 artDates<-withAs(xx=art[!is.na(art$date)&art$mm %in% meta$mm,],structure(dmy(xx$date),.Names=xx$mm))
+art$lastDate<-ymd(apply(art[,c('lastClinic','lastSample')],1,function(xx)if(all(is.na(xx)))return(NA)else as.character(max(dmy(xx),na.rm=TRUE))))
+lastDates<-withAs(xx=art[!is.na(art$lastDate)&art$mm %in% meta$mm,],structure(xx$lastDate,.Names=xx$mm))
 
 ## Joining ##
 
@@ -231,6 +233,8 @@ write.csv(comboMeta,'out/combinedMeta.csv')
 
 artDfosx<-sapply(names(artDates),function(xx)artDates[xx]-ymd(baseDate[xx]))
 names(artDfosx)<-names(artDates)
+lastDfosx<-sapply(names(lastDates),function(xx)lastDates[xx]-ymd(baseDate[xx]))
+names(lastDfosx)<-names(lastDates)
 
 customCols<-read.csv('data/Hex color no. for MM cohort colorcode.csv',stringsAsFactors=FALSE,header=FALSE)[,1:2]
 customCols<-customCols[customCols[,1]!='',]

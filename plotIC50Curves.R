@@ -42,7 +42,7 @@ fitter<-fit5par
 findVresIc50<-function(concAlpha,p24s){
   origConcs<-rep(concAlpha,each=2*nrow(p24s))
   p24s<-unlist(p24s)
-  fit<-fitter(origConcs,p24s)
+  fit<-fitter(origConcs[!is.na(p24s)],p24s[!is.na(p24s)])
   vres<-fitFunc(fit,max(origConcs))
   ic50<-optIc50(fit)
   percVres<-vres/fit[1]*100
@@ -63,20 +63,25 @@ readIfns<-function(file,exclude=1){
   ic50Curves<-lapply(getSheets(wb),function(sheet){
     counter<<-counter+1
     if(counter %in% exclude)return(NULL)
+    message(' Sheet ',counter)
     #can get weird error otherwise
     #rows<-lapply(1:40,function(xx)tryCatch(getCells(getRows(sheet)[xx])[[1]],error=function(e)return(NULL)))
-    rows<-getCells(getRows(sheet)[1:40],simplify=FALSE)
+    if(length(getRows(sheet))==0)return(NULL)
+    rows<-getCells(getRows(sheet,1:40),1:50,simplify=FALSE)
     vals<-lapply(rows,function(row){
       tmp<-sapply(row,function(xx)ifelse(is.null(xx),NA,getCellValue(xx)))
-      #100 is arbitrary number to make all same width
-      out<-rep(NA,100)
-      names(out)<-1:100
+      out<-rep(NA,50)
+      names(out)<-1:50
       out[names(tmp)[names(tmp)!='']]<-tmp[names(tmp)!='']
       return(out)
     })
-    lastRow<-2+max(which(!is.na(sapply(vals[3:12],'[[',4))))
-    dat<-as.data.frame(apply(do.call(rbind,lapply(vals[3:lastRow],function(zz)zz[3:22])),2,function(xx){ifelse(xx==''|is.na(xx),NA,as.numeric(sub('[><]','',xx)))}),stringsAsFactors=FALSE)
-    dat$sample<-fillDown(sapply(vals[3:lastRow],'[[',2))
+    firstRow<-min(c(Inf,which(!is.na(sapply(vals[1:30],'[[',3)))))+1
+    if(firstRow==Inf)return(NULL)
+    lastRow<-firstRow+min(c(Inf,which(is.na(sapply(vals[firstRow:40],'[[',3)))))-1-1
+    if(lastRow==Inf)return(NULL)
+    #if((lastRow-firstRow+1) %%2 !=0)warning('Number of rows not a multiple of 2 on sheet ',counter,' of ',file)
+    dat<-as.data.frame(apply(do.call(rbind,lapply(vals[firstRow:lastRow],function(zz)zz[3:22])),2,function(xx){as.numeric(ifelse(xx==''|is.na(xx)|grepl('\\?\\?',xx),NA,sub('[><]','',xx)))}),stringsAsFactors=FALSE)
+    dat$sample<-fillDown(sapply(vals[firstRow:lastRow],'[[',2))
     return(dat)
   })
   names(ic50Curves)<-names(getSheets(wb))
@@ -109,17 +114,21 @@ plotIfn<-function(concAlpha,p24s,main='',xlab='',ylims=range(p24s),log='xy',scal
   vresIc50<-findVresIc50(concAlpha,p24s)
   zeroOffset<-.01
   concs[concs==0]<-min(concs[concs>0])*zeroOffset
-  if(nrow(p24s)==2){
+  if(nrow(p24s)==4){
+    cols<-rainbow.lab(17)[c(1:2,6:7,11:12,16:17)]
+    names(cols)<-c('Bio replicate 1\nTech replicate 1','Bio replicate 1\nTech replicate 2','Bio replicate 2\nTech replicate 1','Bio replicate 2\nTech replicate 2','Bio replicate 3\nTech replicate 1','Bio replicate 3\nTech replicate 2','Bio replicate 4\nTech replicate 1','Bio replicate 4\nTech replicate 2')
+  }else if(nrow(p24s)==2){
     cols<-rainbow.lab(12)[c(1:2,11:12)]
     names(cols)<-c('Bio replicate 1\nTech replicate 1','Bio replicate 1\nTech replicate 2','Bio replicate 2\nTech replicate 1','Bio replicate 2\nTech replicate 2')
   }else if(nrow(p24s)==1){
     cols<-rainbow.lab(2)
     names(cols)<-c('Replicate 1','Replicate 2')
   }else{
+    browser()
     stop('p24s not 2 or 4 columns')
   }
   p24s<-unlist(p24s)
-  fit<-fitter(origConcs,p24s)
+  fit<-fitter(origConcs[!is.na(p24s)],p24s[!is.na(p24s)])
   plot(concs,p24s/maxs,xlab=xlab,ylab='',log=log,las=1,xaxt='n',main=main,bg=cols,pch=21,mgp=c(2,1,0),ylim=ylims/mean(maxs),yaxt='n')
   #fit2<-suppressWarnings(nlminb(c(max(p24s),1,1,min(p24s)),LS,x=concs[origConcs!=0],y=p24s[origConcs!=0],lower=c(0,-Inf,-Inf,0))$par)
   fakeConc<-10^seq(-10,10,.001)
@@ -148,6 +157,7 @@ plotIfn<-function(concAlpha,p24s,main='',xlab='',ylims=range(p24s),log='xy',scal
   yCoord<-ifelse(isAbove,10^(par('usr')[3]*.2+par('usr')[4]*.8),10^(par('usr')[3]*.55+par('usr')[4]*.45)*1.2)
   text(vresIc50['ic50']/1.85,yCoord,sprintf('IC50=%s',format(vresIc50['ic50'],digits=2)),adj=c(1,0.5),col='red')
   segments(vresIc50['ic50']/1.75,yCoord,vresIc50['ic50'],yCoord*ifelse(isAbove,1.2,.8),col='red')
+  if(is.na(vresIc50['max']))browser()
   axis(4,vresIc50['max']/c(1,2,10,100,1000),as.character(c(1,.5,.1,.01,.001)*100),las=1,tcl=-.2,mgp=c(0,.6,0))
   abline(h=vresIc50['max']/2,lty=3,col='#00000055')
   text(convertLineToUser(2.6,4),10^mean(par('usr')[3:4]),'Percent of maximum',xpd=NA,srt=-90)
@@ -156,6 +166,7 @@ plotIfn<-function(concAlpha,p24s,main='',xlab='',ylims=range(p24s),log='xy',scal
   #if(thisSample=='MM55.12.2B1 bulk')browser()
   return(fit)
 }
+
 plotIfns<-function(dilutes,concAlpha,xlab='',...){
   ylims<-range(dilutes[,1:20],na.rm=TRUE)
   par(mar=c(3,3.25,1,3))
@@ -195,3 +206,17 @@ ic50FitsBeta<-calcIc50s(dilutesBeta,concBeta)
 pdf('out/newCurves.pdf',width=6,height=4)
   plotIfns(newDilutes,concAlpha,'IFNa2 concentration (pg/ml)')
 dev.off()
+
+
+oldFiles<-list.files('ic50','xlsx?$',full.names=TRUE)
+oldDilutes<-lapply(oldFiles,function(xx){message(xx);readIfns(xx)})
+names(oldDilutes)<-basename(oldFiles)
+oldDilutes<-oldDilutes[names(oldDilutes)!='IC50 alpha and beta for BULK isolates .xlsx']
+oldDilutes<-mapply(function(xx,yy){xx$sample<-sprintf('%s (%s)',xx$sample,yy);xx},oldDilutes,names(oldDilutes),SIMPLIFY=FALSE)
+oldAlpha<-do.call(rbind,oldDilutes[grepl('[Aa]lpha',names(oldDilutes))])
+oldBeta<-do.call(rbind,oldDilutes[grepl('[bB]eta',names(oldDilutes))])
+pdf('out/oldCurves.pdf')
+  plotIfns(oldAlpha,concAlpha,'IFNa2 concentration (pg/ml)')
+  plotIfns(oldBeta,concBeta,'IFNb concentration (pg/ml)')
+dev.off()
+
