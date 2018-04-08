@@ -1,3 +1,4 @@
+if(!exists('dat'))source('readNewData.R')
 readCounts<-function(countFile){
   counts<-read.csv(countFile,stringsAsFactors=FALSE)
   counts$plate<-basename(counts$dir)
@@ -107,7 +108,72 @@ drugMeans<-tapply(receptor$n,list(receptor$virus,receptor$drug),mean)
 drugMeans[drugViruses,drugs]
 
 iceTrop<-readCounts('ice/out/2018-04-02-iceTropism2/counts.csv')
-tapply(iceTrop$n,list(iceTrop$row,iceTrop$col,iceTrop$plate),c)
+iceTropMats<-tapply(iceTrop$n,list(iceTrop$row,iceTrop$col,iceTrop$plate),c)
 
 iceLuc<-read.csv('ice/2018-04-02-iceTropism/2018-04-02_ice.csv',check.names=FALSE,row.names=1)[,-13]
+#ran out of virus
+iceLuc[c('B','D','F','H'),c(3:4,7:8)]<-NA
 tropLuc<-read.csv('ice/2018-04-02-iceTropism/2018-04-02_tropism.csv',check.names=FALSE,row.names=1)[,-13]
+
+viruses<-rep(c("WT","L193A"),4)
+times<-rep(c(0,8,24,48),each=2)
+virCol<-c('WT'='#0000FF','L193A'='#FF0000')
+thawViruses<-rep(rep(c("WT","L193A"),4),2)
+freezeThaws<-rep(1:4,each=2)
+#abusing globals
+plotIce<-function(xx,main='',ylab='TZM-BL B-Gal spots',normalize=FALSE){
+  ylim<-c(0,max(xx,na.rm=TRUE))
+  if(normalize){
+    zeros<-apply(xx[1:2,],1,mean,na.rm=TRUE)
+    xx<-xx/zeros
+    ylim<-range(xx,na.rm=TRUE)
+  }
+  plot(rep(times,ncol(xx)),as.vector(unlist(xx)),main=main,xlab='Time on ice (h)',ylab=ylab,las=1,bg=virCol[viruses],pch=21,cex=1.5,ylim=ylim,log=ifelse(normalize,'y',''),yaxt=ifelse(normalize,'n','s'))
+  if(normalize) logAxis(2,las=1,exponent=FALSE)
+  means<-apply(xx,1,median,na.rm=TRUE)
+  for(ii in 1:2){
+    if(normalize){
+      tmp<-data.frame('x'=rep(times[seq(ii,nrow(xx),2)],ncol(xx)),'y'=log(as.vector(unlist(xx[seq(ii,nrow(xx),2),]))))
+      mod<-lm(y~x,tmp)
+      fakeTime<-seq(0,60,.01) 
+      preds<-predict(mod,data.frame(x=fakeTime),interval='confidence')
+      lines(fakeTime,exp(preds[,1]),col=virCol[ii])
+      polygon(c(fakeTime,rev(fakeTime)),exp(c(preds[,2],rev(preds[,3]))),border=NA,col=sprintf('%s11',virCol[ii]))
+      halfLife<-log(.5)/coefficients(mod)[2]
+      text(par('usr')[1]+.01*diff(par('usr')[1:2]),10^(par('usr')[3]+(.01+(ii-2)*-0.05)*diff(par('usr')[3:4])),sprintf('%s half-life=%0.1fhr',names(virCol)[ii],halfLife),adj=c(0,0))
+    }else{
+      lines(times[seq(ii,nrow(xx),2)],means[seq(ii,nrow(xx),2)],col=virCol[ii])
+    }
+  }
+}
+plotThaw<-function(xx,ylab='TZM-BL B-Gal spots'){
+  plot(rep(freezeThaws,ncol(xx)),as.vector(unlist(xx)),xlab='Number of freeze thaws',ylab=ylab,las=1,bg=virCol[thawViruses],pch=21,cex=1.5,xaxt='n',log='y')
+  axis(1,1:4)
+  for(ii in 1:2){
+    thisFreezes<-rep(freezeThaws[seq(ii,nrow(xx),2)],ncol(xx))
+    vals<-as.vector(unlist(xx[seq(ii,nrow(xx),2),]))
+    mod<-lm(log(vals)~thisFreezes) 
+    fakeThaws<-seq(0,6,.01)
+    preds<-predict(mod,data.frame(thisFreezes=fakeThaws),interval='confidence')
+    lines(fakeThaws,exp(preds[,1]),col=virCol[ii])
+    polygon(c(fakeThaws,rev(fakeThaws)),exp(c(preds[,2],rev(preds[,3]))),border=NA,col=sprintf('%s11',virCol[ii]))
+  }
+}
+pdf('out/iceWtMut.pdf',width=10,height=10)
+  par(mfrow=c(3,2))
+  for(normalize in c(FALSE,TRUE)){
+    if(normalize)ylabs<-sprintf('Proportion of 0-hour infectivity %s',c('(B-Gal)','(Luciferase)'))
+    else ylabs<-c('TZM-BL B-Gal spots','TZM-BL luciferase luminescence')
+    withAs(xx=iceTropMats[,1:4,'ice'],plotIce(xx,main='50ul in 96 well plate',ylab=ylabs[1],normalize=normalize))
+    withAs(xx=iceLuc[,1:4],plotIce(xx,main='50ul in 96 well plate',ylab=ylabs[2],normalize=normalize))
+    legend('topright',names(virCol),pt.bg=virCol,pch=21,inset=.01)
+    withAs(xx=iceTropMats[,5:8,'ice'],plotIce(xx,main='50ul in a 1.5ml tube',ylab=ylabs[1],normalize=normalize))
+    withAs(xx=iceLuc[,5:8],plotIce(xx,main='50ul in a 1.5ml tube',ylab=ylabs[2],normalize=normalize))
+    withAs(xx=iceTropMats[,9:12,'ice'],plotIce(xx,main='500ul in a 1.5ml tube (no freeze-thaw)',ylab=ylabs[1],normalize=normalize))
+    withAs(xx=iceLuc[,9:12],plotIce(xx,main='500ul in a 1.5ml tube (no freeze-thaw)',ylab=ylabs[2],normalize=normalize))
+  }
+  par(mfrow=c(2,2))
+  withAs(xx=iceTropMats[,11:12,'tropism'],plotThaw(xx,ylab='TZM-BL B-Gal spots'))
+  withAs(xx=tropLuc[,11:12],plotThaw(xx,ylab='TZM-BL luciferase luminescence'))
+  legend('topright',names(virCol),pt.bg=virCol,pch=21,inset=.01)
+dev.off()
