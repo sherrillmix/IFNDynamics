@@ -324,8 +324,8 @@ pdf('out/subjects_condense.pdf',width=9,height=4)
     par(new=TRUE)
     thisDat<-unique(comboMeta[comboMeta$mm==ii&!is.na(comboMeta$vl),c('time','vl')])
     plot(thisDat$time/7,thisDat$vl,type='n',log='y',yaxt='n',xlab='',ylab='',xlim=xlim,ylim=range(dat$vl,na.rm=TRUE),xaxt='n',col='red',lwd=2)
-    reduceDat<-thisDat[c(TRUE,!sapply(2:(nrow(thisDat)-1),function(zz)all(thisDat[zz+-1:1,'vl']==50)),TRUE),]
-    segments(reduceDat$time[-nrow(reduceDat)]/7,reduceDat$vl[-nrow(reduceDat)],reduceDat$time[-1]/7,reduceDat$vl[-1],col='red',lwd=2,lty=ifelse(reduceDat$vl[-nrow(reduceDat)]==50&reduceDat$vl[-1]==50,2,1))
+    reduceDat<-thisDat[c(TRUE,!sapply(2:(nrow(thisDat)-1),function(zz)all(thisDat[zz+-1:1,'vl']<=50)),TRUE),]
+    segments(reduceDat$time[-nrow(reduceDat)]/7,reduceDat$vl[-nrow(reduceDat)],reduceDat$time[-1]/7,reduceDat$vl[-1],col='red',lwd=2,lty=ifelse(reduceDat$vl[-nrow(reduceDat)]<=50&reduceDat$vl[-1]<=50,2,1))
     if(counter==6)text(par('usr')[2]+.2*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),'CD4 count (cells/mm3)',srt=-90,xpd=NA,col='blue',cex=2)
     if(counter%%3==1)logAxis(2,mgp=c(3,1,0),las=1,col.axis='red',cex.axis=1.3)
     if(counter==4)text(par('usr')[1]-.2*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),'Viral load (copies/ml)',srt=90,xpd=NA,col='red',cex=2)
