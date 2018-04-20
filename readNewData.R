@@ -12,7 +12,7 @@ names(patCols2)<-names(patCols3)<-names(patCols)
 #dat<-read.csv('data/Data Master MG, Sept_2.csv')
 #dat<-read.csv('data/MM cohort cata master 11.29.2017.csv')
 #allDats<-lapply(c('data/for Scott_2017_12_13.csv','data/For Scott - All bulk isol. alpha and beta.csv'),read.csv,stringsAsFactors=FALSE)
-allDats<-lapply(c('data/For Scott 03.06.2018.csv'),read.csv,stringsAsFactors=FALSE)
+allDats<-lapply(c('data/for Scott_Data Marster.csv'),read.csv,stringsAsFactors=FALSE)
 allDats<-lapply(allDats,function(dat)dat[!is.na(dat$ID.for.Publications)&dat$ID.for.Publications!='',])
 allCols<-unique(unlist(lapply(allDats,colnames)))
 allDats<-lapply(allDats,function(dat){dat[,allCols[!allCols %in% colnames(dat)]]<-NA;dat[,allCols]})
@@ -25,11 +25,11 @@ dat<-do.call(rbind,allDats)
 
 #Standardize BULK naming and catch _BULK with no .
 dat$qvoa<-grepl('VOA',dat$ID.for.Publications)
-dat$id<-sub('VOA[_ ]','',sub(' +bulk|_Bulk|_BULK','.bulk',dat$ID.for.Publications))
+dat$id<-sub('[ _.][Bb]ulk-([IVX]+)','.\\1.bulk',sub('VOA[_ ]','',sub(' +[Bb]ulk|_Bulk|_BULK','.bulk',dat$ID.for.Publications)))
 dat$id<-sprintf('%s%s',dat$id,ifelse(dat$qvoa,'.VOA',''))
 dat$id<-sub('^Mm','MM',dat$id)
 dat$id<-sub('^(MM[0-9]+)\\.([0-9])\\.','\\1.0\\2.',dat$id)
-dat$bulk<-grepl('bulk',dat$id)
+dat$bulk<-grepl('[Bb]ulk',dat$id)
 probs<-grepl('^MM[0-9]+\\.[0-9]+\\.bulk',dat$id)
 dat[probs,'id']<-withAs(xx=dat[probs,],ave(sub('\\.bulk','',xx$id),sub('\\.bulk','',xx$id),FUN=function(yy)sprintf('%s.%d.bulk',yy,1:length(yy))))
 splits<-strsplit(dat$id,'\\.')
@@ -56,7 +56,6 @@ dat$logTime3<-log(dat$time)^3
 dat$logTime4<-log(dat$time)^4
 dat$logVl<-log(dat$vl)
 dat$rt<-as.numeric(sub('N/A','',dat$RT.activity..ηg.μl.))
-
 
 cols<-rainbow.lab(length(unique(dat$pat)))
 names(cols)<-unique(dat$pat)
@@ -113,4 +112,8 @@ print(mean(sapply(rownames(zz),function(xx){tmp<-zz[xx,!is.na(zz[xx,])];diff(as.
 message('Median CD4 at last time point')
 print(median(withAs(xx=dat[!dat$qvoa,][dat$time[!dat$qvoa]==ave(dat$time[!dat$qvoa],dat$pat[!dat$qvoa],FUN=max),c('pat','CD4')],tapply(xx$CD4,xx$pat,unique))))
 
+dat$meanIc50<-ave(dat$ic50,paste(dat$pat,dat$time),FUN=function(xx)mean(xx,na.rm=TRUE))
+dat$isNadir<-dat$meanIc50==ave(dat$meanIc50,dat$pat,FUN=function(xx)min(xx,na.rm=TRUE))
+dat$isFirst<-dat$time==ave(dat$time,dat$pat,FUN=function(xx)min(xx,na.rm=TRUE))
+write.csv(dat[dat$isFirst|dat$isNadir|dat$qvoa,c('pat','time','ic50','isFirst','isNadir','qvoa')],'out/firstNadir.csv')
 
