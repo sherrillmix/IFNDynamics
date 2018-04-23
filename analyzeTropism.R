@@ -43,13 +43,23 @@ plateIds$virus<-sub('(MM[0-9]+)\\.([0-9])\\.','\\1.0\\2.',plateIds$virus)
 counts$virus<-plateIds[counts$well,'virus']
 iceMeans<-tapply(counts$n,list(counts$virus,counts$time),mean)
 iceSd<-tapply(counts$n,list(counts$virus,counts$time),sd)
+counts$h<-as.numeric(sub('h','',counts$time))
 iceProps<-t(apply(iceMeans,1,function(xx)xx/xx[1]))
+calculateHalf<-function(counts,times){
+  #adding 1 pseudocount
+  tmp<-data.frame('x'=times,'y'=log(counts+1))
+  mod<-lm(y~x,tmp)
+  halfLife<-log(.5)/coefficients(mod)[2]  
+  return(halfLife)
+}
+iceHalfs<-sapply(unique(counts$virus),function(xx)calculateHalf(counts[counts$virus==xx,'n'],counts[counts$virus==xx,'h']))
+names(iceHalfs)<-unique(counts$virus)
 
 icePats<-unique(na.omit(dat[rownames(iceMeans),'pat']))
 times<-as.numeric(sub('h','',colnames(iceMeans)))
 pdf('out/iceMeans.pdf')
-  plot(1,1,type='n',xlab='Hours on ice',ylab='Proportion of 0h TZM-BL infectivity',xlim=range(times),ylim=range(iceProps))
-  apply(iceProps,1,function(xx)lines(times,xx))
+  plot(1,1,type='n',xlab='Hours on ice',ylab='Proportion of 0h TZM-BL infectivity',xlim=range(times),ylim=range(iceProps),log='y')
+  for(ii in 1:nrow(iceProps))lines(times,iceProps[ii,],col=1+grepl('JRFL',rownames(iceProps)[ii]))
   par(mar=c(3.5,4,.1,4.5))
   plot(dat[rownames(iceMeans),'ic50'],iceProps[,'08h'],ylab='Proportion TZM-BL infectivity after 8h on ice',xlab='IFNa2 IC50',log='x',xaxt='n',pch=21,bg=patCols[dat[rownames(iceMeans),'pat']],cex=1.4,las=1,mgp=c(2.5,.7,0))
   logAxis(1,las=1)
@@ -64,8 +74,12 @@ pdf('out/iceMeans.pdf')
   axis(4,iceProps[!rownames(iceMeans) %in% rownames(dat),'48h'],sub('CoJRFL_','',rownames(iceProps)[!rownames(iceMeans) %in% rownames(dat)]),las=1)
   par(mar=c(3.5,4,.1,4.5))
   legend('topleft',icePats,pt.bg=patCols[icePats],pch=21,inset=.01)
-  plot(dat[rownames(iceMeans),'time'],iceProps[,'48h'],ylab='Proportion TZM-BL infectivity after 8h on ice',xlab='Days after onset of symptoms',pch=21,bg=patCols[dat[rownames(iceMeans),'pat']],las=1,cex=1.4,mgp=c(2.5,.7,0))
+  plot(dat[rownames(iceMeans),'time'],iceProps[,'48h'],ylab='Proportion TZM-BL infectivity after 48h on ice',xlab='Days after onset of symptoms',pch=21,bg=patCols[dat[rownames(iceMeans),'pat']],las=1,cex=1.4,mgp=c(2.5,.7,0))
   axis(4,iceProps[!rownames(iceMeans) %in% rownames(dat),'48h'],sub('CoJRFL_','',rownames(iceProps)[!rownames(iceMeans) %in% rownames(dat)]),las=1)
+  legend('top',icePats,pt.bg=patCols[icePats],pch=21,inset=.01)
+  #half life
+  plot(dat[names(iceHalfs),'time'],iceHalfs,ylab='Half life on ice (h)',xlab='Days after onset of symptoms',pch=21,bg=patCols[dat[names(iceHalfs),'pat']],las=1,cex=1.4,mgp=c(2.5,.7,0))
+  axis(4,iceHalfs[!names(iceHalfs) %in% rownames(dat)],sub('CoJRFL_','',names(iceHalfs)[!names(iceHalfs) %in% rownames(dat)]),las=1)
   legend('top',icePats,pt.bg=patCols[icePats],pch=21,inset=.01)
 dev.off()
 
@@ -140,7 +154,7 @@ plotIce<-function(xx,main='',ylab='TZM-BL B-Gal spots',normalize=FALSE){
       lines(fakeTime,exp(preds[,1]),col=virCol[ii])
       polygon(c(fakeTime,rev(fakeTime)),exp(c(preds[,2],rev(preds[,3]))),border=NA,col=sprintf('%s11',virCol[ii]))
       halfLife<-log(.5)/coefficients(mod)[2]
-      text(par('usr')[1]+.01*diff(par('usr')[1:2]),10^(par('usr')[3]+(.01+(ii-2)*-0.05)*diff(par('usr')[3:4])),sprintf('%s half-life=%0.1fhr',names(virCol)[ii],halfLife),adj=c(0,0))
+      text(par('usr')[1]+.01*diff(par('usr')[1:2]),10^(par('usr')[3]+(.01+(ii-2)*-0.06)*diff(par('usr')[3:4])),sprintf('%s half-life=%0.1fhr',names(virCol)[ii],halfLife),adj=c(0,0))
     }else{
       lines(times[seq(ii,nrow(xx),2)],means[seq(ii,nrow(xx),2)],col=virCol[ii])
     }
