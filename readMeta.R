@@ -2,7 +2,19 @@ library(dnar)
 library(xlsx)
 library(lubridate)
 
-fixDecimals<-function(xx,maxVisit=29){
+convertUKMM<-function(xx,mmLookup,errorOnNA=TRUE){
+  splits<-strsplit(xx,'\\.')
+  splits<-lapply(splits,function(xx){
+    orig<-xx
+    if(length(xx)==0)return('')
+    xx[1]<-sub('UK','EJ',gsub(' ','',xx[1]))
+    if(grepl('EJ',xx[1]))xx[1]<-mmLookup[xx[1]]
+    if(is.na(xx[1])&errorOnNA)stop('Problem converting ID "',paste(orig,collapse='.'),'"')
+    return(xx)
+  })
+  return(sapply(splits,paste,collapse='.'))
+}
+fixDecimals<-function(xx,maxVisit=29,checkRank=TRUE){
   splits<-strsplit(xx,'\\.')
   visits<-as.numeric(sub('[oO]','0',sapply(splits,'[',2)))
   pats<-sapply(splits,'[',1)
@@ -20,10 +32,10 @@ fixDecimals<-function(xx,maxVisit=29){
     #catch too low value
     probs<-out<cummax(out)
     if(any(probs))out[probs]<-out[probs]*10
-    if(any(rank(out)!=1:length(out)))stop('Problem fixing visits: ',paste(xx,collapse=', '))
+    if(checkRank&&any(rank(out)!=1:length(out)))stop('Problem fixing visits: ',paste(xx,collapse=', '))
     out
   })
-  return(paste(pats,sprintf('%02d',fixVisit),sep='.'))
+  return(sprintf('%s.%s%s',pats,sprintf('%02d',fixVisit),sapply(splits,function(xx)ifelse(length(xx)>2,sprintf('.%s',paste(xx[-2:-1],collapse='.')),''))))
 }
 
 ##MASTER META LIST##
@@ -120,6 +132,7 @@ ifnMeta<-ifnMeta[ifnMeta$mm %in% meta$mm,]
 ifnMeta[ifnMeta$ej=='EJ52'&ifnMeta$rDate=='2001-06-09','rDate']<-ymd('2001-09-06')
 tmp<-unique(ifnMeta[,c('mm','ej')])
 ejLookup<-structure(tmp$ej,.Names=tmp$mm)
+mmLookup<-structure(tmp$mm,.Names=tmp$e)
 
 
 
@@ -151,6 +164,10 @@ pbmc$visit<-sub('.*\\.([0-9]+)$','\\1',pbmc$sample)
 pbmc$vl<-as.numeric(sub('<','',pbmc$viralLoad))
 pbmc$cd4<-as.numeric(sub('N/A','',pbmc$CD4))
 
+## Additional data
+more<-read.csv('meta/moreMetaData.csv',stringsAsFactors=FALSE)
+more$vl<-as.numeric(sub('<','',more$VL))
+more$cd4<-as.numeric(more$CD4)
 
 art<-read.csv('data/artDates.csv',stringsAsFactors=FALSE)
 artDates<-withAs(xx=art[!is.na(art$date)&art$mm %in% meta$mm,],structure(dmy(xx$date),.Names=xx$mm))
@@ -202,6 +219,15 @@ thisPbmc$source<-'pbmc'
 
 comboMeta<-rbind(comboMeta,thisPbmc[,colnames(comboMeta)])
 
+##combine additional data
+thisMore<-more
+thisMore$ej<-ejLookup[thisMore$mm]
+thisMore$rDate<-dmy(thisMore$date)
+thisMore[,colnames(comboMeta)[!colnames(comboMeta) %in% colnames(thisMore)]]<-NA
+thisMore$source<-'additional'
+
+comboMeta<-rbind(comboMeta,thisMore[,colnames(comboMeta)])
+
 ##combine trans
 if(any(!trans$sample %in% sprintf('%s.%s',sub('EJ','',comboMeta$ej),comboMeta$visit)))stop('Found unknown sample in trans data')
 rownames(trans)<-trans$sample
@@ -230,11 +256,15 @@ comboMeta[comboMeta$vl==37611600&!is.na(comboMeta$vl),'vl']<-NA
 
 if(any(apply(table(comboMeta$visit,comboMeta$mm)>1,2,any)))stop('Duplicate visit found')
 write.csv(comboMeta,'out/combinedMeta.csv')
+tmp<-comboMeta[,c('mm','ej','date','rDate','vl','cd4','source')]
+tmp$dfosx<-comboMeta$time
+write.csv(tmp,'out/combinedMetadata.csv',row.names=FALSE)
 
 artDfosx<-sapply(names(artDates),function(xx)artDates[xx]-ymd(baseDate[xx]))
 names(artDfosx)<-names(artDates)
 lastDfosx<-sapply(names(lastDates),function(xx)lastDates[xx]-ymd(baseDate[xx]))
 names(lastDfosx)<-names(lastDates)
+for(ii in names(lastDfosx))lastDfosx[ii]<-max(as.numeric(comboMeta[comboMeta$mm==ii,'time']),lastDfosx[ii])
 
 customCols<-read.csv('data/Hex color no. for MM cohort colorcode.csv',stringsAsFactors=FALSE,header=FALSE)[,1:2]
 customCols<-customCols[customCols[,1]!='',]
