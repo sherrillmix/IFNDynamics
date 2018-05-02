@@ -272,3 +272,4 @@ colnames(customCols)<-c('sample','color')
 customCols$name<-fixDecimals(sub(' ?\\(.*$','',customCols$sample))
 rownames(customCols)<-customCols$name
 
+founders<-read.csv('founder.csv',stringsAsFactors=FALSE,row.names=1)
