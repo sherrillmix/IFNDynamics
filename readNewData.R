@@ -115,5 +115,8 @@ print(median(withAs(xx=dat[!dat$qvoa,][dat$time[!dat$qvoa]==ave(dat$time[!dat$qv
 dat$meanIc50<-ave(dat$ic50,paste(dat$pat,dat$time),FUN=function(xx)mean(xx,na.rm=TRUE))
 dat$isNadir<-dat$meanIc50==ave(dat$meanIc50,dat$pat,FUN=function(xx)min(xx,na.rm=TRUE))
 dat$isFirst<-dat$time==ave(dat$time,dat$pat,FUN=function(xx)min(xx,na.rm=TRUE))
-write.csv(dat[dat$isFirst|dat$isNadir|dat$qvoa,c('pat','time','ic50','isFirst','isNadir','qvoa')],'out/firstNadir.csv')
+#dat$isSix<-dat$time==ave(dat$time,dat$pat,FUN=function(xx){diff<-abs(180-xx);out<-xx[which.min(diff)][1];if(diff[which.min(diff)][1]>30)return(FALSE);out})
+dat$isSix<-abs(dat$time-180)<30
+dat$isLast<-dat$time==ave(dat$time,dat$pat,FUN=max)
+write.csv(dat[dat$isFirst|dat$isNadir|dat$qvoa|dat$isSix|dat$isLast,c('pat','time','ic50','isFirst','isNadir','isSix','isLast','qvoa')],'out/firstNadir.csv')
 
