@@ -2,6 +2,7 @@ library(vipor)
 if(!exists('dat'))source('readNewData.R')
 lay<-matrix(0,nrow=5,ncol=5)
 lay[2:4,2:4]<-matrix(1:9,nrow=3,byrow=TRUE)
+lowerP24Limit<-60
 
 condenseArrows<-function(dat,ic50Name,clinicalName,xlab,ylab,xlog=FALSE){
   par(mar=c(0,0,0,0))
@@ -215,7 +216,7 @@ plotPredictions<-function(pat,var,dat,thisFit,artDate,customColors,ylab,bulkHigh
     ylim<-range(dat[,var],na.rm=TRUE)
     plot(1,1,yaxt='n',log='y',type='n',xlab='',ylab=ylab,mgp=c(2.75,1,0),main=pat,xlim=xlim,ylim=ylim)
     if(!is.na(artDate)){
-      rect(artDate/7,10^par('usr')[3],par('usr')[2],10^par('usr')[4],col='#00000022',border=NA)
+      rect(srtDate/7,10^par('usr')[3],par('usr')[2],10^par('usr')[4],col='#00000022',border=NA)
       text(mean(c(artDate/7,par('usr')[2])),10^(par('usr')[4]-diff(par('usr')[3:4])*.05),'ART treatment',xpd=NA)
     }
     title(xlab='Time following onset of symptoms (weeks)',mgp=c(2.4,1,0))
@@ -312,12 +313,12 @@ dev.off()
 
 pdf('out/subjects_condense.pdf',width=9,height=4)
   par(mar=c(0,0,0,0))
-  layout(lay,width=c(.25,rep(1,3),.25),height=c(.01,rep(1,3),.43))
+  layout(lay,width=c(.25,rep(1,3),.27),height=c(.01,rep(1,3),.42))
   counter<-1
   for(ii in sort(unique(dat$pat))){
     xlim<-range(c(dat$time/7,lastDfosx/7))
     withAs(xx=comboMeta[comboMeta$mm==ii&!is.na(comboMeta$cd4),],plot(xx$time/7,xx$cd4,pty='l',las=1,log='',xlab='',ylab='',xlim=xlim,ylim=range(dat$CD4,na.rm=TRUE)+c(-30,90),col='blue',type='l',lwd=2,xaxt='n',yaxt='n'))
-    title(ii,line=-1)
+    title(sprintf('%s %s',ii,ifelse(ii %in% rownames(founders),sprintf(' (%s)',founders[ii,'tf']),'')),line=-1)
     if(counter>6)(axis(1,pretty(comboMeta$time/7),cex.axis=1.2))
     title(xlab='Time (weeks)',mgp=c(2,1,0))
     if(counter%%3==0)(axis(4,pretty(comboMeta$cd4,n=5),las=1,col.axis='blue',cex.axis=1.1))
@@ -325,8 +326,10 @@ pdf('out/subjects_condense.pdf',width=9,height=4)
     thisDat<-unique(comboMeta[comboMeta$mm==ii&!is.na(comboMeta$vl),c('time','vl')])
     plot(thisDat$time/7,thisDat$vl,type='n',log='y',yaxt='n',xlab='',ylab='',xlim=xlim,ylim=range(dat$vl,na.rm=TRUE),xaxt='n',col='red',lwd=2)
     reduceDat<-thisDat[c(TRUE,!sapply(2:(nrow(thisDat)-1),function(zz)all(thisDat[zz+-1:1,'vl']<=50)),TRUE),]
-    segments(reduceDat$time[-nrow(reduceDat)]/7,reduceDat$vl[-nrow(reduceDat)],reduceDat$time[-1]/7,reduceDat$vl[-1],col='red',lwd=2,lty=ifelse(reduceDat$vl[-nrow(reduceDat)]<=50&reduceDat$vl[-1]<=50,2,1))
-    if(counter==6)text(par('usr')[2]+.2*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),'CD4 count (cells/mm3)',srt=-90,xpd=NA,col='blue',cex=2)
+    #connects two <50 or big gap to <50
+    isDashed<-(reduceDat$vl[-nrow(reduceDat)]<=lowerP24Limit&reduceDat$vl[-1]<=lowerP24Limit)|(reduceDat$vl[-1]<=lowerP24Limit&reduceDat$time[-1]-reduceDat$time[-nrow(reduceDat)]>120)
+    segments(reduceDat$time[-nrow(reduceDat)]/7,reduceDat$vl[-nrow(reduceDat)],reduceDat$time[-1]/7,reduceDat$vl[-1],col='red',lwd=2,lty=ifelse(isDashed,2,1))
+    if(counter==6)text(par('usr')[2]+.22*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),'CD4 count (cells/mm3)',srt=-90,xpd=NA,col='blue',cex=2)
     if(counter%%3==1)logAxis(2,mgp=c(3,1,0),las=1,col.axis='red',cex.axis=1.3)
     if(counter==4)text(par('usr')[1]-.2*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),'Viral load (copies/ml)',srt=90,xpd=NA,col='red',cex=2)
     if(counter==8)text(mean(par('usr')[1:2]),10^(par('usr')[3]-.32*diff(par('usr')[3:4])),'Weeks after onset of symptoms',xpd=NA,cex=2)
@@ -454,12 +457,12 @@ pdf('out/VL_vs_IC50_condense.pdf',width=7,height=4)
 dev.off()
 
 pdf('out/ifna2_vs_ifnb.pdf',width=5,height=5)
-par(mar=c(3,3.6,.1,.1))
-plot(dat$ic50,dat$beta,log='xy',bg=sprintf('%sDD',patCols[dat$pat]),xaxt='n',yaxt='n',pch=21,ylab='IFN beta IC50 (pg/ml)',xlab='',mgp=c(2.7,1,0),cex=1.2)
-title(xlab='IFN alpha 2 IC50 (pg/ml)',mgp=c(2,1,0))
-logAxis(1,mgp=c(2.5,.8,0))
-logAxis(2,las=1,mgp=c(2.5,.8,0))
-legend('bottomright',names(patCols),pch=21,pt.bg=patCols,inset=.01,ncol=3,x.intersp=.5,pt.cex=1.2)
+  par(mar=c(3,3.6,.1,.1))
+  plot(dat$ic50,dat$beta,log='xy',bg=sprintf('%sDD',patCols[dat$pat]),xaxt='n',yaxt='n',pch=21,ylab='IFN beta IC50 (pg/ml)',xlab='',mgp=c(2.7,1,0),cex=1.2)
+  title(xlab='IFN alpha 2 IC50 (pg/ml)',mgp=c(2,1,0))
+  logAxis(1,mgp=c(2.5,.8,0))
+  logAxis(2,las=1,mgp=c(2.5,.8,0))
+  legend('bottomright',names(patCols),pch=21,pt.bg=patCols,inset=.01,ncol=3,x.intersp=.5,pt.cex=1.2)
 dev.off()
 
 tmp<-dat[order(dat$pat,dat$time,dat$id,decreasing=TRUE),]
@@ -470,6 +473,7 @@ pdf('out/ifn_reproducibility.pdf',width=15,height=30)
   par(mar=c(3,5,.1,.1))
   plot(1,1,type='n',ylim=c(1,nrow(tmp))+c(-1,1),xlim=range(tmp$ic50,na.rm=TRUE),log='x',yaxt='n',xlab='IFNa2 IC50 (pg/ml)',xaxt='n',yaxs='i',ylab='')
   axis(2,1:nrow(tmp),tmp$id,las=2,cex.axis=.5)
+  abline(h=1:1000,col='#00000011')
   logAxis(1,las=1)
   for(ii in 1:nrow(tmp)){
     ic50s<-as.vector(tmp[ii,ifna2_ic50])
