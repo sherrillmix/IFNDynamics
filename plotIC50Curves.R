@@ -1,8 +1,10 @@
 library(xlsx)
 library(dnar)
 
-concAlpha<-c(0, 0.001, 0.003, 0.008, 0.023, 0.068, 0.204, 0.611, 1.833, 5.5)
-concBeta<-c(0, 4.4E-05, 0.00044, 0.0044, 0.044, 0.44, 4.4, 44, 440, 4400)
+#concAlpha<-c(0, 0.001, 0.003, 0.008, 0.023, 0.068, 0.204, 0.611, 1.833, 5.5)
+concAlpha<-c(0,5.55*3^(-8:0))
+#concBeta<-c(0, 4.4E-05, 0.00044, 0.0044, 0.044, 0.44, 4.4, 44, 440, 4400)
+concBeta<-c(0,4400*10^(-8:0))
 lowerLimit<-50
 
 #https://www.myassays.com/four-parameter-logistic-regression.html
@@ -18,8 +20,8 @@ f5<-function(B,x,transformX=function(x)x){
 }
 #f5<-function(B,x,transformX=log){exp(log(B[1]-B[4])-B[5]*log(1+(transformX(x)/B[3])^B[2]))+B[4]}
 f4<-function(B,x,transformX=function(x)x){exp(log(B[1]-B[4])-log(1+(transformX(x)/B[3])^B[2]))+B[4]}
-LS<-function(B,y,x){sum((log(y)-log(fitFunc(B,x)))^2)}
-optIc50<-function(B)optim(1,function(x,B){(B[1]*.5-fitFunc(B,x))^2},B=B,method='Brent',lower=10^-10,upper=10^2)$par
+LS<-function(B,y,x){sum(abs((log(y)-log(fitFunc(B,x)))))}
+optIc50<-function(B)exp(optim(1,function(x,B){abs(B[1]*.5-fitFunc(B,exp(x)))},B=B,method='Brent',lower=-20,upper=20)$par)
 fit4par<-function(concs,p24s){
   #p24s<-p24s[concs>0]
   #concs<-concs[concs>0]
@@ -31,7 +33,7 @@ fit4par<-function(concs,p24s){
 fit5par<-function(concs,p24s){
   #p24s<-p24s[concs>0]
   #concs<-concs[concs>0]
-  fits<-lapply(list(c(max(p24s),1,1,min(p24s),1),c(max(p24s)*2,1,1,min(p24s)/10),c(mean(p24s),1,1,mean(p24s),1),c(max(p24s),.01,1,1),1),function(starts)suppressWarnings(nlminb(starts,LS,x=concs,y=p24s,lower=c(0,-Inf,-Inf,0,-Inf))))
+  fits<-lapply(list(c(max(p24s),1,1,min(p24s),1),c(max(p24s)*2,1,1,min(p24s)/10),c(mean(p24s),1,1,mean(p24s),1),c(max(p24s),.01,1,1,1)),function(starts)suppressWarnings(nlminb(starts,LS,x=concs,y=p24s,lower=c(0,-Inf,-Inf,0,-Inf))))
   #fit<-suppressWarnings(nlminb(c(max(p24s),1,1,min(p24s)),LS,x=concs,y=p24s,lower=c(0,-Inf,-Inf,0))$par)
   obj<-sapply(fits,'[[','objective')
   return(fits[[which.min(obj)]]$par)
@@ -40,7 +42,7 @@ fitFunc<-f5
 fitter<-fit5par
 
 findVresIc50<-function(concAlpha,p24s){
-  origConcs<-rep(concAlpha,each=2*nrow(p24s))
+  origConcs<-rep(concAlpha,each=ncol(p24s)/length(concAlpha)*nrow(p24s))
   p24s<-unlist(p24s)
   fit<-fitter(origConcs[!is.na(p24s)],p24s[!is.na(p24s)])
   vres<-fitFunc(fit,max(origConcs))
@@ -75,9 +77,11 @@ readIfns<-function(file,exclude=1){
       out[names(tmp)[names(tmp)!='']]<-tmp[names(tmp)!='']
       return(out)
     })
-    firstRow<-min(c(Inf,which(!is.na(sapply(vals[1:30],'[[',3)))))+1
-    if(firstRow==Inf)return(NULL)
-    lastRow<-firstRow+min(c(Inf,which(is.na(sapply(vals[firstRow:40],'[[',3)))))-1-1
+    if(any(sapply(vals[1:20],function(xx)is.null(xx[[3]])))){message('  Not found');return(NULL)}
+    #assuming col 3, first row contains 1
+    firstRow<-min(c(Inf,which(!is.na(sapply(vals[1:20],'[[',3))&sapply(vals[1:20],'[[',3)=='1')))+1
+    if(firstRow==Inf){message('  Not found');return(NULL)}
+    lastRow<-firstRow+min(c(Inf,which(is.na(sapply(vals[firstRow:40],'[[',4))&is.na(sapply(vals[firstRow:40],'[[',3)))))-1-1
     if(lastRow==Inf)return(NULL)
     #if((lastRow-firstRow+1) %%2 !=0)warning('Number of rows not a multiple of 2 on sheet ',counter,' of ',file)
     dat<-as.data.frame(apply(do.call(rbind,lapply(vals[firstRow:lastRow],function(zz)zz[3:22])),2,function(xx){as.numeric(ifelse(xx==''|is.na(xx)|grepl('\\?\\?',xx),NA,sub('[><]','',xx)))}),stringsAsFactors=FALSE)
@@ -86,6 +90,8 @@ readIfns<-function(file,exclude=1){
   })
   names(ic50Curves)<-names(getSheets(wb))
   dilutes<-do.call(rbind,ic50Curves)
+  dilutes$sheet<-rep(names(ic50Curves),sapply(ic50Curves,function(xx)ifelse(is.null(xx),0,nrow(xx))))
+  dilutes$sample<-sprintf('%s (%s)',dilutes$sample,dilutes$sheet)
   return(dilutes)
 }
 
@@ -105,27 +111,32 @@ if(!exists('dilutes')){
 }
 
 #assuming 
-#bio#1-tech#1 bio#2-tech#1
-#bio#1-tech#2 bio#2-tech#2
+#bio#1-tech#1 bio#1-tech#2
+#bio#2-tech#1 bio#2-tech#2
 plotIfn<-function(concAlpha,p24s,main='',xlab='',ylims=range(p24s),log='xy',scaleMax=FALSE){
-  origConcs<-concs<-rep(concAlpha,each=2*nrow(p24s))
+  origConcs<-concs<-rep(concAlpha,each=ncol(p24s)/length(concAlpha)*nrow(p24s))
   if(scaleMax)maxs<-unlist(p24s[,1:2])
   else maxs<-1
   vresIc50<-findVresIc50(concAlpha,p24s)
   zeroOffset<-.01
   concs[concs==0]<-min(concs[concs>0])*zeroOffset
-  if(nrow(p24s)==4){
+  if(nrow(p24s)*ncol(p24s)/length(concAlpha)==8){
     cols<-rainbow.lab(17)[c(1:2,6:7,11:12,16:17)]
     names(cols)<-c('Bio replicate 1\nTech replicate 1','Bio replicate 1\nTech replicate 2','Bio replicate 2\nTech replicate 1','Bio replicate 2\nTech replicate 2','Bio replicate 3\nTech replicate 1','Bio replicate 3\nTech replicate 2','Bio replicate 4\nTech replicate 1','Bio replicate 4\nTech replicate 2')
-  }else if(nrow(p24s)==2){
+    cols<-cols[c(seq(1,8,2),seq(2,8,2))]
+  }else if(nrow(p24s)*ncol(p24s)/length(concAlpha)==4){
     cols<-rainbow.lab(12)[c(1:2,11:12)]
     names(cols)<-c('Bio replicate 1\nTech replicate 1','Bio replicate 1\nTech replicate 2','Bio replicate 2\nTech replicate 1','Bio replicate 2\nTech replicate 2')
-  }else if(nrow(p24s)==1){
+    cols<-cols[c(seq(1,4,2),seq(2,4,2))]
+  }else if(nrow(p24s)*ncol(p24s)/length(concAlpha)==2){
     cols<-rainbow.lab(2)
     names(cols)<-c('Replicate 1','Replicate 2')
+  }else if(nrow(p24s)*ncol(p24s)/length(concAlpha)==1){
+    cols<-rainbow.lab(2)[1]
+    names(cols)<-c('Replicate 1')
   }else{
     browser()
-    stop('p24s not 2 or 4 columns')
+    stop('p24s not 2 or 4 rows')
   }
   p24s<-unlist(p24s)
   fit<-fitter(origConcs[!is.na(p24s)],p24s[!is.na(p24s)])
@@ -135,7 +146,7 @@ plotIfn<-function(concAlpha,p24s,main='',xlab='',ylims=range(p24s),log='xy',scal
   fitLine<-fitFunc(fit,fakeConc)
   lines(fakeConc,fitLine/mean(maxs),col='#00000066',lwd=3)
   if(scaleMax)title(ylab='Proportion maximum p24',mgp=c(2,1,0))
-  else title(ylab='p24 concentration (ng/ml)',mgp=c(2.25,1,0))
+  else title(ylab='p24 concentration (ng/ml)',mgp=c(ifelse(grepl('y',log),2.25,2.9),1,0))
   if(grepl('x',log))logAxis(1,axisMin=min(origConcs[origConcs>0]),mgp=c(2.5,.7,0))
   else axis(1,pretty(par('usr')[1:2]),mgp=c(2.5,.7,0))
   if(grepl('y',log))logAxis(2,las=1,mgp=c(2.5,.7,0))
@@ -148,34 +159,41 @@ plotIfn<-function(concAlpha,p24s,main='',xlab='',ylims=range(p24s),log='xy',scal
   #if(fit[4]<par('usr')[4])
   vres<-fitFunc(fit,max(origConcs))
   abline(h=vresIc50['vres']/mean(maxs),lty=2,col='#0000FF55')
-  yCoord<-vresIc50['vres']/2^ifelse(isAbove,1,-1)
+  yCoord<-ifelse(grepl('y',log),vresIc50['vres']/2^ifelse(isAbove,1,-1),vresIc50['vres']+diff(par('usr')[3:4])*ifelse(isAbove,-.1,.1))
   xCoord<-10^(par('usr')[1]*.72+par('usr')[2]*.28)
-  text(xCoord,yCoord,sprintf('Vres=%s',format(vresIc50['percVres'],digits=2,width=3)),adj=c(1,0.5),col='blue')
+  text(xCoord,yCoord,sprintf('Vres=%s%%',format(vresIc50['percVres'],digits=2,width=3)),adj=c(1,0.5),col='blue')
   segments(xCoord*1.1,yCoord,10^(par('usr')[1]*.65+par('usr')[2]*.35),vresIc50['vres']/mean(maxs),col='blue')
   #ic50 label
   isAbove<-vresIc50['vres']>10^mean(par('usr')[3:4])
-  yCoord<-ifelse(isAbove,10^(par('usr')[3]*.2+par('usr')[4]*.8),10^(par('usr')[3]*.55+par('usr')[4]*.45)*1.2)
+  yCoord<-ifelse(grepl('y',log),ifelse(isAbove,10^(par('usr')[3]*.2+par('usr')[4]*.8),10^(par('usr')[3]*.55+par('usr')[4]*.45)*1.2),par('usr')[3]*.7+par('usr')[4]*.3)
   text(vresIc50['ic50']/1.85,yCoord,sprintf('IC50=%s',format(vresIc50['ic50'],digits=2)),adj=c(1,0.5),col='red')
   segments(vresIc50['ic50']/1.75,yCoord,vresIc50['ic50'],yCoord*ifelse(isAbove,1.2,.8),col='red')
   if(is.na(vresIc50['max']))browser()
-  axis(4,vresIc50['max']/c(1,2,10,100,1000),as.character(c(1,.5,.1,.01,.001)*100),las=1,tcl=-.2,mgp=c(0,.6,0))
+  if(grepl('y',log))axis(4,vresIc50['max']/c(1,2,10,100,1000),as.character(c(1,.5,.1,.01,.001)*100),las=1,tcl=-.2,mgp=c(0,.6,0))
   abline(h=vresIc50['max']/2,lty=3,col='#00000055')
   text(convertLineToUser(2.6,4),10^mean(par('usr')[3:4]),'Percent of maximum',xpd=NA,srt=-90)
   par('lheight'=.72)
-  legend('topright',names(cols),pch=21,pt.bg=cols,inset=.01,cex=.5,pt.cex=1,y.intersp=1.5)
-  #if(thisSample=='MM55.12.2B1 bulk')browser()
+  legend('topright',names(cols),pch=21,pt.bg=cols,inset=.01,cex=ifelse(length(cols)==2,1,.6),pt.cex=1,y.intersp=ifelse(length(cols)<=2,1,1.5))
   return(fit)
 }
-
-plotIfns<-function(dilutes,concAlpha,xlab='',...){
+condenseReps<-function(xx){
+  do.call(cbind,lapply(seq(1,ncol(xx),2),function(ii)apply(xx[,ii+0:1,drop=FALSE],1,mean,na.rm=TRUE)))
+}
+plotIfns<-function(dilutes,concAlpha,xlab='',condenseTechs=TRUE,log='xy',multiple=1,...){
   ylims<-range(dilutes[,1:20],na.rm=TRUE)
-  par(mar=c(3,3.25,1,3))
+  dilutes[,1:20]<-dilutes[,1:20]*multiple
+  par(mar=c(3,3.8,1,3))
+  fits<-list()
   for(thisSample in sort(unique(dilutes$sample))){
     xx<-dilutes[dilutes$sample==thisSample,1:20]
-    plotIfn(concAlpha,xx,main=thisSample,xlab=xlab,ylims=ylims,...)
-    plotIfn(concAlpha,array(apply(xx,2,mean),dim=c(1,ncol(xx))),main=thisSample,xlab=xlab,ylims=ylims,...)
+    if(!grepl('y',log))ylims<-c(0,max(xx,na.rm=TRUE))
+    fits[[thisSample]]<-plotIfn(concAlpha,xx,main=thisSample,xlab=xlab,ylims=ylims,log=log,...)
+    if(!grepl('y',log))ylims<-c(0,max(condenseReps(xx),na.rm=TRUE))
+    if(condenseTechs)plotIfn(concAlpha,condenseReps(xx),main=thisSample,xlab=xlab,ylims=ylims,log=log,...)
   }
+  invisible(fits)
 }
+
 plotDualIfns<-function(dilutes,dilutesBeta,concAlpha,concBeta){
   ylims<-range(dilutes[,1:20],na.rm=TRUE)
   ylims2<-range(dilutesBeta[,1:20],na.rm=TRUE)
@@ -191,10 +209,17 @@ plotDualIfns<-function(dilutes,dilutesBeta,concAlpha,concBeta){
 }
 pdf('out/allCurves.pdf',width=6,height=4)
   plotIfns(dilutes,concAlpha,'IFNa2 concentration (pg/ml)')
+  plotIfns(dilutes,concAlpha,'IFNa2 concentration (pg/ml)',log='x')
 dev.off()
 pdf('out/allCurvesBeta.pdf',width=6,height=4)
   plotIfns(dilutesBeta,concBeta,'IFNb concentration (pg/ml)')
+  plotIfns(dilutesBeta,concBeta,'IFNb concentration (pg/ml)',log='x')
 dev.off()
+pdf('out/newCurves.pdf',width=6,height=4)
+  plotIfns(newDilutes,concAlpha,'IFNa2 concentration (pg/ml)')
+  plotIfns(newDilutes,concAlpha,'IFNa2 concentration (pg/ml)',log='x')
+dev.off()
+#system('pdftk A=out/allCurves.pdf B=out/allCurvesBeta.pdf cat A164 A180 B208 B218 output out/example_ic50.pdf')
 
 pdf('out/allCurvesCombo.pdf',width=10,height=5)
   plotDualIfns(dilutes,dilutesBeta,concAlpha,concBeta)
@@ -203,20 +228,137 @@ dev.off()
 ic50Fits<-calcIc50s(dilutes,concAlpha)
 ic50FitsBeta<-calcIc50s(dilutesBeta,concBeta)
 
-pdf('out/newCurves.pdf',width=6,height=4)
-  plotIfns(newDilutes,concAlpha,'IFNa2 concentration (pg/ml)')
-dev.off()
 
 
 oldFiles<-list.files('ic50','xlsx?$',full.names=TRUE)
 oldDilutes<-lapply(oldFiles,function(xx){message(xx);readIfns(xx)})
 names(oldDilutes)<-basename(oldFiles)
-oldDilutes<-oldDilutes[names(oldDilutes)!='IC50 alpha and beta for BULK isolates .xlsx']
 oldDilutes<-mapply(function(xx,yy){xx$sample<-sprintf('%s (%s)',xx$sample,yy);xx},oldDilutes,names(oldDilutes),SIMPLIFY=FALSE)
-oldAlpha<-do.call(rbind,oldDilutes[grepl('[Aa]lpha',names(oldDilutes))])
-oldBeta<-do.call(rbind,oldDilutes[grepl('[bB]eta',names(oldDilutes))])
-pdf('out/oldCurves.pdf')
-  plotIfns(oldAlpha,concAlpha,'IFNa2 concentration (pg/ml)')
-  plotIfns(oldBeta,concBeta,'IFNb concentration (pg/ml)')
-dev.off()
+oldAll<-do.call(rbind,oldDilutes)
+oldAll$id<-sub('[ _][Bb]ulk','.bulk',sub('19P4B5','19.P4B5',sub(' .*$','',sub('Bulk- ([^ ]+) ','\\1.bulk ',sub('(UK|MM) ','\\1',sub(' - ','.',oldAll$sample))))))
+#oldAll$id[grepl('^[0-9]',oldAll$id)]<-sprintf('UK%s',oldAll$id[grepl('^[0-9]',oldAll$id)])
+oldAll$id<-sub('[.-]P([0-9])','.\\1',convertUKMM(oldAll$id,mmLookup))
+oldAll$id[grepl('^MM',oldAll$id)]<-sapply(oldAll$id[grepl('^MM',oldAll$id)],fixDecimals)
+rowIds<-lapply(oldAll$id,grep,dat$id)
+probs<-which(sapply(rowIds,length)>1)
+if(any(probs))rowIds[probs]<-mapply(function(bulk,rows)rows[grepl('bulk',dat[rows,'id'],ignore.case=TRUE)],grepl('bulk',oldAll$sample[probs],ignore.case=TRUE),rowIds[probs],SIMPLIFY=FALSE)
+if(any(sapply(rowIds,length)>1))stop('Found ambiguous ID')
+oldAll$row<-NA
+oldAll$row[sapply(rowIds,length)==1]<-unlist(rowIds[sapply(rowIds,length)==1])
+#oldAll$correctedId<-NA
+#oldAll$correctedId[grep('UK',oldAll$id)]<-sapply(strsplit(oldAll$id[grep('UK',oldAll$id)],'[-._]'),function(xx){sprintf('%s.%s',fixDecimals(sprintf('%s.%s',names(ejLookup)[ejLookup==sub('UK','EJ',xx[1])],xx[2])),sub('^P','',xx[3]))})
+#rowIds<-lapply(oldAll$correctedId[grep('UK',oldAll$id)],grep,dat$id)
+#oldAll[grep('UK',oldAll$id),'row'][sapply(rowIds,length)==1]<-unlist(rowIds[sapply(rowIds,length)==1])
+rowIds<-lapply(gsub(' ','',sub('[. _-][Bb][Uu][Ll][Kk]','_bulk',oldAll$id[is.na(oldAll$row)])),grep,sub('[.-]P([0-9])','.\\1',convertUKMM(sub('[ ._-][Bb][Uu][Ll][Kk]','.bulk',dat$Patient.Original.ID),mmLookup)))
+oldAll[is.na(oldAll$row),'row'][sapply(rowIds,length)==1]<-unlist(rowIds[sapply(rowIds,length)==1])
+oldAll$isAlpha<-grepl('[Aa]lpha|IC50-a2',oldAll$sample)
+oldAll$isBeta<-grepl('[Bb]eta',oldAll$sample)
+probs<-oldAll$isAlpha+oldAll$isBeta!=1
+if(any(probs)){
+  oldAll$isAlpha[probs]<-grepl('\\(alpha2\\)',rownames(oldAll)[probs])
+  oldAll$isBeta[probs]<-grepl('\\(beta\\)',rownames(oldAll)[probs])
+}
+if(any(oldAll$isAlpha+oldAll$isBeta!=1))stop('Unclear if sample is alpha or beta')
+oldAll$marvinIc50<-ifelse(oldAll$isAlpha,dat[oldAll$row,'ic50'],dat[oldAll$row,'beta'])
+oldAll$marvinVres<-ifelse(oldAll$isAlpha,dat[oldAll$row,'vres'],dat[oldAll$row,'betaVres'])
+oldAll$newId<-dat[oldAll$row,'id']
 
+oldAlpha<-oldAll[oldAll$isAlpha,]
+oldBeta<-oldAll[oldAll$isBeta,]
+pdf('out/oldCurves.pdf',width=6,height=4)
+  oldAlphaFits<-plotIfns(oldAlpha,concAlpha,'IFNa2 concentration (pg/ml)',condenseTechs=FALSE)
+  oldBetaFits<-plotIfns(oldBeta,concBeta,'IFNb concentration (pg/ml)',condenseTechs=FALSE)
+  plotIfns(oldAlpha,concAlpha,'IFNa2 concentration (pg/ml)',condenseTechs=TRUE,log='x')
+  plotIfns(oldBeta,concBeta,'IFNb concentration (pg/ml)',condenseTechs=TRUE,log='x')
+dev.off()
+tmp<-tempfile()
+pdf(tmp,width=6,height=4)
+  selectIds<-c('MM14.02.2A1.bulk','MM14.10.2C1.bulk')
+  #02.2A1 alpha 1/50
+  #02.2A1 beta 1/50
+  #10.2C1 alpha 1/50
+  #10.2C1 beta 1/50
+  for(ii in selectIds){
+    thisDat<-oldAlpha[oldAlpha$newId==ii&!is.na(oldAlpha$newId),,drop=FALSE]
+    thisDat$sample<-ii
+    plotIfns(thisDat,concAlpha,'IFNa2 concentration (pg/ml)',condenseTechs=TRUE,log='x',multiple=50/1000)
+    thisDat<-oldBeta[oldBeta$newId==ii&!is.na(oldBeta$newId),,drop=FALSE]
+    thisDat$sample<-ii
+    plotIfns(thisDat,concBeta,'IFNb concentration (pg/ml)',condenseTechs=TRUE,log='x',multiple=50/1000)
+  }
+dev.off()
+system(sprintf('pdftk %s cat 2 4 6 8 output out/example_ic50.pdf',tmp))
+
+if(FALSE){
+  oldAlphaVresIc50<-as.data.frame(do.call(rbind,by(oldAlpha,oldAlpha$sample,function(xx)findVresIc50(concAlpha,xx[,1:20]))))
+  #oldAlphaVresIc50$id<-oldAlpha$id
+  notFoundAlpha<-oldAlphaVresIc50[is.na(oldAlphaVresIc50$row),]
+  oldAlphaVresIc50<-oldAlphaVresIc50[!is.na(oldAlphaVresIc50$row),]
+  oldAlphaVresIc50$newId<-dat[oldAlphaVresIc50$row,'id']
+  oldAlphaVresIc50$marvinIc50<-dat[oldAlphaVresIc50$row,'ic50']
+  oldAlphaVresIc50$marvinVres<-dat[oldAlphaVresIc50$row,'vres']
+  oldAlphaVresIc50$ic50Diff<-log2(oldAlphaVresIc50$ic50/oldAlphaVresIc50$marvinIc50)
+
+  oldBetaVresIc50<-as.data.frame(do.call(rbind,by(oldBeta,oldBeta$sample,function(xx)findVresIc50(concBeta,xx[,1:20]))))
+  #oldBetaVresIc50$id<-oldBeta$id
+  notFoundBeta<-oldBetaVresIc50[is.na(oldBetaVresIc50$row),]
+  oldBetaVresIc50<-oldBetaVresIc50[!is.na(oldBetaVresIc50$row),]
+  oldBetaVresIc50$newId<-dat[oldBetaVresIc50$row,'id']
+  oldBetaVresIc50$marvinIc50<-dat[oldBetaVresIc50$row,'beta']
+  oldBetaVresIc50$marvinVres<-dat[oldBetaVresIc50$row,'betaVres']
+  oldBetaVresIc50<-as.data.frame(do.call(rbind,by(oldBeta,oldBeta$sample,function(xx)findVresIc50(concBeta,xx[,1:20]))))
+  oldAlphaFits<-do.call(rbind,oldAlphaFits)
+  oldBetaFits<-do.call(rbind,oldBetaFits)
+}
+
+
+GROWTH<-function(x,y,newX){
+  mod<-lm(log(y)~x)
+  exp(predict(mod,data.frame(x=newX)))
+}
+
+calculateBasicIc50<-function(p24s,concs,vocal=FALSE){
+  means<-condenseReps(p24s)
+  props<-t(apply(means,1,function(xx)xx/xx[1]))
+  #ic50<-mean(apply(props,1,function(xx)approx(xx,concs,.5)$y))
+  if(vocal)print(t(props))
+  ic50s<-apply(props,1,function(xx){
+    id<-min(c(Inf,which(xx<.5)))
+    if(id==Inf)return(NA)
+    if(any(concs[id+-1:0]==0))return(NA)
+    GROWTH(xx[id+-1:0],concs[id+-1:0],.5)
+  })
+  if(vocal)print(ic50s)
+  ic50<-mean(ic50s)
+  vres<-mean(props[,ncol(props)])
+  return(c('ic50'=ic50,'vres'=vres*100))
+}
+
+oldBasics<-rbind(
+  as.data.frame(do.call(rbind, by(oldAll[oldAll$isAlpha,],oldAll$sample[oldAll$isAlpha],function(xx){calculateBasicIc50(xx[,1:20,drop=FALSE],concAlpha)}))), as.data.frame(do.call(rbind, by(oldAll[oldAll$isBeta,],oldAll$sample[oldAll$isBeta],function(xx){calculateBasicIc50(xx[,1:20,drop=FALSE],concBeta)})))
+)
+oldBasics$marvinIc50<-sapply(rownames(oldBasics),function(xx)oldAll[oldAll$sample==xx,'marvinIc50'][1])
+oldBasics$marvinVres<-sapply(rownames(oldBasics),function(xx)oldAll[oldAll$sample==xx,'marvinVres'][1])
+oldBasics$newId<-sapply(rownames(oldBasics),function(xx)oldAll[oldAll$sample==xx,'newId'][1])
+oldBasics$isAlpha<-sapply(rownames(oldBasics),function(xx)oldAll[oldAll$sample==xx,'isAlpha'][1])
+oldBasics$row<-sapply(rownames(oldBasics),function(xx)oldAll[oldAll$sample==xx,'row'][1])
+newIc50<-mapply(function(isAlpha,ic50,id){
+  cols<-if(isAlpha)ifna2_ic50 else ifnb_ic50
+  out<-unlist(dat[dat$id==id,cols])
+  diffs<-abs(out-ic50)
+  if(all(is.na(diffs)))return(NA)
+  out[diffs==min(diffs,na.rm=TRUE)&!is.na(diffs)]
+},oldBasics$isAlpha,oldBasics$ic50,oldBasics$newId)
+newVres<-mapply(function(isAlpha,ic50,id){
+  out<-dat[dat$id==id,if(isAlpha)ifna2_vres else ifnb_vres]
+  diffs<-abs(out-ic50)
+  if(all(is.na(diffs)))return(NA)
+  out[diffs==min(diffs,na.rm=TRUE)&!is.na(diffs)]
+},oldBasics$isAlpha,oldBasics$vres,oldBasics$newId)
+oldBasics[!is.na(newIc50),'marvinIc50']<-newIc50[!is.na(newIc50)]
+oldBasics[!is.na(newVres),'marvinVres']<-newVres[!is.na(newVres)]
+oldBasics$ic50Disagree<-(abs(log2(oldBasics$marvinIc50/oldBasics$ic50))>1&apply(!is.na(oldBasics[,c('ic50','marvinIc50')]),1,all))|(is.na(oldBasics$ic50)!=is.na(oldBasics$marvinIc50))
+oldBasics$vresDisagree<-(abs(oldBasics$marvinVres-oldBasics$vres)>1&apply(!is.na(oldBasics[,c('vres','marvinVres')]),1,all))|(is.na(oldBasics$marvinVres)!=is.na(oldBasics$vres))
+oldBasics$notFound<-is.na(oldBasics$newId)
+problems<-oldBasics[oldBasics$ic50Disagree|oldBasics$vresDisagree|oldBasics$notFound,]
+withAs(zz=problems,write.csv(zz[order(is.na(zz$newId),is.na(zz$marvinVres),is.na(zz$ic50)),],'out/oldIc50Check.csv'))
