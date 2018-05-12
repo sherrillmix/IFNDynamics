@@ -1,3 +1,4 @@
+library(dnar)
 if(!exists('dat'))source('readNewData.R')
 readCounts<-function(countFile){
   counts<-read.csv(countFile,stringsAsFactors=FALSE)
@@ -53,7 +54,8 @@ calculateHalf<-function(counts,times){
   return(halfLife)
 }
 iceHalfs<-sapply(unique(counts$virus),function(xx)calculateHalf(counts[counts$virus==xx,'n'],counts[counts$virus==xx,'h']))
-names(iceHalfs)<-unique(counts$virus)
+iceHalfs2<-sapply(unique(counts$virus),function(xx)calculateHalf(counts[counts$virus==xx&counts$h<25,'n'],counts[counts$virus==xx&counts$h<25,'h']))
+names(iceHalfs)<-names(iceHalfs2)<-unique(counts$virus)
 
 icePats<-unique(na.omit(dat[rownames(iceMeans),'pat']))
 times<-as.numeric(sub('h','',colnames(iceMeans)))
@@ -191,3 +193,86 @@ pdf('out/iceWtMut.pdf',width=10,height=10)
   withAs(xx=tropLuc[,11:12],plotThaw(xx,ylab='TZM-BL luciferase luminescence'))
   legend('topright',names(virCol),pt.bg=virCol,pch=21,inset=.01)
 dev.off()
+
+calcIc50<-function(n,time,pseudocount=0){
+  if(length(n)==0)return(NA)
+  n<-log10(n+pseudocount)
+  mod<-lm(n~time)
+  log10(.5)/coefficients(mod)[2]
+}
+
+iceSpin<-readCounts('ice/out/2018-04-27_iceSpin/counts.csv')
+iceSpinMats<-tapply(iceSpin$n,list(iceSpin$row,iceSpin$col,iceSpin$plate),c)
+iceTimes<-matrix(rep(rep(c(48,24,8,0),each=4),6),nrow=8,dimnames=list(LETTERS[1:8],1:12))
+iceVirusesCulture<-structure(rep(c('SG3+WT','SG3+Mut','NL43+WT','NL43+Mut','NL43+Mut 4x','236'),each=2),.Names=1:12)
+iceVirusesSpin<-structure(rep(c('SG3+WT','SG3+Mut','NL43+WT','NL43+Mut','NL43+WT 4x','NL43+Mut 4x'),each=2),.Names=1:12)
+iceSpin$time<-sapply(iceSpin$well,function(xx)iceTimes[sub('[0-9]+','',xx),sub('[A-Z]','',xx)])
+iceSpin$virus<-ifelse(iceSpin$plate=='ice_spin',iceVirusesSpin[iceSpin$col],iceVirusesCulture[iceSpin$col])
+zeroMeans<-withAs(xx=iceSpin[iceSpin$time==0,],tapply(xx$n,paste(xx$virus,xx$plate),mean))
+iceSpin$prop<-iceSpin$n/zeroMeans[paste(iceSpin$virus,iceSpin$plate)]
+iceSpinIc50<-outer(unique(iceSpin$plate),unique(iceSpin$virus),function(xx,yy)mapply(function(xxx,yyy){
+    withAs(zzz=iceSpin[iceSpin$virus==yyy&iceSpin$plate==xxx,],calcIc50(zzz$n,zzz$time))
+},xx,yy))
+dimnames(iceSpinIc50)<-list(unique(iceSpin$plate),unique(iceSpin$virus))
+round(iceSpinIc50[,order(colnames(iceSpinIc50))],1)
+
+
+pdf('out/iceSpin.pdf')
+for(ii in unique(iceSpin$virus)){
+  for(jj in unique(iceSpin$plate)){
+    thisDat<-iceSpin[iceSpin$virus==ii&iceSpin$plate==jj,]
+    if(nrow(thisDat)==0)next()
+    plot(1,1,type='n',xlim=range(iceSpin$time),ylim=range(iceSpin$prop),log='y',main=paste(ii,jj),yaxt='n',ylab='TZM-Bl infectivity (proportion of 0 hour)',xlab='Time on ice')
+    logAxis(las=1)
+    points(thisDat$time,thisDat$prop,pch=21,bg='#0000FFBB',cex=1.5)
+    tmp<-data.frame('x'=thisDat$time,'y'=log(thisDat$prop))
+    mod<-lm(y~x,tmp)
+    fakeTime<-seq(0,60,.01) 
+    preds<-predict(mod,data.frame(x=fakeTime),interval='confidence')
+    lines(fakeTime,exp(preds[,1]),col='black')
+    polygon(c(fakeTime,rev(fakeTime)),exp(c(preds[,2],rev(preds[,3]))),border=NA,col='#00000033')
+  }
+}
+dev.off()
+
+
+magenta<-readCounts('ice/out/2018-05-04_mmImcIceTropism/counts.csv')
+magentaViruses<-c('YU2','896','NL43','SG3')
+magentaMats<-tapply(magenta$n,list(magenta$row,magenta$col,magenta$plate),c)
+magCompare<-cbind('24hr'=magentaMats[,5:8,'24hr'],'48hr'=magentaMats[,8:11,'magentaGal'],'magenta_48hr'=magentaMats[,2:5,'magentaGal'])
+colnames(magCompare)<-paste(rep(magentaViruses,3),rep(c('24hr','48hr','magenta'),each=4))
+rownames(magCompare)<-sprintf('%dx',3^(1:8))
+magCompare[,order(colnames(magCompare))]
+
+iceMM<-readCounts('ice/out/2018-05-07_iceTropism/counts.csv')
+iceMMMats<-tapply(iceMM$n,list(iceMM$row,iceMM$col,iceMM$plate),c)
+iceMM<-iceMM[iceMM$plate!='tropism',]
+iceMMVirus<-list('ice1'=rep(c('896','NL43','SG3','YU2','470 TF','470 6mo'),each=2),'ice2'=rep(c('40 TF','40 6mo','MM23.1','MM23.7','MM23.11','MM23.13'),each=2),'ice3'=rep(c('NL43+WT','NL43+Mut','SG3+WT','SG3+Mut','SG3+WEAU','No virus'),each=2))
+iceMMTime<-matrix(rep(c(50,26,10,0),each=4),ncol=12,nrow=8,dimnames=list(LETTERS[1:8],1:12))
+iceMM$time<-indexMatrix(iceMM$row,iceMM$col,iceMMTime)
+iceMM$virus<-mapply(function(xx,yy)xx[yy],iceMMVirus[iceMM$plate],iceMM$col)
+halfs<-sapply(unique(iceMM$virus),function(xx){withAs(zzz=iceMM[iceMM$virus==xx,],calcIc50(zzz$n+1,zzz$time))})
+names(halfs)<-unique(iceMM$virus)
+t(t(round(halfs[orderIn(names(halfs),unique(unlist(iceMMVirus)))],1)))
+
+
+zeroMeans<-withAs(xx=iceMM[iceMM$time==0,],tapply(xx$n+1,xx$virus,mean))
+iceMM$prop<-(iceMM$n+1)/zeroMeans[iceMM$virus]
+pdf('out/iceMM.pdf')
+for(ii in unique(unlist(iceMMVirus))){
+  thisDat<-iceMM[iceMM$virus==ii,]
+  if(nrow(thisDat)==0)next()
+  plot(1,1,type='n',xlim=range(iceMM$time),ylim=range(iceMM$prop),log='y',main=sprintf('%s\nhalf=%0.1f',ii,halfs[ii]),yaxt='n',ylab='TZM-Bl infectivity (proportion of 0 hour)',xlab='Time on ice')
+  logAxis(las=1)
+  points(thisDat$time,thisDat$prop,pch=21,bg='#0000FFBB',cex=1.5)
+  tmp<-data.frame('x'=thisDat$time,'y'=log(thisDat$prop))
+  mod<-lm(y~x,tmp)
+  fakeTime<-seq(0,60,.01) 
+  preds<-predict(mod,data.frame(x=fakeTime),interval='confidence')
+  lines(fakeTime,exp(preds[,1]),col='black')
+  polygon(c(fakeTime,rev(fakeTime)),exp(c(preds[,2],rev(preds[,3]))),border=NA,col='#00000033')
+  abline(h=1,lty=2)
+}
+dev.off()
+
+
