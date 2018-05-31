@@ -52,7 +52,7 @@ dev.off()
 
 library(ape)
 library(grid)
-#pdf('out/voa_trees.pdf',width=3,height=6)
+pdf('out/voa_trees.pdf',width=3,height=6)
 for(ii in list.files('trees/qvoa','ph$',full.name=TRUE)){
   message(ii)
   tree<-ape::read.tree(ii)
@@ -83,4 +83,4 @@ for(ii in list.files('trees/qvoa','ph$',full.name=TRUE)){
   insetScale(c(1:nDays-.5,nDays+.5),timeCols[1:nDays],main='Days after onset of symptoms',insetPos = c(0.025, 0.3, 0.04, 0.95),at=c(1,500,1000,1500,2000))
   #plot.phylo(tree,show.tip.label=FALSE,tip.color=timeCols[days])
 }
-#dev.off()
+dev.off()
