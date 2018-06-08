@@ -171,7 +171,8 @@ more$cd4<-as.numeric(more$CD4)
 
 art<-read.csv('data/artDates.csv',stringsAsFactors=FALSE)
 artDates<-withAs(xx=art[!is.na(art$date)&art$mm %in% meta$mm,],structure(dmy(xx$date),.Names=xx$mm))
-art$lastDate<-ymd(apply(art[,c('lastClinic','lastSample')],1,function(xx)if(all(is.na(xx)))return(NA)else as.character(max(dmy(xx),na.rm=TRUE))))
+#art$lastDate<-ymd(apply(art[,c('lastClinic','lastSample')],1,function(xx)if(all(is.na(xx)))return(NA)else as.character(max(dmy(xx),na.rm=TRUE))))
+art$lastDate<-dmy(art$lastSample)
 lastDates<-withAs(xx=art[!is.na(art$lastDate)&art$mm %in% meta$mm,],structure(xx$lastDate,.Names=xx$mm))
 
 ## Joining ##
@@ -273,3 +274,50 @@ customCols$name<-fixDecimals(sub(' ?\\(.*$','',customCols$sample))
 rownames(customCols)<-customCols$name
 
 founders<-read.csv('founder.csv',stringsAsFactors=FALSE,row.names=1)
+
+
+
+wb <- loadWorkbook("meta/EJ MM CD4 VL pre and post ART 08June2018_sasm.xlsx")
+vals<-lapply(getSheets(wb),function(sheet){
+  rows<-getCells(getRows(sheet),simplify=FALSE)
+  vals<-lapply(rows,function(row){
+    tmp<-lapply(as.character(1:8),function(xx)ifelse(any(names(row)==xx),getCellValue(row[[xx]]),NA))
+    if(is.na(tmp[[2]])&is.na(tmp[[3]]))return(NULL)
+    if((grepl('Date',tmp[[2]])|grepl('Date',tmp[[3]])))return(NULL)
+    out<-data.frame('id'='999.99','origDate'='99.99.99','date'=99999,'DFOSx'=99999,'VL'=999999999,'CD4'=9999999,'ART'='','Notes'='',stringsAsFactors=FALSE)[0,]
+    out[1,]<-rep(NA,8)
+    for(ii in 1:8)if(length(tmp)>=ii)out[1,ii]<-tmp[[ii]] else out[1,ii]<-NA
+    return(out)
+  })
+  return(do.call(rbind,vals))
+})
+compiledMeta<-do.call(rbind,mapply(function(xx,yy){xx$pat<-yy;xx},vals,names(vals),SIMPLIFY=FALSE))
+compiledMeta$mm<-sub('.* ','',sub('MM ','MM',compiledMeta$pat))
+compiledMeta$ej<-sub(' .*','',sub('EJ ','EJ',compiledMeta$pat))
+compiledMeta<-compiledMeta[compiledMeta$mm %in% mmLookup,]
+compiledMeta$rDate<-as.Date(as.numeric(compiledMeta$date),origin='1899-12-30')
+compiledMeta$vl<-as.numeric(gsub(' ','',sub('<','',compiledMeta$VL)))
+compiledMeta$cd4<-as.numeric(compiledMeta$CD4)
+if(any(is.na(compiledMeta$rDate)))stop('Problem interpreting date')
+if(year(min(compiledMeta$rDate))<2000)stop('Year <2000 detected')
+if(year(min(compiledMeta$rDate))>2015)stop('Year >2015 detected')
+startDates<-tapply(compiledMeta$rDate-compiledMeta$DFOSx,compiledMeta$mm,mostAbundant)
+compiledMeta$time<-compiledMeta$rDate-as.Date(startDates[compiledMeta$mm])
+if(any(compiledMeta$time!=compiledMeta$DFOSx))warning('Disagreement in dfosx')
+comboMeta[which(!paste(comboMeta$mm,comboMeta$rDate) %in% paste(compiledMeta$mm,compiledMeta$rDate) & !is.na(comboMeta$mm)&(!is.na(comboMeta$vl)|!is.na(comboMeta$cd4))),c('mm','date','rDate','time','vl','cd4','source')]
+
+tmp<-comboMeta$vl
+names(tmp)<-paste(comboMeta$mm,comboMeta$rDate)
+tmp<-tmp[paste(compiledMeta$mm,compiledMeta$rDate)]
+probs<-tmp!=sub('<','',compiledMeta$VL)&!is.na(tmp)
+cbind(compiledMeta[probs,],tmp[probs])
+
+tmp<-comboMeta$cd4
+names(tmp)<-paste(comboMeta$mm,comboMeta$rDate)
+tmp<-tmp[paste(compiledMeta$mm,compiledMeta$rDate)]
+probs<-tmp!=compiledMeta$CD4&!is.na(tmp)
+cbind(compiledMeta[probs,],tmp[probs])
+
+
+
+

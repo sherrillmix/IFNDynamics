@@ -311,19 +311,20 @@ pdf('out/subjects.pdf',width=11,height=8)
   }
 dev.off()
 
-pdf('out/subjects_condense.pdf',width=9,height=4)
+pdf('out/subjects_condense_new.pdf',width=9,height=4)
   par(mar=c(0,0,0,0))
   layout(lay,width=c(.25,rep(1,3),.27),height=c(.01,rep(1,3),.42))
   counter<-1
   for(ii in sort(unique(dat$pat))){
     xlim<-range(c(dat$time/7,lastDfosx/7))
-    withAs(xx=comboMeta[comboMeta$mm==ii&!is.na(comboMeta$cd4),],plot(xx$time/7,xx$cd4,pty='l',las=1,log='',xlab='',ylab='',xlim=xlim,ylim=range(dat$CD4,na.rm=TRUE)+c(-30,90),col='blue',type='l',lwd=2,xaxt='n',yaxt='n'))
-    title(sprintf('%s %s',ii,ifelse(ii %in% rownames(founders),sprintf(' (%s)',founders[ii,'tf']),'')),line=-1)
-    if(counter>6)(axis(1,pretty(comboMeta$time/7),cex.axis=1.2))
+    withAs(xx=compiledMeta[compiledMeta$mm==ii&!is.na(compiledMeta$cd4)&compiledMeta$time<=lastDfosx[ii],],plot(xx$time/7,xx$cd4,pty='l',las=1,log='',xlab='',ylab='',xlim=xlim,ylim=range(dat$CD4,na.rm=TRUE)+c(-30,90),col='blue',type='l',lwd=2,xaxt='n',yaxt='n'))
+    #title(sprintf('%s %s',ii,ifelse(ii %in% rownames(founders),sprintf(' (%s)',founders[ii,'tf']),'')),line=-1)
+    title(ii,line=-1)
+    if(counter>6)(axis(1,pretty(compiledMeta$time/7),cex.axis=1.2))
     title(xlab='Time (weeks)',mgp=c(2,1,0))
-    if(counter%%3==0)(axis(4,pretty(comboMeta$cd4,n=5),las=1,col.axis='blue',cex.axis=1.1))
+    if(counter%%3==0)(axis(4,pretty(compiledMeta$cd4,n=5),las=1,col.axis='blue',cex.axis=1.1))
     par(new=TRUE)
-    thisDat<-unique(comboMeta[comboMeta$mm==ii&!is.na(comboMeta$vl),c('time','vl')])
+    thisDat<-unique(compiledMeta[compiledMeta$mm==ii&!is.na(compiledMeta$vl)&compiledMeta$time<=lastDfosx[ii],c('time','vl')])
     plot(thisDat$time/7,thisDat$vl,type='n',log='y',yaxt='n',xlab='',ylab='',xlim=xlim,ylim=range(dat$vl,na.rm=TRUE),xaxt='n',col='red',lwd=2)
     reduceDat<-thisDat[c(TRUE,!sapply(2:(nrow(thisDat)-1),function(zz)all(thisDat[zz+-1:1,'vl']<=50)),TRUE),]
     #connects two <50 or big gap to <50
