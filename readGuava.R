@@ -21,6 +21,12 @@ findMostExtremePoint2<-function(red,green,nOutlier=0){
   id<-0
   return(c('slope'=mod$coef[['red']],'yint'=greenBase,'id'=id))
 }
+wellToRowCol<-function(wells){
+  cols<-(wells %%12)
+  cols[cols==0]<-12
+  rows<-ceiling(wells/12)
+  data.frame('col'=cols,'row'=rows)
+}
 
 
 
@@ -191,6 +197,42 @@ for(ii in unique(fcs2$sample)){
   message(ii)
   plotPlate(fcs2[fcs2$sample==ii,],sprintf('out/flow/infectionAid_%s.png',ii))
 }
+
+
+plotGuava<-function(allDat,outFile,slope=1,int=0){
+  allDat$outlier<-allDat[,'GRN-HLog']-int-slope*allDat[,'RED-HLog']
+  png(outFile,height=8*400,width=12*500)
+    par(mfrow=c(8,12),mar=c(0,0,0,0))
+    for(ii in 1:96){
+      thisDat<-allDat[allDat$well==ii,]
+      if(nrow(thisDat)==0){
+        plot(1,1,type='n',xlab='',ylab='',xaxt='n',yaxt='n',bty='n')
+        message('Missing ',ii)
+      }else{
+        #max is a bit crazy in CD4
+        ylim<-quantile(allDat[,'GRN-HLog'],c(0,1))
+        xlim<-quantile(allDat[allDat[,'RED-HLog']<250,'RED-HLog'],c(0,1))
+        plot(thisDat[,'RED-HLog'],thisDat[,'GRN-HLog'],ylim=ylim,xaxt='n',yaxt='n',xlim=xlim,cex=.5,col='#0000FF66')
+        fakeDat<-data.frame('RED-HLog'=seq(1:10000),check.names=FALSE)
+        predGrn<-int+fakeDat$`RED-HLog`*slope
+        lines(fakeDat$`RED-HLog`,predGrn,lty=2)
+        if(thisDat$virus[1]=='No virus'&&any(thisDat$outlier>0))withAs(xx=thisDat[thisDat$outlier>0,],points(xx$`RED-HLog`,xx$`GRN-HLog`,col='red',cex=1))
+      }
+      title(main=sprintf('%s\n%s\n%0.2f%%\n%0.1f cells/sec',thisDat$virus[1],thisDat$treat[1],mean(thisDat$outlier>0)*100,thisDat$density[1]),line=-11,cex.main=3)
+    }
+  dev.off()
+}
+
+
+virus<-rep(c('SG3','89.6','WEAU','YU2','MM15.14.2C4','MM23.07.2B2'),2)
+treat<-rep(c('No drug','AMD','Tak','AMD+Tak'),2)
+trop<-readFcsDf('ice/2018-06-18_tropism/')
+trop<-cbind(trop,wellToRowCol(trop$well))
+trop$virus<-virus[trop$col]
+trop$treat<-treat[trop$row]
+plotGuava(trop[trop$sample=='2018-06-18-jltr',],'out/flow/2018-06-18-tropism.png',1,200)
+plotGuava(trop[trop$sample=='2018-06-18-jltr_dilute',],'out/flow/2018-06-18-tropism2.png',1,200)
+plotGuava(trop[trop$sample=='2018-06-19_jltr',],'out/flow/2018-06-18-tropism3.png',1,200)
 
 
 
