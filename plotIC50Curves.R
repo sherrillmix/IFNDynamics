@@ -1,5 +1,6 @@
 library(xlsx)
 library(dnar)
+source('functions.R')
 
 #concAlpha<-c(0, 0.001, 0.003, 0.008, 0.023, 0.068, 0.204, 0.611, 1.833, 5.5)
 concAlpha<-c(0,5.55*3^(-8:0))
@@ -171,5 +172,20 @@ pdf('out/newIc50.pdf',width=6,height=4)
   plotIfns(newP24[newP24$isAlpha,],concAlpha,'IFNa2 concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
   plotIfns(newP24[newP24$isBeta,],concBeta,'IFNb concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
 dev.off()
+
+
+
+newP24Rerun<-readIfns('data/p24 +vertical std. 6.12.2018 controls  test .xls',exclude=0,firstCol=4,nameCol=2,ifnCol=1)
+newP24Rerun$isAlpha<-grepl('alpha',newP24Rerun$ifn,ignore.case=TRUE)
+newP24Rerun$isBeta<-grepl('beta',newP24Rerun$ifn,ignore.case=TRUE)
+newP24Rerun$sample<-sprintf('%s(%s)',sub('\\(.*','',newP24Rerun$sample),newP24Rerun$ifn)
+out2<-rbind(as.data.frame(do.call(rbind, by(newP24Rerun[newP24Rerun$isAlpha,],newP24Rerun$sample[newP24Rerun$isAlpha],function(xx){calcBasicIc50(concAlpha,xx[,1:20,drop=FALSE])}))), as.data.frame(do.call(rbind, by(newP24Rerun[newP24Rerun$isBeta,],newP24Rerun$sample[newP24Rerun$isBeta],function(xx){calcBasicIc50(concBeta,xx[,1:20,drop=FALSE])}))))
+write.csv(out2,'out/newP24Rerun_ic50.csv')
+
+pdf('out/newIc50Redo.pdf',width=6,height=4)
+  plotIfns(newP24Rerun[newP24Rerun$isAlpha,],concAlpha,'IFNa2 concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
+  plotIfns(newP24Rerun[newP24Rerun$isBeta,],concBeta,'IFNb concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
+dev.off()
+
 
 
