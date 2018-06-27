@@ -275,4 +275,33 @@ for(ii in unique(unlist(iceMMVirus))){
 }
 dev.off()
 
+library(abind)
+virus<-list(
+  'A'=c('MM23.01.2A3','UK61.1-P2C2','MM23.07.2B2','UK61.7-P2A4','MM23.11.1D6','UK61.11-P2B3','UK61.13-P1B4','UK61.13-P21A3','MM15.02.2B5 bulk','MM15.02.2A2 bulk','MM15.03.2B6 bulk','MM15.08.2B2 bulk'),
+  'E'=c('MM15.11.2B4 bulk','MM15.14.2C4 bulk','WEAU.2.1A2','WEAU.3.1A6','WEAU.11.1B6','WEAU.15.1C6','WEAU.19.1A1','89.6','SG3','YU2','SG3+WEAU','No virus')
+)
+treats<-factor(structure(rep(c('No drug','AMD','Tak','AMD+Tak'),2),.Names=LETTERS[1:8]))
+trop<-readCounts('ice/out/2018-06-09_tropismTitration/counts.csv')
+trop<-trop[trop$plate!='titration',]
+trop$conc<-sub('^([0-9]x)$','0\\1',trop$plate)
+trop$virus<-mapply(function(xx,yy)xx[yy],virus[sub('[FGH]','E',sub('[BCD]','A',trop$row))],trop$col)
+trop$treat<-treats[trop$row]
+tropCounts<-tapply(trop$n,list(trop$virus,trop$treat,trop$conc),c)
+props<-do.call(abind,c(lapply(dimnames(tropCounts)[[3]],function(xx){out<-tropCounts[,,xx]/ifelse(tropCounts[,'No drug',xx]>500,tropCounts[,'No drug',xx],NA)}),list(along=3)))[unlist(virus),treats[1:4],]
+propMean<-apply(props,c(1,2),mean,na.rm=TRUE)
+pdf('tropism.pdf',height=12)
+  par(mar=c(3,10,.1,.1))
+  cols=rev(heat.colors(1000))
+  breaks=seq(0,max(propMean,na.rm=TRUE),length.out=1001)
+  image(1:ncol(propMean),1:nrow(propMean),t(propMean),xaxt='n',yaxt='n',xlab='',ylab='',col=cols,breaks=breaks)
+  axis(2,1:nrow(propMean),rownames(propMean),las=1)
+  axis(1,1:ncol(propMean),colnames(propMean))
+  insetScale(breaks,cols,insetPos = c(0.015, 0.015, 0.025, 0.25),main='Proportion of no drug')
+  box()
+  abline(h=1:nrow(propMean)-.5,col='#00000033')
+  abline(v=1:ncol(propMean)-.5,col='#00000033')
+dev.off()
+#tak = ccr5 inhibitor, amd = cxcr4 inhibitor
+
+
 
