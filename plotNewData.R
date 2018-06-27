@@ -317,14 +317,14 @@ pdf('out/subjects_condense_new.pdf',width=9,height=4)
   counter<-1
   for(ii in sort(unique(dat$pat))){
     xlim<-range(c(dat$time/7,lastDfosx/7))
-    withAs(xx=compiledMeta[compiledMeta$mm==ii&!is.na(compiledMeta$cd4)&compiledMeta$time<=lastDfosx[ii],],plot(xx$time/7,xx$cd4,pty='l',las=1,log='',xlab='',ylab='',xlim=xlim,ylim=range(dat$CD4,na.rm=TRUE)+c(-30,90),col='blue',type='l',lwd=2,xaxt='n',yaxt='n'))
+    withAs(xx=compiledMeta[compiledMeta$mm==ii&!is.na(compiledMeta$cd4),],plot(xx$time/7,xx$cd4,pty='l',las=1,log='',xlab='',ylab='',xlim=xlim,ylim=range(dat$CD4,na.rm=TRUE)+c(-30,90),col='blue',type='l',lwd=2,xaxt='n',yaxt='n'))
     #title(sprintf('%s %s',ii,ifelse(ii %in% rownames(founders),sprintf(' (%s)',founders[ii,'tf']),'')),line=-1)
     title(ii,line=-1)
     if(counter>6)(axis(1,pretty(compiledMeta$time/7),cex.axis=1.2))
     title(xlab='Time (weeks)',mgp=c(2,1,0))
     if(counter%%3==0)(axis(4,pretty(compiledMeta$cd4,n=5),las=1,col.axis='blue',cex.axis=1.1))
     par(new=TRUE)
-    thisDat<-unique(compiledMeta[compiledMeta$mm==ii&!is.na(compiledMeta$vl)&compiledMeta$time<=lastDfosx[ii],c('time','vl')])
+    thisDat<-unique(compiledMeta[compiledMeta$mm==ii&!is.na(compiledMeta$vl),c('time','vl')])
     plot(thisDat$time/7,thisDat$vl,type='n',log='y',yaxt='n',xlab='',ylab='',xlim=xlim,ylim=range(dat$vl,na.rm=TRUE),xaxt='n',col='red',lwd=2)
     reduceDat<-thisDat[c(TRUE,!sapply(2:(nrow(thisDat)-1),function(zz)all(thisDat[zz+-1:1,'vl']<=50)),TRUE),]
     #connects two <50 or big gap to <50
@@ -335,11 +335,13 @@ pdf('out/subjects_condense_new.pdf',width=9,height=4)
     if(counter==4)text(par('usr')[1]-.2*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),'Viral load (copies/ml)',srt=90,xpd=NA,col='red',cex=2)
     if(counter==8)text(mean(par('usr')[1:2]),10^(par('usr')[3]-.32*diff(par('usr')[3:4])),'Weeks after onset of symptoms',xpd=NA,cex=2)
     counter<-counter+1
+    #thisLast<-lastDfosx[ii]
+    thisLast<-max(compiledMeta[compiledMeta$mm==ii&(!is.na(compiledMeta$cd4)|!is.na(compiledMeta$vl)),'time'])
     if(ii %in% names(artDfosx)&&!is.na(artDfosx[ii])){
-      rect(artDfosx[ii]/7,10^par('usr')[3],lastDfosx[ii]/7,10^par('usr')[4],col='#00000022',border=NA)
+      rect(artDfosx[ii]/7,10^par('usr')[3],thisLast/7,10^par('usr')[4],col='#00000022',border=NA)
       #text(mean(c(artDfosx[ii]/7,par('usr')[2])),10^(par('usr')[4]-diff(par('usr')[3:4])*.3),'ART treatment',xpd=NA)
     }
-    abline(v=lastDfosx[ii]/7,lty=2)
+    abline(v=thisLast/7,lty=2)
   }
 dev.off()
 
