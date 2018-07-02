@@ -304,4 +304,137 @@ dev.off()
 #tak = ccr5 inhibitor, amd = cxcr4 inhibitor
 
 
+tit<-readCounts('ice/out/2018-06-23_titration/counts.csv')
+virus<-read.csv('ice/2018-06-23_titration.csv',stringsAsFactors=FALSE)
+virus$final<-virus$Dilution*3
+virus$well<-paste(rep(LETTERS[1:4],each=12),rep(1:12,4),sep='')
+rownames(virus)<-virus$well
+pdf('out/neutralRed.pdf');withAs(xx=tit[order(tit$well),],plot(xx[xx$plate=='1x','n'],xx[xx$plate=='1x_NR2','n'],las=1,xlab='Count without NR',ylab='Count with NR'));dev.off()
+tit<-tit[grep('^[0-9]+x$',tit$plate),]
+tit$dilution<-as.numeric(sub('x','',tit$plate))*ifelse(tit$row %in% c('E','F','G','H'),3,1)
+tit<-tit[order(tit$col,tit$dilution),]
+tit$virusNum<-ifelse(tit$row %in% LETTERS[5:8],paste(structure(LETTERS[1:4],.Names=LETTERS[5:8])[tit$row],tit$col,sep=''),tit$well)
+tit$baseDilute<-virus[tit$virusNum,'final']
+tit$virus<-virus[tit$virusNum,'Virus']
+tit$totalDilute<-tit$baseDilute*tit$dilution
+tit$filter<-ave(tit$n,tit$virus,FUN=function(xx)ifelse(1:length(xx)>=which.max(xx)&xx>25,xx,NA))
+virus$iuPerUl<-NA
+pdf('out/titration.pdf')
+plot(tit$totalDilute,tit$n+1,xlab='Dilution',ylab='TZMBL count',las=1,type='n',log='yx')
+for(ii in unique(tit$virus))withAs(zz=tit[tit$virus==ii,],lines(zz$totalDilute,zz$n))
+abline(100,1,col='#FF0000')
+for(ii in virus$Virus){
+  thisDat<-tit[tit$virus==ii,]
+  thisDat$logDil<--log(thisDat$totalDilute)
+  withAs(zz=thisDat,plot(zz$totalDilute,zz$n+1,xlab='Dilution',ylab='TZMBL count',las=1,log='yx',main=ii,ylim=range(tit$n+1),xlim=range(tit$totalDilute),pch=21,bg=is.na(thisDat$filter)+1,cex=2))
+  if(sum(!is.na(thisDat$filter))>0){
+    mod<-glm(n~offset(logDil),thisDat[!is.na(thisDat$filter),],family='poisson')
+    fakeDat<-data.frame(logDil=-log(1:50000))
+    preds<-predict(mod,fakeDat)
+    lines(exp(-fakeDat$logDil),exp(preds)+1)
+    iuPerUl<-exp(coef(mod)['(Intercept)'])/150
+    virus$iuPerUl[virus$Virus==ii]<-iuPerUl
+    mtext(sprintf('%0.1f IU/ul (polybrene+spin)',iuPerUl),3)
+  }
+}
+dev.off()
+write.csv(virus,'ice/2018-06-23_titration_calc.csv')
+
+viruses<-read.csv('ice/2018-06-17_bigTropism.csv',stringsAsFactors=FALSE)
+viruses$virusNum<-paste(viruses$Plate,substring(viruses$Row,1,1),viruses$Col,sep='_')
+rownames(viruses)<-viruses$virusNum
+uniqDrugs<-c('No drug','AMD','Tak','AMD+Tak')
+drugs<-structure(rep(uniqDrugs,2),.Names=LETTERS[1:8])
+
+viruses2<-read.csv('ice/2018-06-21_tropismRedo.csv',stringsAsFactors=FALSE)
+
+
+trop2<-readCounts('ice/out/2018-06-21-drugTitration/counts.csv')
+trop2<-trop2[grep('redo',trop2$plate),]
+trop2$virus<-viruses2[trop2$col,'Virus']
+trop2$dilution<-ifelse(trop2$plate=='redo_1',9,1)*ifelse(trop2$row %in% LETTERS[5:8],3,1)*viruses2[trop2$col,'Dilution']
+trop2$drug<-drugs[trop2$row]
+trop2$date<-'6-21'
+
+trop<-readCounts('ice/out/2018-06-17_tropism/counts.csv')
+trop$rowGroup<-ifelse(trop$row %in% LETTERS[5:8],'E','A')
+trop<-trop[trop$plate!='BGAL',]
+trop$pId<-sub('^P([0-9]).*','\\1',trop$plate)
+trop$virusNum<-paste(trop$pId,trop$rowGroup,trop$col,sep='_')
+trop$dilution<-as.numeric(sub('^P[0-9]_([0-9]+)x$','\\1',trop$plate))*viruses[trop$virusNum,'Dilution']
+trop$virus<-viruses[trop$virusNum,'Virus']
+trop$drug<-drugs[trop$row]
+trop$date<-'6-17'
+
+desiredCols<-c('virus','dilution','n','drug','date')
+combo<-rbind(trop[,desiredCols],trop2[,desiredCols])
+combo<-combo[order(combo$virus,combo$dilution),]
+combo$date<-as.factor(combo$date)
+drugColors<-structure(rainbow.lab(4),.Names=uniqDrugs)
+viruses$bestDilution<-sapply(viruses$Virus,function(xx){
+  thisDat<-combo[combo$drug=='No drug'&combo$virus==xx,]
+  tail(thisDat$dilution[thisDat$n==max(thisDat$n)],1)
+})
+datePch<-c('6-17'=21,'6-21'=22)
+#best<-combo[combo$dilution==viruses[combo$virusNum,'bestDilution'],]
+mods<-list()
+pdf('out/bigTropism.pdf')
+for(ii in viruses$Virus){
+  thisDat<-combo[combo$virus==ii,]
+  firstDilute<-do.call(rbind,lapply(unique(combo$date),function(day){sapply(uniqDrugs,function(dd){
+    thisTime<-thisDat[thisDat$date==day,]
+    if(all(thisTime[thisTime$drug==dd,'n']<50))return(-Inf)
+    else return(tail(thisTime[(thisTime$n>.8*max(thisTime[thisTime$drug==dd,'n'])) & thisTime$drug==dd,'dilution'],1))
+  })}))
+  rownames(firstDilute)<-unique(combo$date)
+  thisDat$filter<-thisDat$n
+  thisDat$drug<-factor(thisDat$drug,levels=uniqDrugs)
+  for(dd in uniqDrugs)thisDat[thisDat$drug==dd&thisDat$dilution<firstDilute[,dd][thisDat$date],'filter']<-NA
+  thisDat$logDil<--log(thisDat$dilution)
+  withAs(zz=thisDat,plot(zz$dilution,zz$n+1,xlab='Dilution',ylab='TZMBL count',las=1,log='yx',main=ii,ylim=range(combo$n+1)*c(1,2),xlim=range(combo$dilution),type='n'))
+  #abline(v=viruses[viruses$Virus==ii,'bestDilution'],lty=2)
+  for(dd in uniqDrugs){
+    withAs(zz=thisDat[thisDat$drug==dd,],points(zz$dilution,zz$n+1,pch=datePch[zz$date],cex=2,bg=drugColors[dd],col=c('black','#00000000')[is.na(zz$filter)+1],lwd=3))
+  }
+  legend('topright',names(drugColors),col=drugColors,lty=1,inset=.01)
+  if(length(unique(thisDat$date))>1)mod<-glm(filter~offset(logDil)+drug+date,thisDat,family='poisson')
+  else mod<-glm(filter~offset(logDil)+drug,thisDat,family='poisson')
+  for(dd in uniqDrugs){
+    fakeDat<-data.frame(logDil=-log(2^seq(0,16,.1)),'drug'=dd,'date'='6-17')
+    preds<-predict(mod,fakeDat)
+    lines(exp(-fakeDat$logDil),exp(preds)+1,col=drugColors[dd])
+  }
+  amd<-1-exp(coef(mod)['drugAMD'])
+  tak<-1-exp(coef(mod)['drugTak'])
+  amdTak<-1-exp(coef(mod)['drugAMD+Tak'])
+  mtext(sprintf('Inhibition:\nAMD: %0.2f%%\nTAK: %0.2f%%\nAMD+TAK: %0.2f%%',amd*100,tak*100,amdTak*100),3,at=exp(log(max(combo$dilution))*.8))
+  mods[[ii]]<-mod
+}
+dev.off()
+
+estimates<-do.call(rbind,lapply(mods,function(mod){
+  est<-coef(summary(mod))[sprintf('drug%s',uniqDrugs[-1]),'Estimate']
+  se<-coef(summary(mod))[sprintf('drug%s',uniqDrugs[-1]),'Std. Error']
+  c('est'=exp(est),'lower'=exp(est-se*2),'upper'=exp(est+se*2))
+}))
+estimates<-estimates[rownames(estimates)!='No virus',]
+mms<-sub('(MM[0-9]+\\.)?.*','\\1',rownames(estimates))
+estimates<-estimates[order(mms!=''),]
+mms<-sub('(MM[0-9]+\\.)?.*','\\1',rownames(estimates))
+mmSwitch<-c(FALSE,mms[-1]!=mms[-length(mms)])
+virusPos<-cumsum(rep(1,nrow(estimates))+mmSwitch)
+
+rectPos<-seq(-.4,.4,length.out=ncol(estimates)/3+2)
+rectCols<-structure(rainbow.lab(4),.Names=uniqDrugs)
+pdf('out/bigTropismSummary.pdf',width=20)
+  par(mar=c(7,4,.2,4))
+  #plot(1,1,type='n',ylim=range(estimates),xlab='',las=1,ylab='TZMBL BGal spots (proportion relative to no drug)',xlim=c(1,nrow(estimates))+c(-.5,.5),yaxt='n',xaxt='n',xaxs='i')
+  plot(1,1,type='n',ylim=range(estimates[rownames(estimates)!='No virus',1:3]),xlab='',las=1,ylab='TZMBL BGal spots (proportion relative to no drug)',xlim=range(virusPos)+c(-1,1),xaxt='n',xaxs='i')
+  #logAxis(las=1)
+  slantAxis(1,virusPos,rownames(estimates),las=2)
+  rect(rectPos[1]+virusPos,1,rectPos[2]+virusPos,0,col=rectCols['No drug'])
+  for(ii in 1:3)rect(rectPos[1+ii]+virusPos,estimates[,ii],rectPos[2+ii]+virusPos,0,col=rectCols[sub('est.drug','',colnames(estimates)[ii])])
+  for(ii in 1:3)segments(mean(rectPos[1:2+ii])+virusPos,estimates[,ii+3],mean(rectPos[1:2+ii])+virusPos,estimates[,ii+6])
+  legend('topleft',names(rectCols),fill=rectCols,bty='n')
+dev.off()
 
