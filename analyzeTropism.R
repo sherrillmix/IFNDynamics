@@ -346,9 +346,23 @@ rownames(viruses)<-viruses$virusNum
 uniqDrugs<-c('No drug','AMD','Tak','AMD+Tak')
 drugs<-structure(rep(uniqDrugs,2),.Names=LETTERS[1:8])
 
+viruses3<-read.csv('ice/2018-07-03_tropism.csv',stringsAsFactors=FALSE)
+viruses3$virusNum<-paste(viruses3$Plate,viruses3$Col,sep='_')
+rownames(viruses3)<-viruses3$virusNum
+moreDrugs<-structure(c(uniqDrugs,'Mar','HiMar','Mar+AMD','HiMar+AMD'),.Names=LETTERS[1:8])
+trop3<-readCounts('ice/out/2018-07-07_tropism/counts.csv')
+nr3<-trop3[grepl("NR",trop3$plate),]
+trop3<-trop3[!grepl("NR",trop3$plate),]
+#fix a flipped plate
+trop3[trop3$plate=='P1_27x','col']<-rev(1:12)[trop3[trop3$plate=='P1_27x','col']]
+trop3[trop3$plate=='P1_27x','row']<-structure(LETTERS[8:1],.Names=LETTERS[1:8])[trop3[trop3$plate=='P1_27x','row']]
+trop3$drug<-moreDrugs[trop3$row]
+trop3$virusNum<-paste(sub('^P','',sub('_.*','',trop3$plate)),trop3$col,sep='_')
+trop3$virus<-viruses3[trop3$virusNum,'Virus']
+trop3$date<-'7-3'
+trop3$dilution<-viruses3[trop3$virusNum,'Dilution']*as.numeric(sub('x$','',sub('P[12]_','',trop3$plate)))
+
 viruses2<-read.csv('ice/2018-06-21_tropismRedo.csv',stringsAsFactors=FALSE)
-
-
 trop2<-readCounts('ice/out/2018-06-21-drugTitration/counts.csv')
 trop2<-trop2[grep('redo',trop2$plate),]
 trop2$virus<-viruses2[trop2$col,'Virus']
@@ -367,40 +381,43 @@ trop$drug<-drugs[trop$row]
 trop$date<-'6-17'
 
 desiredCols<-c('virus','dilution','n','drug','date')
-combo<-rbind(trop[,desiredCols],trop2[,desiredCols])
+combo<-rbind(trop[,desiredCols],trop2[,desiredCols],trop3[trop3$drug %in% uniqDrugs,desiredCols])
 combo<-combo[order(combo$virus,combo$dilution),]
-combo$date<-as.factor(combo$date)
-drugColors<-structure(rainbow.lab(4),.Names=uniqDrugs)
+combo$dateF<-as.factor(combo$date)
+drugColors<-structure(rainbow.lab(length(uniqDrugs)),.Names=uniqDrugs)
 viruses$bestDilution<-sapply(viruses$Virus,function(xx){
   thisDat<-combo[combo$drug=='No drug'&combo$virus==xx,]
   tail(thisDat$dilution[thisDat$n==max(thisDat$n)],1)
 })
-datePch<-c('6-17'=21,'6-21'=22)
+datePch<-c('6-17'=21,'6-21'=22,'7-3'=23)
 #best<-combo[combo$dilution==viruses[combo$virusNum,'bestDilution'],]
 mods<-list()
 pdf('out/bigTropism.pdf')
-for(ii in viruses$Virus){
+for(ii in unique(c(viruses$Virus,viruses3$Virus))){
   thisDat<-combo[combo$virus==ii,]
-  firstDilute<-do.call(rbind,lapply(unique(combo$date),function(day){sapply(uniqDrugs,function(dd){
+  thisDrugs<-uniqDrugs
+  #if(all(moreDrugs %in% thisDat$drug))thisDrugs<-unname(moreDrugs)
+  #else thisDrugs<-uniqDrugs
+  firstDilute<-do.call(rbind,lapply(unique(combo$date),function(day){sapply(thisDrugs,function(dd){
     thisTime<-thisDat[thisDat$date==day,]
     if(all(thisTime[thisTime$drug==dd,'n']<50))return(-Inf)
     else return(tail(thisTime[(thisTime$n>.8*max(thisTime[thisTime$drug==dd,'n'])) & thisTime$drug==dd,'dilution'],1))
   })}))
   rownames(firstDilute)<-unique(combo$date)
   thisDat$filter<-thisDat$n
-  thisDat$drug<-factor(thisDat$drug,levels=uniqDrugs)
-  for(dd in uniqDrugs)thisDat[thisDat$drug==dd&thisDat$dilution<firstDilute[,dd][thisDat$date],'filter']<-NA
+  thisDat$drug<-factor(thisDat$drug,levels=thisDrugs)
+  for(dd in thisDrugs)thisDat[thisDat$drug==dd&thisDat$dilution<firstDilute[,dd][thisDat$date],'filter']<-NA
   thisDat$logDil<--log(thisDat$dilution)
   withAs(zz=thisDat,plot(zz$dilution,zz$n+1,xlab='Dilution',ylab='TZMBL count',las=1,log='yx',main=ii,ylim=range(combo$n+1)*c(1,2),xlim=range(combo$dilution),type='n'))
   #abline(v=viruses[viruses$Virus==ii,'bestDilution'],lty=2)
-  for(dd in uniqDrugs){
+  for(dd in thisDrugs){
     withAs(zz=thisDat[thisDat$drug==dd,],points(zz$dilution,zz$n+1,pch=datePch[zz$date],cex=2,bg=drugColors[dd],col=c('black','#00000000')[is.na(zz$filter)+1],lwd=3))
   }
   legend('topright',names(drugColors),col=drugColors,lty=1,inset=.01)
-  if(length(unique(thisDat$date))>1)mod<-glm(filter~offset(logDil)+drug+date,thisDat,family='poisson')
+  if(length(unique(thisDat$date))>1)mod<-glm(filter~offset(logDil)+drug+dateF,thisDat,family='poisson')
   else mod<-glm(filter~offset(logDil)+drug,thisDat,family='poisson')
-  for(dd in uniqDrugs){
-    fakeDat<-data.frame(logDil=-log(2^seq(0,16,.1)),'drug'=dd,'date'='6-17')
+  for(dd in thisDrugs){
+    fakeDat<-data.frame(logDil=-log(2^seq(0,16,.1)),'drug'=dd,'dateF'='6-17')
     preds<-predict(mod,fakeDat)
     lines(exp(-fakeDat$logDil),exp(preds)+1,col=drugColors[dd])
   }
@@ -418,23 +435,77 @@ estimates<-do.call(rbind,lapply(mods,function(mod){
   c('est'=exp(est),'lower'=exp(est-se*2),'upper'=exp(est+se*2))
 }))
 estimates<-estimates[rownames(estimates)!='No virus',]
-mms<-sub('(MM[0-9]+\\.)?.*','\\1',rownames(estimates))
-estimates<-estimates[order(mms!=''),]
-mms<-sub('(MM[0-9]+\\.)?.*','\\1',rownames(estimates))
+mms<-sub('(MM[0-9]+|WEAU\\.)?.*','\\1',rownames(estimates))
+times<-as.numeric(ifelse(mms=='',NA,sub('(MM[0-9]+|WEAU)\\.([0-9]+).*$','\\2',rownames(estimates))))
+estimates<-estimates[order(mms!='',mms,times),]
+mms<-sub('(MM[0-9]+|WEAU\\.)?.*','\\1',rownames(estimates))
 mmSwitch<-c(FALSE,mms[-1]!=mms[-length(mms)])
 virusPos<-cumsum(rep(1,nrow(estimates))+mmSwitch)
-
 rectPos<-seq(-.4,.4,length.out=ncol(estimates)/3+2)
 rectCols<-structure(rainbow.lab(4),.Names=uniqDrugs)
 pdf('out/bigTropismSummary.pdf',width=20)
+  for(isLog in c(FALSE,TRUE)){
   par(mar=c(7,4,.2,4))
   #plot(1,1,type='n',ylim=range(estimates),xlab='',las=1,ylab='TZMBL BGal spots (proportion relative to no drug)',xlim=c(1,nrow(estimates))+c(-.5,.5),yaxt='n',xaxt='n',xaxs='i')
-  plot(1,1,type='n',ylim=range(estimates[rownames(estimates)!='No virus',1:3]),xlab='',las=1,ylab='TZMBL BGal spots (proportion relative to no drug)',xlim=range(virusPos)+c(-1,1),xaxt='n',xaxs='i')
-  #logAxis(las=1)
+  plot(1,1,type='n',ylim=range(estimates[rownames(estimates)!='No virus',1:3]),xlab='',las=1,ylab='TZMBL BGal spots (proportion relative to no drug)',xlim=range(virusPos)+c(-1,1),xaxt='n',xaxs='i',log=ifelse(isLog,'y',''),yaxt=ifelse(isLog,'n','s'))
   slantAxis(1,virusPos,rownames(estimates),las=2)
-  rect(rectPos[1]+virusPos,1,rectPos[2]+virusPos,0,col=rectCols['No drug'])
-  for(ii in 1:3)rect(rectPos[1+ii]+virusPos,estimates[,ii],rectPos[2+ii]+virusPos,0,col=rectCols[sub('est.drug','',colnames(estimates)[ii])])
+  if(!isLog){
+    rect(rectPos[1]+virusPos,1,rectPos[2]+virusPos,0,col=rectCols['No drug'])
+  } else {
+    abline(h=1,lty=2)
+    logAxis(las=1)
+  }
+  for(ii in 1:3)rect(rectPos[1+ii]+virusPos,estimates[,ii],rectPos[2+ii]+virusPos,ifelse(isLog,1,0),col=rectCols[sub('est.drug','',colnames(estimates)[ii])])
   for(ii in 1:3)segments(mean(rectPos[1:2+ii])+virusPos,estimates[,ii+3],mean(rectPos[1:2+ii])+virusPos,estimates[,ii+6])
-  legend('topleft',names(rectCols),fill=rectCols,bty='n')
+  legend(ifelse(isLog,'bottomright','topleft'),names(rectCols),fill=rectCols,bty='n')
+  }
 dev.off()
 
+drugColors<-structure(rainbow.lab(length(moreDrugs)),.Names=moreDrugs)
+mods<-list()
+allDrugs<-list()
+pdf('out/tropismMaraviroc.pdf')
+for(ii in c(viruses3$Virus[viruses3$Virus %in% c(viruses2$Virus,viruses$Virus)],'89.6 (293T)')){
+  thisDat<-trop3[trop3$virus==ii,]
+  thisDrugs<-unname(moreDrugs)
+  firstDilute<-do.call(rbind,lapply(unique(combo$date),function(day){sapply(thisDrugs,function(dd){
+    thisTime<-thisDat[thisDat$date==day,]
+    if(all(thisTime[thisTime$drug==dd,'n']<50))return(-Inf)
+    else return(tail(thisTime[(thisTime$n>.8*max(thisTime[thisTime$drug==dd,'n'])) & thisTime$drug==dd,'dilution'],1))
+  })}))
+  rownames(firstDilute)<-unique(combo$date)
+  thisDat$filter<-thisDat$n
+  thisDat$drug<-factor(thisDat$drug,levels=thisDrugs)
+  for(dd in thisDrugs)thisDat[thisDat$drug==dd&thisDat$dilution<firstDilute[,dd][thisDat$date],'filter']<-NA
+  thisDat$logDil<--log(thisDat$dilution)
+  withAs(zz=thisDat,plot(zz$dilution,zz$n+1,xlab='Dilution',ylab='TZMBL count',las=1,log='yx',main=ii,ylim=range(combo$n+1)*c(1,2),xlim=range(combo$dilution),type='n'))
+  for(dd in thisDrugs){
+    withAs(zz=thisDat[thisDat$drug==dd,],points(zz$dilution,zz$n+1,pch=21,cex=2,bg=drugColors[dd],col=c('black','#00000000')[is.na(zz$filter)+1],lwd=3))
+  }
+  legend('topright',names(drugColors),col=drugColors,lty=1,inset=.01)
+  if(length(unique(thisDat$date))>1)mod<-glm(filter~offset(logDil)+drug+dateF,thisDat,family='poisson')
+  else mod<-glm(filter~offset(logDil)+drug,thisDat,family='poisson')
+  for(dd in thisDrugs){
+    fakeDat<-data.frame(logDil=-log(2^seq(0,16,.1)),'drug'=dd,'dateF'='6-17')
+    preds<-predict(mod,fakeDat)
+    lines(exp(-fakeDat$logDil),exp(preds)+1,col=drugColors[dd])
+  }
+  drugs<-1-exp(coef(mod))[-1]
+  drugText<-sprintf('%s: %0.2f',sub('^drug','',names(drugs)),drugs*100)
+  mtext(sprintf('Inhibition\n%s',paste(drugText[1:3],collapse='\n')),3,at=exp(log(max(combo$dilution))*.2))
+  mtext(sprintf('Inhibition\n%s',paste(drugText[4:7],collapse='\n')),3,at=exp(log(max(combo$dilution))*.8))
+  mods[[ii]]<-mod
+  allDrugs[[ii]]<-drugs
+}
+dev.off()
+
+out<-round(do.call(rbind,allDrugs)*100,2)
+colnames(out)<-sub('^drug','',colnames(out))
+
+nrCompare<-cbind(trop3[order(trop3$plate,trop3$col,trop3$row),c('plate','col','row','n')],nr3[order(nr3$plate,nr3$col,nr3$row),c('plate','col','row','n')])
+colnames(nrCompare)<-paste(rep(c('no','NR'),each=4),c('plate','col','row','n'),sep='_')
+if(any(nrCompare$no_plate!=sub('_NR$','',nrCompare$NR_plate)))stop('Mismatched plates')
+pdf('out/neutralRed2.pdf')
+  plot(nrCompare$no_n+1,nrCompare$NR_n+1,las=1,xlab='Count without NR',ylab='Count with NR',log='xy')
+  abline(0,1,lty=2)
+dev.off()
