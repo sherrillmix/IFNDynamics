@@ -20,6 +20,10 @@ seqs<-data.frame(
   'time'=c(rep(NA,nrow(hiv)),dat$time),
   'bulk'=c(rep(FALSE,nrow(hiv)),dat$bulk),
   'seq'=c(hiv$Sequence,dat$Sequence..Full.Length.or.3.half.),
+  'replicativeCapacity'=c(hiv$Replicative.capacity.Pooled.Donor.cells.p24.d7,dat$replication),
+  'envPerRT'=c(hiv$Env.RT,rep(NA,nrow(dat))),
+  'infectivity'=c(hiv$Infectivity.RLU.pg.RT...T1249,rep(NA,nrow(dat))),
+  'p24Release'=c(hiv$p24.release.No.IFN,rep(NA,nrow(dat))),
   stringsAsFactors=FALSE
 )
 
@@ -79,7 +83,19 @@ withAs(zz=seqs[!seqs$isNa,],write.fa(zz$id,zz$align,'combined/trimmed.fa'))
 xx<-read.csv('combined/IFNbeta - DR.csv',header=FALSE,stringsAsFactors=FALSE)[2:12,2:3]
 yy<-read.csv('combined/IFNbeta - DR.csv',header=FALSE,stringsAsFactors=FALSE)[15:23,2:3]
 pdf('combined/ifnCompare.pdf')
-plot(c(xx[,1],yy[,1]),c(xx[,2],yy[,2]),col=rep(c('red','blue'),c(nrow(xx),nrow(yy))),log='x',xaxt='n')
+plot(c(xx[,1],yy[,1]),c(xx[,2],yy[,2]),col=rep(c('red','blue'),c(nrow(xx),nrow(yy))),log='x',xaxt='n',las=1,ylab='p24',xlab='IFNb')
 dnar::logAxis(1)
+abline(h=50,lty=2)
+x50<-approx(xx[,2],xx[,1],50)$y
+y50<-approx(yy[,2],yy[,1],50)$y
+abline(v=x50,col='red')
+abline(v=y50,col='blue')
 dev.off()
 
+probs<-lapply(unique(allAligns$prot),function(prot){
+  isNa<-is.na(out[,prot])|out[,prot]==''|!grepl('[ACTG]',out[,prot])
+  aa<-dna2aa(degap(out[!isNa,prot]),warn=FALSE)
+  probs<-substring(aa,nchar(aa))!='X'|grepl('X',substring(aa,1,nchar(aa)-1))
+  out[!isNa,][probs,c('id',prot)]
+})
+names(probs)<-unique(allAligns$prot)
