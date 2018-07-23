@@ -77,6 +77,28 @@ tmp$raw<-degap(hmmer$seq[1])
 tmp$align<-hmmer$trim[1]
 for(ii in unique(allAligns$prot))tmp[,ii]<-allAligns[allAligns$name==tmp$id&allAligns$prot==ii,'seq']
 out<-rbind(out,tmp)
+
+for(ii in unique(allAligns$prot)){
+  message(ii)
+  seqMat<-seqSplit(out[,ii])
+  ref<-seqMat[out$id==tmp$id,]
+  aas<-rep('',nrow(seqMat))
+  frame<-1
+  refPos<-which(ref!='-')
+  dummy<-paste(rep('-',1000),collapse='')
+  for(jj in seq(3,length(refPos),3)){
+    cat('.')
+    subset<-(ifelse(jj-3==0,0,refPos[jj-3])+1):refPos[jj]
+    subSeqs<-seqMat[,subset]
+    subAA<-dna2aa(degap(apply(subSeqs,1,paste,collapse='')),warn=FALSE)
+    n<-nchar(subAA)
+    subAA<-sprintf('%s%s',subAA,substring(dummy,1,max(n)-n))
+    if(any(nchar(subAA)!=nchar(subAA[1])))browser()
+    aas<-sprintf('%s%s',aas,subAA)
+  }
+  out[,sprintf('%sAA',ii)]<-aas
+}
+
 write.csv(out,gzfile('combined/combinedIC50.csv.gz'),row.names=FALSE)
 withAs(zz=seqs[!seqs$isNa,],write.fa(zz$id,zz$align,'combined/trimmed.fa'))
 
