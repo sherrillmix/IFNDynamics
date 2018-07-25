@@ -60,13 +60,14 @@ dev.off()
 
 rownames(hmmer)<-hmmer$name
 seqs$align<-hmmer[seqs$id,'trim']
+if(any(is.na(seqs$align)&!seqs$isNa))stop('Lost sequence during alignment')
+
 for(ii in unique(allAligns$prot)){
   tmp<-allAligns[allAligns$prot==ii,]
   rownames(tmp)<-tmp$name
   seqs[,ii]<-tmp[seqs$id,'seq']
-  if(any(is.na(seqs[,ii])&!seqs$isNa))stop('Lost sequence during alignment')
+  if(any(is.na(seqs[,ii])&!seqs$isNa))stop('Lost genes equence during alignment')
 }
-if(any(is.na(seqs$align)&!seqs$isNa))stop('Lost sequence during alignment')
 
 
 out<-seqs[!seqs$isNa,!colnames(seqs) %in% c('isNa','seq','revComp')]
