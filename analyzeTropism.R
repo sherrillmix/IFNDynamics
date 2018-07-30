@@ -509,3 +509,45 @@ pdf('out/neutralRed2.pdf')
   plot(nrCompare$no_n+1,nrCompare$NR_n+1,las=1,xlab='Count without NR',ylab='Count with NR',log='xy')
   abline(0,1,lty=2)
 dev.off()
+
+
+tit<-readCounts('ice/out/2018-07-21_titration/counts.csv')
+virus<-read.csv('ice/2018-07-21_titration.csv',stringsAsFactors=FALSE)
+virus$final<-1
+virus$well<-paste(rep(LETTERS[1:8],4),rep(1:4,each=8),sep='')
+rownames(virus)<-virus$well
+wellLookup<-structure(rep(paste(rep(LETTERS[1:8],4),rep(1:4,each=8),sep=''),3),.Names=paste(rep(LETTERS[1:8],12),rep(1:12,each=8),sep=''))
+tit$plateBase<-as.numeric(sapply(strsplit(tit$plate,'_'),'[[',2))
+tit$totalDilute<-virus[wellLookup[tit$well],'final'] * tit$plateBase * 4^floor((tit$col-1)/4)
+tit$virus<-virus[wellLookup[tit$well],'Virus']
+tit$treat<-sapply(strsplit(tit$plate,'_'),'[[',1)
+tit$rep<-sapply(strsplit(tit$plate,'_'),'[[',3)
+nr<-tit[grepl('NR$',tit$plate),]
+tit<-tit[!grepl('NR$',tit$plate),]
+tit<-tit[order(tit$col,tit$totalDilute),]
+tit$filter<-ave(tit$n,tit$virus,tit$treat,tit$rep,FUN=function(xx)ifelse(1:length(xx)>=which.max(xx)&xx>20,xx,NA))
+tit$treat<-sapply(strsplit(tit$plate,'_'),'[[',1)
+tit$treat[tit$treat=='Spin']<-'Spin+Poly'
+pdf('out/2018-07-21_titration.pdf',width=10,height=8)
+par(mfrow=c(1,2))
+for(ii in virus$Virus){
+  for(treat in unique(tit$treat)){
+    thisDat<-tit[tit$virus==ii&tit$treat==treat,]
+    thisDat$logDil<--log(thisDat$totalDilute)
+    withAs(zz=thisDat,plot(zz$totalDilute,zz$n+1,xlab='Dilution',ylab='TZMBL count',las=1,log='yx',main=sprintf('%s %s',ii,treat),ylim=range(tit$n+1),xlim=range(tit$totalDilute),pch=21,bg=is.na(thisDat$filter)+1,cex=2))
+    if(sum(!is.na(thisDat$filter))>0){
+      mod<-glm(n~offset(logDil),thisDat[!is.na(thisDat$filter),],family='poisson')
+      fakeDat<-data.frame(logDil=-log(1:50000))
+      preds<-predict(mod,fakeDat)
+      lines(exp(-fakeDat$logDil),exp(preds)+1)
+      iuPerUl<-exp(coef(mod)['(Intercept)'])/150
+      virus[virus$Virus==ii,sprintf('iuPerUl%s',treat)]<-iuPerUl
+      mtext(sprintf('%0.1f IU/ul (%s)',iuPerUl,treat),3)
+    }
+  }
+}
+dev.off()
+
+write.csv(virus[,!colnames(virus) %in% c('well','final')],'ice/2018-07-21_titration_calc.csv')
+
+
