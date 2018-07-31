@@ -188,4 +188,37 @@ pdf('out/newIc50Redo.pdf',width=6,height=4)
 dev.off()
 
 
+weauRaw<-readIfns('data/IC50 alpha and beta for WEAU and few EJs BULK isolates .xlsx',ifnCol=1)
+weau<-do.call(rbind, by(weauRaw,paste(weauRaw$sample,weauRaw$ifn),function(xx){calcBasicIc50(concAlpha,xx[,1:20,drop=FALSE])}))
+tmp<-weauRaw
+tmp$sample<-paste(weauRaw$sample,weauRaw$ifn)
+pdf('out/weauCheck.pdf',width=6,height=4)
+  plotIfns(tmp,concAlpha,'IFNa2 concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
+dev.off()
+
+filterWeau<-weauRaw
+filterWeau[,1:20]<- t(apply(filterWeau[,1:20],1,function(xx){
+      xx<-ifelse(xx>30000,NA,xx)
+      first<-max(which.max(c(xx,-Inf))-1,which(is.na(xx)))
+      if(first>1)xx[1:(first)]<-NA
+      xx
+}))
+filterWeau[,1:20]<-filterWeau[,1:20]*as.numeric(filterWeau$ifn)
+#weauFilt<-do.call(rbind, by(filterWeau,paste(filterWeau$sample),function(xx){calcBasicIc50(concAlpha,xx[,1:20,drop=FALSE])}))
+dilCol<-c('20'='red','2'='blue')
+pdf('out/weauFilter.pdf',width=6,height=4)
+  for(ii in seq(1,8,2)){
+    thisDat<-filterWeau[ii+c(0,1,8,9),]
+    plot(1,1,type='n',ylim=range(filterWeau[,1:20],na.rm=TRUE),xlim=c(min(concAlpha[-1])/100,max(concAlpha)),log='xy',xlab='IFNa2',ylab='p24',xaxt='n',yaxt='n')
+    logAxis(las=1)
+    logAxis(1)
+    tmp<-concAlpha
+    concAlpha[1]<-concAlpha[2]/100
+    for(ii in 1:nrow(thisDat)){
+      points(tmp,thisDat[ii,seq(1,20,2)],bg=dilCol[thisDat$ifn[ii]],pch=20+ii)
+      points(tmp,thisDat[ii,seq(2,20,2)],bg=dilCol[thisDat$ifn[ii]],pch=20+ii)
+    }
+  }
+dev.off()
+
 
