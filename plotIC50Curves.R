@@ -221,4 +221,31 @@ pdf('out/weauFilter.pdf',width=6,height=4)
   }
 dev.off()
 
+weauRaw2<-readIfns('data/IC50 alpha and beta for WEAU and few EJs BULK isolates 2.xlsx',ifnCol=1)
+weau2<-do.call(rbind, by(weauRaw2,paste(weauRaw2$sample,weauRaw2$ifn),function(xx){calcBasicIc50(concAlpha,xx[,1:20,drop=FALSE])}))
+write.csv(weau2[unique(paste(weauRaw2$sample,weauRaw2$ifn)),],'out/weauAlphaIc50.csv')
+tmp<-weauRaw2
+tmp$sample<-paste(weauRaw2$sample,weauRaw2$ifn)
+pdf('out/weau2Check.pdf',width=6,height=4)
+  plotIfns(tmp,concAlpha,'IFNa2 concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
+dev.off()
+justWeau<-as.data.frame(weau2[grep('WEAU',rownames(weau2)),])
+justWeau$visit<-as.numeric(sapply(strsplit(rownames(justWeau),'\\.'),'[[',2))
+justWeau<-justWeau[grepl('50$',rownames(justWeau)),]
+conts<-as.data.frame(weau2[grep('Controls.*20$',rownames(weau2)),])
+#assuming all visits are in table and id starts at 1
+weauMeta<-read.csv('meta/weau.csv',stringsAsFactors=FALSE)
+justWeau$time<-weauMeta[justWeau$visit,'Time']
+if(!exists('dat'))source('readNewData.R')
+pdf('out/prelimWeau.pdf',width=11,height=6)
+par(mar=c(3.7,4,1.2,5.5),mfrow=c(1,2))
+ylim<-range(c(conts$ic50,justWeau$ic50,conts2$ic50),na.rm=TRUE)
+plot(justWeau$time/7,justWeau$ic50,xlab='Time (weeks) ',ylab='IFNa2 IC50',las=1,log='y',yaxt='n',ylim=ylim,main="WEAU",xlim=c(0,150),cex=1.4,pch=21,bg='#00000033',mgp=c(2.5,.7,0),tcl=-.4)
+#text(justWeau$time/7,justWeau$ic50,rownames(justWeau),cex=.4)
+logAxis(las=1)
+slantAxis(4,conts$ic50,sub(' .*','',rownames(conts)),las=1,location=.8,axisArgs=list(tcl=-.3))
+withAs(just15=dat[dat$pat=='MM15',],plot(just15$time/7,just15$ic50,xlab='Time (weeks) ',ylab='IFNa2 IC50',las=1,log='y',yaxt='n',ylim=ylim,main="MM15",xlim=c(0,150),cex=1.4,pch=21,bg='#00000033',tcl=-.4,mgp=c(2.5,.7,0)))
+logAxis(las=1)
+withAs(conts2=dat[dat$Patient.Original.ID %in% sub(' .*','',rownames(conts)),],slantAxis(4,conts2$ic50,conts2$id,las=1,location=.8,axisArgs=list(tcl=-.3)))
+dev.off()
 
