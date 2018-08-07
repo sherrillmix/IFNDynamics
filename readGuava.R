@@ -216,9 +216,11 @@ plotGuava<-function(allDat,outFile,slope=1,int=0){
         fakeDat<-data.frame('RED-HLog'=seq(1:10000),check.names=FALSE)
         predGrn<-int+fakeDat$`RED-HLog`*slope
         lines(fakeDat$`RED-HLog`,predGrn,lty=2)
-        if(thisDat$virus[1]=='No virus'&&any(thisDat$outlier>0))withAs(xx=thisDat[thisDat$outlier>0,],points(xx$`RED-HLog`,xx$`GRN-HLog`,col='red',cex=1))
+        if(!is.null(thisDat$virus)&&thisDat$virus[1]=='No virus'&&any(thisDat$outlier>0))withAs(xx=thisDat[thisDat$outlier>0,],points(xx$`RED-HLog`,xx$`GRN-HLog`,col='red',cex=1))
       }
-      title(main=sprintf('%s\n%s\n%0.2f%%\n%0.1f cells/sec',thisDat$virus[1],thisDat$treat[1],mean(thisDat$outlier>0)*100,thisDat$density[1]),line=-11,cex.main=3)
+      if(!is.null(thisDat$virus)&&!is.null(thisDat$treat))desc<-sprinf('%s\n%s\n',thisDat$virus[1],thisDat$treat[1])
+      else desc<-''
+      title(main=sprintf('%s%0.2f%%\n%0.1f cells/sec',desc,mean(thisDat$outlier>0)*100,thisDat$density[1]),line=-11,cex.main=3)
     }
   dev.off()
 }
@@ -237,5 +239,34 @@ plotGuava(trop[trop$sample=='2018-06-19_jltr',],'out/flow/2018-06-18-tropism3.pn
 
 
 
+int<-200
+slope<-1
+virus<-c('CH40_TF','CH40_6mo','NL4.3','89.6','MM23.1','MM23.8','MM23.13','89.6+CH40_TF')
+
+plotEvo<-function(fcsEvo,main='',maxChange=max(abs(scaledGreen))){
+  fcsEvo$outlier<-fcsEvo[,'GRN-HLog']-int-slope*fcsEvo[,'RED-HLog']
+  propGreen<-matrix(tapply(fcsEvo$outlier>0,fcsEvo$well,mean),nrow=8,ncol=12,byrow=TRUE)
+  cols<-colorRampPalette(c('blue','white','red'))(100)
+  scaledGreen<-log2(propGreen/as.vector(propGreen[,4:6]))
+  breaks<-seq(-maxChange-1e-6,maxChange+1e-6,length.out=101)
+  par(mar=c(5,8,.1,1.1),lheight=.7)
+  image(1:12,1:8,t(scaledGreen),col=cols,breaks=breaks,xaxt='n',yaxt='n',xlab='',ylab='',main='')
+  axis(1,1:12,c('UT','A2','BE',rep(c('UT','A2','BE'),each=3)))
+  axis(2,1:8,virus,las=1)
+  scaleTicks<--floor(maxChange):floor(maxChange)
+  dnar::insetScale(breaks,cols,at=scaleTicks,labels=sapply(scaleTicks,function(xx)as.expression(bquote(2^.(xx)))),main='Relative amount of\nGFP-bright JLTR')
+  abline(v=.5+c(3,6,9))
+  box()
+  return(maxChange)
+}
+
+fcsEvo<-readFcsDf('ice/2018-07-09_evoJLTR/')
+fcsEvo2<-readFcsDf('ice/2018-08-04_evoJLTR/')
+plotGuava(fcsEvo,'out/evoSort_0709.png',1,200)
+plotGuava(fcsEvo2,'out/evoSort_0804.png',1,200)
+pdf('out/evoAnalyze.pdf')
+  maxChange<-plotEvo(fcsEvo,'July 9, 2018')
+  plotEvo(fcsEvo2,'August 4, 2018',maxChange=maxChange)
+dev.off()
 
 #xx<-read.FCS('ice/2018-04-23_jltr_spin/cd4_culture_dilute_0001.FCS')
