@@ -123,7 +123,7 @@ plotIfn<-function(concAlpha,p24s,main='',xlab='',ylims=range(p24s),log='xy',scal
   fitLine<-fitFunc(fit,fakeConc)
   lines(fakeConc,fitLine/mean(maxs),col='#00000066',lwd=3)
   if(scaleMax)title(ylab='Proportion maximum p24',mgp=c(2,1,0))
-  else title(ylab='p24 concentration (ng/ml)',mgp=c(ifelse(grepl('y',log),2.25,2.9),1,0))
+  else title(ylab='p24 concentration (pg/ml)',mgp=c(ifelse(grepl('y',log),2.25,2.9),1,0))
   if(grepl('x',log))logAxis(1,axisMin=min(origConcs[origConcs>0]),mgp=c(2.5,.7,0))
   else axis(1,pretty(par('usr')[1:2]),mgp=c(2.5,.7,0))
   if(grepl('y',log))logAxis(2,las=1,mgp=c(2.5,.7,0))
