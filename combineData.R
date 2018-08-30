@@ -66,7 +66,7 @@ for(ii in unique(allAligns$prot)){
   tmp<-allAligns[allAligns$prot==ii,]
   rownames(tmp)<-tmp$name
   seqs[,ii]<-tmp[seqs$id,'seq']
-  if(any(is.na(seqs[,ii])&!seqs$isNa))stop('Lost genes equence during alignment')
+  if(any(is.na(seqs[,ii])&!seqs$isNa))stop('Lost genes sequence during alignment')
 }
 
 
