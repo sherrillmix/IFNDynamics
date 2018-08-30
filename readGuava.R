@@ -38,7 +38,7 @@ readFcsDir<-function(fcsDir){
     out<-exprs(fcs)
     timeReq<-as.numeric(diff(as.difftime(unlist(fcs@description[c("$BTIM","$ETIM")])))*60*60)
     nCells<-nrow(out)
-    out<-cbind(out,'density'=nCells/timeReq)
+    out<-cbind(out,'density'=if(nCells>0)nCells/timeReq else NULL)
     return(out)
   })
   wellNums<-as.numeric(sub('.*_([0-9]+).FCS','\\1',fcsFiles))
@@ -239,22 +239,23 @@ plotGuava(trop[trop$sample=='2018-06-19_jltr',],'out/flow/2018-06-18-tropism3.pn
 
 
 
-int<-200
-slope<-1
-virus<-c('CH40_TF','CH40_6mo','NL4.3','89.6','MM23.1','MM23.8','MM23.13','89.6+CH40_TF')
+#int<-200
+#slope<-1
+#virus<-c('CH40_TF','CH40_6mo','NL4.3','89.6','MM23.1','MM23.8','MM23.13','89.6+CH40_TF')
 
-plotEvo<-function(fcsEvo,main='',maxChange=max(abs(scaledGreen))){
+plotEvo<-function(fcsEvo,main='',maxChange=max(abs(scaledGreen),na.rm=TRUE),int=200,slope=1,virus=c('CH40_TF','CH40_6mo','NL4.3','89.6','MM23.1','MM23.8','MM23.13','89.6+CH40_TF')){
   fcsEvo$outlier<-fcsEvo[,'GRN-HLog']-int-slope*fcsEvo[,'RED-HLog']
-  propGreen<-matrix(tapply(fcsEvo$outlier>0,fcsEvo$well,mean),nrow=8,ncol=12,byrow=TRUE)
+  propGreen<-matrix(tapply(fcsEvo$outlier>0,fcsEvo$well,mean)[as.character(1:96)],nrow=8,ncol=12,byrow=TRUE)
   cols<-colorRampPalette(c('blue','white','red'))(100)
   scaledGreen<-log2(propGreen/as.vector(propGreen[,4:6]))
   breaks<-seq(-maxChange-1e-6,maxChange+1e-6,length.out=101)
-  par(mar=c(5,8,.1,1.1),lheight=.7)
+  par(mar=c(5,8,1.1,.1),lheight=.7)
   image(1:12,1:8,t(scaledGreen),col=cols,breaks=breaks,xaxt='n',yaxt='n',xlab='',ylab='',main='')
   axis(1,1:12,c('UT','A2','BE',rep(c('UT','A2','BE'),each=3)))
   axis(2,1:8,virus,las=1)
   scaleTicks<--floor(maxChange):floor(maxChange)
   dnar::insetScale(breaks,cols,at=scaleTicks,labels=sapply(scaleTicks,function(xx)as.expression(bquote(2^.(xx)))),main='Relative amount of\nGFP-bright JLTR')
+  text(rep(1:12,each=8),rep(1:8,12),as.vector(round(2^scaledGreen,2)),cex=.75)
   abline(v=.5+c(3,6,9))
   box()
   return(maxChange)
@@ -262,11 +263,27 @@ plotEvo<-function(fcsEvo,main='',maxChange=max(abs(scaledGreen))){
 
 fcsEvo<-readFcsDf('ice/2018-07-09_evoJLTR/')
 fcsEvo2<-readFcsDf('ice/2018-08-04_evoJLTR/')
+fcsEvo3<-readFcsDf('ice/2018-08-17_evoJLTR/')
+fcsEvo4<-readFcsDf('ice/2018-08-24_evoJLTR/')
 plotGuava(fcsEvo,'out/evoSort_0709.png',1,200)
 plotGuava(fcsEvo2,'out/evoSort_0804.png',1,200)
+plotGuava(fcsEvo3,'out/evoSort_0817.png',1,200)
+plotGuava(fcsEvo3,'out/evoSort_0824.png',1,200)
+
+#lazy way to figure out maxchange
 pdf('out/evoAnalyze.pdf')
-  maxChange<-plotEvo(fcsEvo,'July 9, 2018')
+  maxChange<-max(
+    plotEvo(fcsEvo,'July 9, 2018'),
+    plotEvo(fcsEvo2,'August 4, 2018'),
+    plotEvo(fcsEvo3,'August 17, 2018'),
+    plotEvo(fcsEvo4,'August 24, 2018')
+  )
+dev.off()
+pdf('out/evoAnalyze.pdf')
+  plotEvo(fcsEvo,'July 9, 2018',maxChange=maxChange)
   plotEvo(fcsEvo2,'August 4, 2018',maxChange=maxChange)
+  plotEvo(fcsEvo3,'August 17, 2018',maxChange=maxChange)
+  plotEvo(fcsEvo4,'August 24, 2018',maxChange=maxChange)
 dev.off()
 
 #xx<-read.FCS('ice/2018-04-23_jltr_spin/cd4_culture_dilute_0001.FCS')
