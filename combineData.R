@@ -122,3 +122,47 @@ probs<-lapply(unique(allAligns$prot),function(prot){
   out[!isNa,][probs,c('id',prot)]
 })
 names(probs)<-unique(allAligns$prot)
+
+
+newSeqs<-read.fa('combined/Final sequences isolates 091318.fasta')
+newSeqs<-newSeqs[grep('FL',newSeqs$name),]
+newSeqs$short<-sub('^S([0-9])','S-\\1',sub('Beat','BEAT',sub('-FL$','',newSeqs$name)))
+rownames(newSeqs)<-newSeqs$short
+dists2<-withAs(xx=newSeqs$seq,cbind(levenR::leven(degap(xx),degap(xx[1]),substring2=TRUE,nThreads=3),levenR::leven(revComp(degap(xx)),degap(xx[1]),substring2=TRUE,nThreads=3)))
+newIc50<-read.csv('rebound/combo.csv',stringsAsFactors=FALSE)
+newIc50[newIc50$class=='Rebound'|(newIc50$pat=='A09'&!is.na(newIc50$pat)),'Virus']
+if(any(!newSeqs$short %in% newIc50[newIc50$class=='Rebound','Virus']))stop('Unmatched sequence name found')
+newIc50$seq<-NA
+newIc50[newIc50$Virus %in% newSeqs$short,'seq']<-newSeqs[newIc50[newIc50$Virus %in% newSeqs$short,'Virus'],'seq']
+
+katieSeqs<-read.fa('combined/A09finalQVOA_reb.isol.fasta')
+katieSeqs$short<-sub('Rebound_.*solate_(.*)','Rebound \\1',sub('Rebound_Bulk_.*solate_(.*)','A09-\\1 bulk',katieSeqs$name))
+katieSeqs$short<-sub('A09.Q1.[0-9]+(M[0-9]+).*','621818B_\\1 pre',katieSeqs$short)
+katieSeqs$short<-sub('A09.Q2.[0-9]+(M[0-9]+).*','621818B_\\1 post',katieSeqs$short)
+#presumed typo
+katieSeqs$short<-sub('1A45 bulk','1A5 bulk',katieSeqs$short)
+katieSeqs<-katieSeqs[katieSeqs$short %in% newIc50$Virus,]
+rownames(katieSeqs)<-katieSeqs$short
+if(any(!newIc50[newIc50$pat=='A09'&!is.na(newIc50$pat),'Virus'] %in% katieSeqs$short))stop('Problem finding A09 seq')
+newIc50[newIc50$Virus %in% katieSeqs$short,'seq']<-degap(katieSeqs[newIc50[newIc50$Virus %in% katieSeqs$short,'Virus'],'seq'])
+
+out2<-out[,c('id','study','alphaIc50','patID','pair','donor','gender','select','fluid','subtype','time','bulk')]
+
+newDat<-newIc50[!is.na(newIc50$seq),]
+newDat$id<-newDat$Virus
+newDat$study<-'rebound'
+newDat$alphaIc50<-newDat$ic50
+newDat$patID<-newDat$pat
+newDat$select<-'UT'
+newDat$fluid<-'PL'
+newDat$subtype<-'B'
+newDat$bulk<-grepl('bulk',newDat$id)
+newDat[,colnames(out2)[!colnames(out2) %in% colnames(newDat)]]<-NA
+tmp<-rbind(out2,newDat[,colnames(out2)])
+
+write.csv(tmp,gzfile('combined/combinedIC50_plusRebound.csv.gz'),row.names=FALSE)
+
+
+
+
+
