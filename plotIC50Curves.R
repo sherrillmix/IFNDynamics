@@ -268,3 +268,15 @@ pdf('out/montanerCheck.pdf',width=6,height=4)
   plotIfns(montaner[!montaner$isBeta,],concAlpha,'IFNa2 concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
   plotIfns(montaner[montaner$isBeta,],concBeta,'IFNb concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
 dev.off()
+
+subsetConc<-c(1,3,6,10)
+minusCols<--(1:20)[-sapply(subsetConc,function(xx)(xx-1)*2+1:2)]
+pdf('out/montanerCheckSubset.pdf',width=6,height=4)
+  plotIfns(montaner[!montaner$isBeta,minusCols],concAlpha[subsetConc],'IFNa2 concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
+  plotIfns(montaner[montaner$isBeta,minusCols],concBeta[subsetConc],'IFNb concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
+dev.off()
+system(sprintf('pdftk A=out/montanerCheck.pdf B=out/montanerCheckSubset.pdf shuffle A B output out/montanerCompare.pdf'))
+
+
+
+
