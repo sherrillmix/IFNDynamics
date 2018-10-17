@@ -298,26 +298,40 @@ compiledMeta<-compiledMeta[compiledMeta$mm %in% mmLookup,]
 compiledMeta$rDate<-as.Date(as.numeric(compiledMeta$date),origin='1899-12-30')
 compiledMeta$vl<-as.numeric(gsub(' ','',sub('<','',compiledMeta$VL)))
 compiledMeta$cd4<-as.numeric(compiledMeta$CD4)
+rownames(compiledMeta)<-sapply(strsplit(sub('^[^ ]+ ','',rownames(compiledMeta)),'\\.'),function(xx)sprintf('%s.%02d',xx[1],as.numeric(xx[2])))
 if(any(is.na(compiledMeta$rDate)))stop('Problem interpreting date')
 if(year(min(compiledMeta$rDate))<2000)stop('Year <2000 detected')
 if(year(min(compiledMeta$rDate))>2015)stop('Year >2015 detected')
 startDates<-tapply(compiledMeta$rDate-compiledMeta$DFOSx,compiledMeta$mm,mostAbundant)
 compiledMeta$time<-compiledMeta$rDate-as.Date(startDates[compiledMeta$mm])
-if(any(compiledMeta$time!=compiledMeta$DFOSx))warning('Disagreement in dfosx')
-comboMeta[which(!paste(comboMeta$mm,comboMeta$rDate) %in% paste(compiledMeta$mm,compiledMeta$rDate) & !is.na(comboMeta$mm)&(!is.na(comboMeta$vl)|!is.na(comboMeta$cd4))),c('mm','date','rDate','time','vl','cd4','source')]
+if(any(abs(compiledMeta$time-compiledMeta$DFOSx)>1))warning('Disagreement in dfosx')
 
+
+weauMeta<-read.csv('meta/weau.csv',stringsAsFactors=FALSE)
+weauMeta$cd4<-as.numeric(ifelse(weauMeta$CD4=='nd',NA,weauMeta$CD4))
+weauMeta$vl<-as.numeric(ifelse(weauMeta$VL=='nd',NA,weauMeta$VL))
+weauMeta$time<-weauMeta$Time
+weauMeta$ID<-weauMeta$id<-weauMeta$visit<-1:nrow(weauMeta)
+weauMeta$origDate<-weauMeta$date<-weauMeta$Date
+weauMeta$rDate<-dmy(weauMeta$Date)
+weauMeta$DFOSx<-weauMeta$Time
+weauMeta$ART<-weauMeta$Notes<-NA
+weauMeta$pat<-weauMeta$mm<-weauMeta$ej<-'WEAU'
+rownames(weauMeta)<-weauMeta$Time.Points<-sprintf('WEAU.%02d',weauMeta$id)
+
+compiledMeta<-rbind(compiledMeta,weauMeta[,colnames(compiledMeta)])
+meta<-rbind(meta,weauMeta[,colnames(meta)])
+
+if(FALSE){
+comboMeta[which(!paste(comboMeta$mm,comboMeta$rDate) %in% paste(compiledMeta$mm,compiledMeta$rDate) & !is.na(comboMeta$mm)&(!is.na(comboMeta$vl)|!is.na(comboMeta$cd4))),c('mm','date','rDate','time','vl','cd4','source')]
 tmp<-comboMeta$vl
 names(tmp)<-paste(comboMeta$mm,comboMeta$rDate)
 tmp<-tmp[paste(compiledMeta$mm,compiledMeta$rDate)]
 probs<-tmp!=sub('<','',compiledMeta$VL)&!is.na(tmp)
 cbind(compiledMeta[probs,],tmp[probs])
-
 tmp<-comboMeta$cd4
 names(tmp)<-paste(comboMeta$mm,comboMeta$rDate)
 tmp<-tmp[paste(compiledMeta$mm,compiledMeta$rDate)]
 probs<-tmp!=compiledMeta$CD4&!is.na(tmp)
 cbind(compiledMeta[probs,],tmp[probs])
-
-
-
-
+}

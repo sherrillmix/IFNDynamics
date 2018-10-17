@@ -4,15 +4,18 @@ library(lubridate)
 if(!exists('meta'))source('readMeta.R')
 
 
-patCols<-c('MM23'='#e41a1c','MM33'='#4daf4a','MM34'='#984ea3','MM39'='#377eb8','MM40'='#FF7f00','MM14'='#FFD700','MM15'='#f781bf','MM55'='#a65628','MM62'='#708090')
+patCols<-c('MM23'='#e41a1c','MM33'='#4daf4a','MM34'='#984ea3','MM39'='#377eb8','MM40'='#FF7f00','MM14'='#FFD700','MM15'='#f781bf','MM55'='#a65628','MM62'='#00CED1')
+patCols<-c(patCols,'WEAU'='#708090')
 patCols2<-sprintf('%s33',patCols)
 patCols3<-sprintf('%s11',patCols)
 names(patCols2)<-names(patCols3)<-names(patCols)
 
+
 #dat<-read.csv('data/Data Master MG, Sept_2.csv')
 #dat<-read.csv('data/MM cohort cata master 11.29.2017.csv')
 #allDats<-lapply(c('data/for Scott_2017_12_13.csv','data/For Scott - All bulk isol. alpha and beta.csv'),read.csv,stringsAsFactors=FALSE)
-allDats<-lapply(c('data/for Scott_Data Marster.csv'),read.csv,stringsAsFactors=FALSE)
+#allDats<-lapply(c('data/for Scott_Data Marster.csv'),read.csv,stringsAsFactors=FALSE)
+allDats<-lapply(c('data/Data Master _ October 2018.csv'),read.csv,stringsAsFactors=FALSE)
 allDats<-lapply(allDats,function(dat)dat[!is.na(dat$ID.for.Publications)&dat$ID.for.Publications!='',])
 allCols<-unique(unlist(lapply(allDats,colnames)))
 allDats<-lapply(allDats,function(dat){dat[,allCols[!allCols %in% colnames(dat)]]<-NA;dat[,allCols]})
@@ -21,12 +24,10 @@ dat<-do.call(rbind,allDats)
 #dat<-read.csv('data/for Scott_2017_12_13.csv')
 #dat2<-read.csv('data/For Scott - All bulk isol. alpha and beta.csv')
 
-
-
 #Standardize BULK naming and catch _BULK with no .
 dat$qvoa<-grepl('VOA',dat$ID.for.Publications)
 dat$id<-sub('[ _.][Bb]ulk-([IVX]+)','.\\1.bulk',sub('VOA[_ ]','',sub(' +[Bb]ulk|_Bulk|_BULK','.bulk',dat$ID.for.Publications)))
-dat$id<-sprintf('%s%s',dat$id,ifelse(dat$qvoa,'.VOA',''))
+dat$id<-sprintf('%s%s',dat$id,ifelse(dat$qvoa&!grepl('\\.VOA$',dat$id),'.VOA',''))
 dat$id<-sub('^Mm','MM',dat$id)
 dat$id<-sub('^(MM[0-9]+)\\.([0-9])\\.','\\1.0\\2.',dat$id)
 dat$bulk<-grepl('[Bb]ulk',dat$id)
@@ -43,8 +44,8 @@ dat$visit<-sapply(strsplit(dat$sample,'\\.'),'[',2)
 dat$virusId<-sapply(strsplit(dat$id,'\\.'),'[',3)
 dat$pat<-sub('\\.[^.]+$','',dat$sample)
 dat$time<-as.numeric(meta[dat$sample,'DFOSx'])
-dat$vl<-as.numeric(sub('<','',gsub(',','',meta[dat$sample,'VL'])))
-dat$CD4<-as.numeric(gsub(',','',meta[dat$sample,'CD4']))
+dat$vl<-meta[dat$sample,'vl']
+dat$CD4<-meta[dat$sample,'cd4']
 #dat<-dat[!is.na(dat$ic50)|!is.na(dat$vres)|!is.na(dat$beta)|!is.na(dat$betaVres),]
 if(any(is.na(dat$time)))stop('Missing time')
 #if(any(is.na(dat$vl)))stop('Missing vl')
@@ -76,10 +77,13 @@ if(any(dat$betaVres==0)){
 dat$replication<-dat$Replicative.capacity.Pooled.Donor.cells.p24.d7..from.June.2017.repeat.
 ifnVars<-c('Interferon alpha 2 IC50'='ic50','Interferon beta IC50'='beta','Interferon alpha 2 Vres'='vres','Interferon beta Vres'='betaVres','Replication capacity'='replication')
 
-dat$time<-sapply(dat$sample,function(xx)comboMeta[paste(comboMeta$mm,comboMeta$visit,sep='.')==xx,'time'])
-if(any(is.na(dat$time)))stop('Missing time metadata')
+#dat$time<-sapply(dat$sample,function(xx)comboMeta[paste(compiledMeta$mm,compiledMeta$visit,sep='.')==xx,'time'])
+#if(any(is.na(dat$time)))stop('Missing time metadata')
 
 rownames(dat)<-dat$id
+
+weau<-dat[dat$pat=='WEAU',]
+dat<-dat[dat$pat!='WEAU',]
 
 
 #withAs(xx=dat[dat$time>35*7,],plot(ave(xx$vl,xx$pat,FUN=function(xx)(xx-min(xx,na.rm=TRUE))/max(xx-min(xx,na.rm=TRUE),na.rm=TRUE)),xx$ic50,bg=patCols[xx$pat],log='y',pch=21,cex=2))
@@ -113,10 +117,12 @@ message('Median CD4 at last time point')
 print(median(withAs(xx=dat[!dat$qvoa,][dat$time[!dat$qvoa]==ave(dat$time[!dat$qvoa],dat$pat[!dat$qvoa],FUN=max),c('pat','CD4')],tapply(xx$CD4,xx$pat,unique))))
 
 dat$meanIc50<-ave(dat$ic50,paste(dat$pat,dat$time),FUN=function(xx)mean(xx,na.rm=TRUE))
+dat$meanBeta<-ave(dat$beta,paste(dat$pat,dat$time),FUN=function(xx)mean(xx,na.rm=TRUE))
 dat$isNadir<-dat$meanIc50==ave(dat$meanIc50,dat$pat,FUN=function(xx)min(xx,na.rm=TRUE))
+dat$isBetaNadir<-dat$meanBeta==ave(dat$meanBeta,dat$pat,FUN=function(xx)min(xx,na.rm=TRUE))
 dat$isFirst<-dat$time==ave(dat$time,dat$pat,FUN=function(xx)min(xx,na.rm=TRUE))
 #dat$isSix<-dat$time==ave(dat$time,dat$pat,FUN=function(xx){diff<-abs(180-xx);out<-xx[which.min(diff)][1];if(diff[which.min(diff)][1]>30)return(FALSE);out})
 dat$isSix<-abs(dat$time-180)<30
 dat$isLast<-dat$time==ave(dat$time,dat$pat,FUN=max)
-write.csv(dat[dat$isFirst|dat$isNadir|dat$qvoa|dat$isSix|dat$isLast,c('pat','time','ic50','isFirst','isNadir','isSix','isLast','qvoa')],'out/firstNadir.csv')
+write.csv(dat[dat$isFirst|dat$isNadir|dat$qvoa|dat$isSix|dat$isLast|dat$isBetaNadir,c('pat','time','ic50','isFirst','isNadir','isBetaNadir','isSix','isLast','qvoa','beta')],'out/firstNadir.csv')
 
