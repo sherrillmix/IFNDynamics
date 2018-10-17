@@ -155,12 +155,13 @@ condenseReps<-function(xx){
   do.call(cbind,lapply(seq(1,ncol(xx),2),function(ii)apply(xx[,ii+0:1,drop=FALSE],1,mean,na.rm=TRUE)))
 }
 plotIfns<-function(dilutes,concAlpha,xlab='',condenseTechs=TRUE,log='xy',multiple=1,...){
-  ylims<-range(dilutes[,1:20],na.rm=TRUE)
-  dilutes[,1:20]<-dilutes[,1:20]*multiple
+  nCol<-length(concAlpha)*2
+  ylims<-range(dilutes[,1:nCol],na.rm=TRUE)
+  dilutes[,1:nCol]<-dilutes[,1:nCol]*multiple
   par(mar=c(3,3.8,1,3))
   fits<-list()
   for(thisSample in sort(unique(dilutes$sample))){
-    xx<-dilutes[dilutes$sample==thisSample,1:20]
+    xx<-dilutes[dilutes$sample==thisSample,1:nCol]
     if(!grepl('y',log))ylims<-c(0,max(xx,na.rm=TRUE))
     fits[[thisSample]]<-plotIfn(concAlpha,xx,main=thisSample,xlab=xlab,ylims=ylims,log=log,...)
     if(!grepl('y',log))ylims<-c(0,max(condenseReps(xx),na.rm=TRUE))
@@ -170,14 +171,15 @@ plotIfns<-function(dilutes,concAlpha,xlab='',condenseTechs=TRUE,log='xy',multipl
 }
 
 plotDualIfns<-function(dilutes,dilutesBeta,concAlpha,concBeta){
-  ylims<-range(dilutes[,1:20],na.rm=TRUE)
-  ylims2<-range(dilutesBeta[,1:20],na.rm=TRUE)
+  nCol<-length(concAlpha)*2
+  ylims<-range(dilutes[,1:nCol],na.rm=TRUE)
+  ylims2<-range(dilutesBeta[,1:nCol],na.rm=TRUE)
   par(mar=c(3.5,4.5,1.5,1),mfrow=c(1,2))
   uniqs<-unique(c(dilutes$sample,dilutesBeta$sample))
   uniqs<-uniqs[uniqs %in% dilutes$sample & uniqs %in% dilutesBeta$sample]
   for(thisSample in uniqs){
-    xx<-dilutes[dilutes$sample==thisSample,1:20]
-    yy<-dilutesBeta[dilutesBeta$sample==thisSample,1:20]
+    xx<-dilutes[dilutes$sample==thisSample,1:nCol]
+    yy<-dilutesBeta[dilutesBeta$sample==thisSample,1:nCol]
     plotIfn(concAlpha,xx,thisSample,xlab='IFNa2 concentration (pg/ml)',ylims=ylims)
     plotIfn(concBeta,yy,thisSample,xlab='IFNb concentration (pg/ml)',ylims=ylims2)
   }
