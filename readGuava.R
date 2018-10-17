@@ -250,7 +250,7 @@ plotEvo<-function(fcsEvo,main='',maxChange=max(abs(scaledGreen),na.rm=TRUE),int=
   scaledGreen<-log2(propGreen/as.vector(propGreen[,4:6]))
   breaks<-seq(-maxChange-1e-6,maxChange+1e-6,length.out=101)
   par(mar=c(5,8,1.1,.1),lheight=.7)
-  image(1:12,1:8,t(scaledGreen),col=cols,breaks=breaks,xaxt='n',yaxt='n',xlab='',ylab='',main='')
+  image(1:12,1:8,t(scaledGreen),col=cols,breaks=breaks,xaxt='n',yaxt='n',xlab='',ylab='',main=main)
   axis(1,1:12,c('UT','A2','BE',rep(c('UT','A2','BE'),each=3)))
   axis(2,1:8,virus,las=1)
   scaleTicks<--floor(maxChange):floor(maxChange)
