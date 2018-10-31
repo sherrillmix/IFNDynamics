@@ -83,7 +83,7 @@ ifnVars<-c('Interferon alpha 2 IC50'='ic50','Interferon beta IC50'='beta','Inter
 rownames(dat)<-dat$id
 
 weau<-dat[dat$pat=='WEAU',]
-dat<-dat[dat$pat!='WEAU',]
+#dat<-dat[dat$pat!='WEAU',]
 
 
 #withAs(xx=dat[dat$time>35*7,],plot(ave(xx$vl,xx$pat,FUN=function(xx)(xx-min(xx,na.rm=TRUE))/max(xx-min(xx,na.rm=TRUE),na.rm=TRUE)),xx$ic50,bg=patCols[xx$pat],log='y',pch=21,cex=2))
@@ -114,7 +114,7 @@ print(mean(apply(zz,1,function(xx)tail(xx[!is.na(xx)],1)/min(xx,na.rm=TRUE))))
 message('Weeks after nadir')
 print(mean(sapply(rownames(zz),function(xx){tmp<-zz[xx,!is.na(zz[xx,])];diff(as.numeric(names(tmp))[c(which.min(tmp),length(tmp))])}))/7)
 message('Median CD4 at last time point')
-print(median(withAs(xx=dat[!dat$qvoa,][dat$time[!dat$qvoa]==ave(dat$time[!dat$qvoa],dat$pat[!dat$qvoa],FUN=max),c('pat','CD4')],tapply(xx$CD4,xx$pat,unique))))
+print(median(withAs(xx=dat[!dat$qvoa&!is.na(dat$CD4),][dat$time[!dat$qvoa&!is.na(dat$CD4)]==ave(dat$time[!dat$qvoa&!is.na(dat$CD4)],dat$pat[!dat$qvoa&!is.na(dat$CD4)],FUN=max),c('pat','CD4')],tapply(xx$CD4,xx$pat,unique))))
 
 dat$meanIc50<-ave(dat$ic50,paste(dat$pat,dat$time),FUN=function(xx)mean(xx,na.rm=TRUE))
 dat$meanBeta<-ave(dat$beta,paste(dat$pat,dat$time),FUN=function(xx)mean(xx,na.rm=TRUE))
