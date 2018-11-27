@@ -124,9 +124,9 @@ plotIfn<-function(concAlpha,p24s,main='',xlab='',ylims=range(p24s),log='xy',scal
   lines(fakeConc,fitLine/mean(maxs),col='#00000066',lwd=3)
   if(scaleMax)title(ylab='Proportion maximum p24',mgp=c(2,1,0))
   else title(ylab='p24 concentration (pg/ml)',mgp=c(ifelse(grepl('y',log),2.25,2.9),1,0))
-  if(grepl('x',log))logAxis(1,axisMin=min(origConcs[origConcs>0]),mgp=c(2.5,.7,0))
+  if(grepl('x',log))dnar::logAxis(1,axisMin=min(origConcs[origConcs>0]),mgp=c(2.5,.7,0))
   else axis(1,pretty(par('usr')[1:2]),mgp=c(2.5,.7,0))
-  if(grepl('y',log))logAxis(2,las=1,mgp=c(2.5,.7,0))
+  if(grepl('y',log))dnar::logAxis(2,las=1,mgp=c(2.5,.7,0))
   else axis(2,pretty(par('usr')[3:4]),las=1,mgp=c(2.5,.7,0))
   axis(1,min(origConcs[origConcs>0])*zeroOffset,0,mgp=c(2.5,.7,0))
   #abline(h=c(fit[c(1,4)]),lty=3,col='#00000055')
@@ -146,7 +146,7 @@ plotIfn<-function(concAlpha,p24s,main='',xlab='',ylims=range(p24s),log='xy',scal
   if(is.na(vresIc50['max']))browser()
   if(grepl('y',log))axis(4,vresIc50['max']/c(1,2,10,100,1000),as.character(c(1,.5,.1,.01,.001)*100),las=1,tcl=-.2,mgp=c(0,.6,0))
   abline(h=vresIc50['max']/2,lty=3,col='#00000055')
-  text(convertLineToUser(2.6,4),10^mean(par('usr')[3:4]),'Percent of maximum',xpd=NA,srt=-90)
+  text(dnar::convertLineToUser(2.6,4),10^mean(par('usr')[3:4]),'Percent of maximum',xpd=NA,srt=-90)
   par('lheight'=.72)
   legend('topright',names(cols),pch=21,pt.bg=cols,inset=.01,cex=ifelse(length(cols)==2,1,.6),pt.cex=1,y.intersp=ifelse(length(cols)<=2,1,1.5))
   return(fit)
@@ -190,8 +190,7 @@ GROWTH<-function(x,y,newX){
   exp(predict(mod,data.frame(x=newX)))
 }
 
-calculateBasicIc50<-function(concs,p24s,vocal=FALSE){
-  means<-condenseReps(p24s)
+calculateBasicIc50<-function(concs,p24s,vocal=FALSE,means=condenseReps(p24s)){
   props<-t(apply(means,1,function(xx)xx/xx[1]))
   #ic50<-mean(apply(props,1,function(xx)approx(xx,concs,.5)$y))
   if(vocal)print(t(props))
@@ -210,4 +209,38 @@ calculateBasicIc50<-function(concs,p24s,vocal=FALSE){
 }
 calcBasicIc50<-function(...){out<-calculateBasicIc50(...);out<-out[c('ic50','percVres')];names(out)[2]<-'vres';out}
 
+plotIfnStacked<-function(conc,p24,bioRep=rep(1,length(p24)),techRep=rep(1,length(p24)),main='',xlab='',ylims=range(p24),log='xy',scaleMax=FALSE,findVresIc50=findVresIc50){
+  origConcs<-conc
+  means<-tapply(p24,list(bioRep,conc),mean)
+  vresIc50<-calculateBasicIc50(as.numeric(colnames(means)),means=means)
+  zeroOffset<-.01
+  conc[conc==0]<-min(conc[conc>0])*zeroOffset
+  reps<-sprintf('Bio rep %d Tech rep %d',bioRep,techRep)
+  repCols<-dnar::rainbow.lab(length(unique(reps)))
+  names(repCols)<-sort(unique(reps))
+  plot(conc,p24,xlab=xlab,ylab='',log=log,las=1,xaxt='n',main=main,bg=repCols[reps],pch=21,mgp=c(2,1,0),ylim=ylims,yaxt='n')
+  title(ylab='p24 concentration (pg/ml)',mgp=c(ifelse(grepl('y',log),2.25,2.9),1,0))
+  if(grepl('x',log))dnar::logAxis(1,axisMin=min(origConcs[origConcs>0]),mgp=c(2.5,.7,0))
+  else axis(1,pretty(par('usr')[1:2]),mgp=c(2.5,.7,0))
+  if(grepl('y',log))dnar::logAxis(2,las=1,mgp=c(2.5,.7,0))
+  else axis(2,pretty(par('usr')[3:4]),las=1,mgp=c(2.5,.7,0))
+  axis(1,min(origConcs[origConcs>0])*zeroOffset,0,mgp=c(2.5,.7,0))
+  isAbove<-vresIc50['vres']>10^mean(par('usr')[3:4])
+  abline(v=vresIc50['ic50'],lty=2,col='#FF000055')
+  abline(h=vresIc50['vres'],lty=2,col='#0000FF55')
+  yCoord<-ifelse(grepl('y',log),vresIc50['vres']/2^ifelse(isAbove,1,-1),vresIc50['vres']+diff(par('usr')[3:4])*ifelse(isAbove,-.1,.1))
+  xCoord<-10^(par('usr')[1]*.72+par('usr')[2]*.28)
+  text(xCoord,yCoord,sprintf('Vres=%s%%',format(vresIc50['percVres'],digits=2,width=3)),adj=c(1,0.5),col='blue')
+  segments(xCoord*1.1,yCoord,10^(par('usr')[1]*.65+par('usr')[2]*.35),vresIc50['vres'],col='blue')
+  #ic50 label
+  yCoord<-ifelse(grepl('y',log),ifelse(isAbove,10^(par('usr')[3]*.8+par('usr')[4]*.2),10^(par('usr')[3]*.7+par('usr')[4]*.3)*1.2),par('usr')[3]*.7+par('usr')[4]*.3)
+  text(vresIc50['ic50']/1.85,yCoord,sprintf('IC50=%s',format(vresIc50['ic50'],digits=2)),adj=c(1,0.5),col='red')
+  segments(vresIc50['ic50']/1.75,yCoord,vresIc50['ic50'],yCoord*ifelse(isAbove,1.2,.8),col='red')
+  if(is.na(vresIc50['max']))browser()
+  if(grepl('y',log))axis(4,vresIc50['max']/c(1,2,4,10,100,1000),as.character(c(1,.5,.25,.1,.01,.001)*100),las=1,tcl=-.2,mgp=c(0,.6,0))
+  abline(h=vresIc50['max']/2,lty=3,col='#00000055')
+  text(dnar::convertLineToUser(2.6,4),10^mean(par('usr')[3:4]),'Percent of maximum',xpd=NA,srt=-90)
+  par('lheight'=.72)
+  legend('topright',names(repCols),pch=21,pt.bg=repCols,inset=.01,cex=ifelse(length(repCols)==2,1,.6),pt.cex=1,y.intersp=ifelse(length(repCols)<=2,1,1.5))
+}
 
