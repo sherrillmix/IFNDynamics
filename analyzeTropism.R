@@ -6,6 +6,8 @@ readCounts<-function(countFile){
   counts$well<-sub('\\.CTL$','',counts$file)
   counts$col<-as.numeric(sub('^[A-Z]','',counts$well))
   counts$row<-sub('[0-9]+$','',counts$well)
+  letterLookup<-structure(1:26,.Names=LETTERS)
+  counts$rowNum<-letterLookup[counts$row]
   return(counts)
 }
 readPlateViruses<-function(plateFile,virusFile){
@@ -550,4 +552,131 @@ dev.off()
 
 write.csv(virus[,!colnames(virus) %in% c('well','final')],'ice/2018-07-21_titration_calc.csv')
 
+tit<-readCounts('ice/out/2018-11-15_infectionAids/counts.csv')
+tit<-tit[tit$plate!='MM39_spin_red_flipped',]
+tit$virusPlate<-sapply(strsplit(tit$plate,'_'),'[[',1)
+tit$moat<-grepl('moat',tit$plate)
+tit$red<-grepl('red',tit$plate)
+tit$spin<-grepl('spin',tit$plate)
+virus<-list('MM33'=c('MM33.01.13C1','MM33.13.2A4','MM33.19.3B4','CH040 TF'),'MM39'=c('MM39.02.2B5','MM39.10.11B4','MM39.16.2C3','CH040 6mo'))
+if(any(!tit$virusPlate %in% names(virus)))stop('Unknown plate')
+tit$virus<-mapply(function(xx,yy)xx[ceiling(yy/3)],ifelse(tit$virusPlate=='MM33',virus['MM33'],virus['MM39']),tit$col)
+tit$treat<-rep(c('poly','dextran','neat'),4)[tit$col]
+tit$treatSpin<-paste(ifelse(tit$spin,'spin','noSpin'),tit$treat)
+tit$totalDilute<-1/c(150/550*(110/550)^(0:6),Inf)
+tit$filter<-ave(tit$n,tit$virus,tit$treatSpin,tit$moat,tit$red,FUN=function(xx)ifelse(1:length(xx)>=which.max(xx)&xx>20,xx,NA))
+tit[tit$virus=='MM39.02.2B5'&tit$treatSpin=='spin poly'&!tit$red&!is.na(tit$filter)&tit$totalDilute>5000,]
+pdf('out/2018-11-15-infectionAid.pdf',width=10,height=8)
+par(mfrow=c(2,3))
+for(ii in unique(tit$virus)){
+  for(treat in unique(tit$treatSpin)){
+    thisDat<-tit[tit$virus==ii&tit$treatSpin==treat&tit$totalDilute>0&!tit$red,]
+    thisDat$logDil<--log(thisDat$totalDilute)
+    withAs(zz=thisDat,plot(zz$totalDilute,zz$n+1,xlab='Dilution',ylab='TZMBL count',las=1,log='yx',main=sprintf('%s %s',ii,treat),ylim=range(tit$n+1),xlim=range(thisDat$totalDilute),pch=21,bg=is.na(thisDat$filter)+1,cex=2))
+    if(sum(!is.na(thisDat$filter))>0){
+      mod<-glm(n~offset(logDil),thisDat[!is.na(thisDat$filter),],family='poisson')
+      fakeDat<-data.frame(logDil=-log(1:50000))
+      preds<-predict(mod,fakeDat)
+      lines(exp(-fakeDat$logDil),exp(preds)+1)
+      iuPerUl<-exp(coef(mod)['(Intercept)'])
+      mtext(sprintf('%0.1f IU/ul (%s)',iuPerUl,treat),3)
+    }
+  }
+}
+dev.off()
+
+
+
+tit<-readCounts('ice/out/2018-11-18_infectionAids2/counts.csv')
+tit$moat<-grepl('moat',tit$plate)
+tit$red<-grepl('red',tit$plate)
+tit$spin<-grepl('spin',tit$plate)
+tit$dil<-as.numeric(sub('^([0-9]+)x.*','\\1',tit$plate))*rep(c(1,3),each=4)[sapply(tit$row,function(xx)which(xx==LETTERS))]
+virus<-c('89.6','CH40TF','CH406mo','Media')
+tit$virus<-structure(rep(virus,2),.Names=LETTERS[1:8])[tit$row]
+if(any(!tit$virusPlate %in% names(virus)))stop('Unknown plate')
+tit$treat<-rep(c('poly','media','dextran','media'),c(5,1,5,1))[tit$col]
+tit$treatDil<-c(60/2^(4:0),0,160/2^(0:4),0)[tit$col]
+tit$treatSpin<-paste(ifelse(tit$spin,'spin','noSpin'),tit$treat)
+tit<-tit[order(tit$virus,tit$treatSpin,tit$treatDil,tit$moat,tit$red,tit$dil),]
+tit$filter<-ave(tit$n,tit$virus,tit$treatSpin,tit$treatDil,tit$moat,tit$red,tit$col,FUN=function(xx)ifelse(1:length(xx)>=which.max(xx)&xx>10,xx,NA))
+
+pdf('out/2018-11-18_infectionAid.pdf',width=10,height=8)
+uniqTreats<-unique(tit$treatSpin)
+uniqTreats<-uniqTreats[!uniqTreats %in% c('noSpin media','spin media')]
+uniqVirus<-unique(tit$virus)
+uniqVirus<-uniqVirus[order(uniqVirus=='Media')]
+for(virus in uniqVirus){
+  for(treat in uniqTreats){
+    treatDils<-c(0,unique(tit$treatDil[tit$treatSpin==treat]))
+    par(mfrow=c(ifelse(length(treatDils)>1,2,1),ceiling(length(treatDils)/2)))
+    for(treatDil in treatDils){
+      if(treatDil==0)thisDat<-tit[tit$virus==virus&tit$spin==!grepl('noSpin',treat)&tit$dil>0&!tit$red&tit$treatDil==treatDil,]
+      else thisDat<-tit[tit$virus==virus&tit$treatSpin==treat&tit$dil>0&!tit$red&tit$treatDil==treatDil,]
+      thisDat$logDil<--log(thisDat$dil)
+      withAs(zz=thisDat,plot(zz$dil,zz$n+1,xlab='Dilution',ylab='TZMBL count',las=1,log='yx',main=sprintf('%s %s %s',virus,treat,treatDil),ylim=range(tit$n+1),xlim=range(thisDat$dil),pch=21,bg=is.na(thisDat$filter)+1,cex=2))
+      if(sum(!is.na(thisDat$filter))>0){
+        mod<-glm(n~offset(logDil),thisDat[!is.na(thisDat$filter),],family='poisson')
+        fakeDat<-data.frame(logDil=-log(1:50000))
+        preds<-predict(mod,fakeDat)
+        lines(exp(-fakeDat$logDil),exp(preds)+1)
+        iuPerUl<-exp(coef(mod)['(Intercept)'])
+        mtext(sprintf('%0.1f IU/ul (%s)',iuPerUl,treat),3)
+      }
+    }
+  }
+}
+dev.off()
+ius<-withAs(xx=tit[!is.na(tit$filter)&!tit$red,],by(xx[,c('n','dil')],list(paste(xx$treatSpin,sprintf('%03d',xx$treatDil)),xx$virus),function(thisDat){
+    thisDat$logDil<--log(thisDat$dil)
+    mod<-glm(n~offset(logDil),thisDat,family='poisson')
+    exp(coef(mod)['(Intercept)'])
+}))
+
+tit<-readCounts('ice/out/2019-01-02_infectionAids3/counts.csv')
+tit$red<-grepl('red',tit$plate)
+tit$spin<-grepl('spin',tit$plate)
+tit$dilNum<-as.numeric(sapply(strsplit(tit$plate,'_'),'[[',2))+floor((tit$col-1)/4)
+#50ul in well + 50ul virus, initial 400ul neat + 500ul media, 200ul remainder + 300ul at each dilution
+tit$dil<-1/(.5*(400/900)*2.5^-(tit$dilNum-1))
+viruses<-read.csv('ice/2019-01-02_infectionAids3/virus.csv',stringsAsFactors=FALSE,header=FALSE)[,1]
+tit$virus<-viruses[tit$rowNum+((tit$col-1)%%4)*8]
+tit$treat<-ifelse(grepl('dex',tit$plate),'Dextran',ifelse(grepl('poly',tit$plate),'Polybrene','Media'))
+tit$treatSpin<-paste(ifelse(tit$spin,'spin','noSpin'),tit$treat)
+tit<-tit[order(tit$virus,tit$treatSpin,tit$red,tit$dil),]
+tit$filter<-ave(tit$n,tit$virus,tit$treatSpin,tit$red,tit$row,FUN=function(xx)ifelse(1:length(xx)>=which.max(xx)&xx>10,xx,NA))
+
+pdf('out/2019-01-02_infectionAid.pdf',width=10,height=8)
+uniqTreats<-unique(tit$treatSpin)
+uniqTreats<-uniqTreats[order(!grepl('noSpin',uniqTreats),!grepl('Media',uniqTreats),!grepl('Polybrene',uniqTreats))]
+uniqVirus<-unique(tit$virus)
+uniqVirus<-uniqVirus[order(uniqVirus=='Media')]
+for(virus in viruses){
+  par(mfrow=c(2,ceiling(length(uniqTreats)/2)))
+  for(treat in uniqTreats){
+    thisDat<-tit[tit$virus==virus&tit$treatSpin==treat&!tit$red,]
+    thisDat$logDil<--log(thisDat$dil)
+    withAs(zz=thisDat,plot(zz$dil,zz$n+1,xlab='Dilution',ylab='TZMBL count',las=1,log='yx',main=sprintf('%s %s',virus,treat),ylim=range(tit$n+1),xlim=c(1,max(tit$dil)),pch=21,bg=is.na(thisDat$filter)+1,cex=2))
+    if(sum(!is.na(thisDat$filter))>0){
+      mod<-glm(n~offset(logDil),thisDat[!is.na(thisDat$filter),],family='poisson')
+      fakeDat<-data.frame(logDil=-log(1:50000))
+      preds<-predict(mod,fakeDat)
+      lines(exp(-fakeDat$logDil),exp(preds)+1)
+      iuPerUl<-exp(coef(mod)['(Intercept)'])/100
+      mtext(sprintf('%0.1f IU/ul (%s)',iuPerUl,treat),3)
+    }
+  }
+}
+dev.off()
+
+ius<-withAs(xx=tit[!is.na(tit$filter)&!tit$red,],by(xx[,c('n','dil')],list(xx$virus,xx$treatSpin),function(thisDat){
+    thisDat$logDil<--log(thisDat$dil)
+    mod<-glm(n~offset(logDil),thisDat,family='poisson')
+    exp(coef(mod)['(Intercept)'])/100
+}))
+slopes<-withAs(xx=tit[!is.na(tit$filter)&!tit$red,],by(xx[,c('n','dil')],list(xx$virus,xx$treatSpin),function(thisDat){
+    thisDat$logDil<--log(thisDat$dil)
+    mod<-glm(n~logDil,thisDat,family='poisson')
+    coef(mod)['logDil']
+}))
 
