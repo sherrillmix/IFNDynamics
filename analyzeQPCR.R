@@ -36,3 +36,29 @@ for(ii in LETTERS[1:8]){
 }
 dev.off()
 
+qpcr<-read.csv('ice/RT LAMP.csv',skip=20,stringsAsFactors=FALSE)
+qpcr$well<-sub('^([A-C])([0-9])$','\\10\\2',trimws(qpcr$Well.Position))
+qpcr<-qpcr[grep('[ABC]',qpcr$well),]
+qpcr$x3m4<-as.numeric(sub(',','',qpcr$x3.m4))
+par(mar=c(0,0,0,0),mfrow=c(3,12))
+for(ii in sort(unique(qpcr$well))){
+  plot(qpcr[!qpcr$Cycle %in% c(1:3,49),c('Cycle','x3m4')],type='n',log='y')
+  col<-ifelse(grepl('A',ii)&!grepl('12',ii),'red',ifelse(grepl('B',ii)&!grepl('12',ii),'blue','black'))
+  lines(qpcr[!qpcr$Cycle %in% c(1:3,49)&qpcr$well==ii,c('Cycle','x3m4')],col=col)
+}
+
+
+qpcr<-read.csv('ice/2018-11-26_083759.csv',skip=46,stringsAsFactors=FALSE)
+qpcr$well<-sprintf('%s%02d',sub('([A-Z]).*','\\1',trimws(qpcr$Well.Position)),as.numeric(sub('[A-Z]([0-9]+)','\\1',trimws(qpcr$Well.Position))))
+qpcr<-qpcr[grep('[E]',qpcr$well),]
+pdf('out/lamp_qpcr.pdf')
+for(jj in colnames(qpcr)[grep('x[0-9].m[0-9]',colnames(qpcr))]){
+qpcr$x3m4<-as.numeric(sub(',','',qpcr[,jj]))-min(as.numeric(sub(',','',qpcr[qpcr$well!='E12',jj])),na.rm=TRUE)+.01 #/as.numeric(sub(',','',qpcr[,'x4.m4']))
+par(mar=c(0,0,0,0),mfrow=c(3,4),oma=c(2,2,1,1))
+for(ii in sort(unique(qpcr$well))){
+  plot(qpcr[!qpcr$Cycle %in% c(1:3)&!qpcr$well %in% c('E02','E12'),c('Cycle','x3m4')],type='n')
+  lines(qpcr[!qpcr$Cycle %in% c(1:3)&qpcr$well==ii,c('Cycle','x3m4')],col='black')
+  title(main=sprintf('%s %s',ii,jj),line=-1)
+}
+}
+dev.off()
