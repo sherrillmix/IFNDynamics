@@ -1,3 +1,5 @@
+library(vipor)
+library(dnar)
 
 beta<-read.csv('stephanieBeta.csv',stringsAsFactors=FALSE)
 beta$pat<-ifelse(grepl('621803B',beta$virus),'A06',
@@ -42,7 +44,7 @@ pair$source<-'shilpa'
 mont<-read.csv('../out/montaner_ic50.csv',row.names=1)
 mont<-mont[grepl('Beta|beta',rownames(mont))&!grepl('UK61',rownames(mont)),]
 mont$class<-'Rebound'
-mont$Virus<-sub(' \\([^)]+\\) - ?','-',sub(' \\(Alpha.*','',rownames(mont)))
+mont$virus<-sub(' \\([^)]+\\) - ?','-',sub(' \\(Alpha.*','',rownames(mont)))
 mont$type<-sprintf('Montaner %s',sapply(strsplit(rownames(mont),'[()]'),'[',2))
 mont$pat<-sub(' .*','',rownames(mont))
 mont$label<-sprintf('Rebound %s',mont$pat)
@@ -50,11 +52,35 @@ mont$source<-'Montaner'
 mont$beta<-mont$ic50
 mont[,colnames(beta)[!colnames(beta) %in% colnames(mont)]]<-NA
 
-combo<-rbind(beta,mm[,colnames(beta)],pair[,colnames(beta)],mont[,colnames(beta)])
-combo<-combo[combo$class!='Control',]
-write.csv(combo,'comboBeta.csv')
+newRebound<-read.csv('../out/reboundRedoIc50.csv',row.names=1)
+newRebound<-newRebound[!grepl('UK61|SG3|CH40|WEAU',rownames(newRebound)),]
+newRebound$virus<-sub(' \\([^)]+\\) - ?','-',sub(' \\(For Scott.*','',rownames(newRebound)))
+newRebound$class<-ifelse(grepl('Rebound|S-22|BEAT',newRebound$virus),'Rebound','QVOA')
+newRebound$type<-ifelse(grepl('Rebound|S-22|BEAT',newRebound$virus),'Rebound','Pre-ATI')
+newRebound$pat<-sub('[ _.].*','',sub('Rebound ','',rownames(newRebound)))
+newRebound$label<-sprintf('%s %s',newRebound$type,newRebound$pat)
+newRebound$source<-'newRebound'
+newRebound$beta<-newRebound$ic50
+newRebound<-newRebound[!is.na(newRebound$ic50),]
+newRebound[,colnames(beta)[!colnames(beta) %in% colnames(newRebound)]]<-NA
 
-ordering<-c('Rebound BEAT-030','Rebound BEAT-044','Rebound S-30','Pre-ATI A06','Post-ATI A06','Pre-ATI A09','Rebound A09','Post-ATI A09','Lorenzi et al. B106','Lorenzi et al. B199','Outgrowth MM23','Outgrowth MM34','Acute','6 Month','Nadir','Last','Acute Recipient','Chronic Donor')
+combo<-rbind(beta,mm[,colnames(beta)],pair[,colnames(beta)],mont[,colnames(beta)],newRebound[,colnames(beta)])
+combo<-combo[combo$class!='Control',]
+combo$study<-ifelse(grepl('^A[0-9]+$',combo$pat),'VRC01',
+  ifelse(grepl('^B[0-9]+$',combo$pat),'Reservoir',
+    ifelse(grepl('^BEAT-',combo$pat),'BEAT',
+      ifelse(grepl('^92[0-9][0-9]|60[0-9]',combo$pat),'3BNC117/10-1074',
+        ifelse(grepl('^MM[0-9]+',combo$pat),'MM',
+          ifelse(grepl('^S-[0-9]+',combo$pat),'ATI',
+            ifelse(grepl('^Donor|Recipient',combo$pat),'Transmission',
+              'UNKNOWN'
+)))))))
+if(any(combo$study=='UNKNOWN'))stop('Unknown study')
+
+
+write.csv(combo[!combo$source %in% c('marvin','shilpa'),c('virus','pat','type','class','study','source','ic50')],'comboBeta.csv',row.names=FALSE)
+
+ordering<-c('Rebound 601','Pre-ATI 9201','Rebound 9201','Pre-ATI 9203','Rebound 9203','Rebound BEAT-004','Rebound BEAT-030','Rebound BEAT-044','Rebound S-22','Rebound S-30','Pre-ATI A06','Post-ATI A06','Pre-ATI A09','Rebound A09','Post-ATI A09','Rebound A08','Lorenzi et al. B106','Lorenzi et al. B199','Outgrowth MM23','Outgrowth MM34','Acute','6 Month','Nadir','Last','Acute Recipient','Chronic Donor')
 pos<-structure(1:length(unique(combo$label)),.Names=unique(combo$label[orderIn(combo$label,ordering)]))
 deemphasize<-c('Acute','6 Month','Donor','Nadir','Last')
 uniqClass<-unique(combo$class)
@@ -93,12 +119,4 @@ for(ii in names(subsets)){
 }
 dev.off()
 
-combo$study<-ifelse(grepl('^A[0-9]+$',combo$pat),'VRC01',
-  ifelse(grepl('^B[0-9]+$',combo$pat),'Reservoir',
-    ifelse(grepl('^BEAT-',combo$pat),'BEAT',
-      ifelse(grepl('^MM[0-9]+',combo$pat),'MM',
-        ifelse(grepl('^S-[0-9]+',combo$pat),'ATI',
-          ifelse(grepl('^Donor|Recipient',combo$pat),'Transmission',
-            'UNKNOWN'
-))))))
-if(any(combo$study=='UNKNOWN'))stop('Unknown study')
+
