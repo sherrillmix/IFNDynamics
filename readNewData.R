@@ -15,7 +15,7 @@ names(patCols2)<-names(patCols3)<-names(patCols)
 #dat<-read.csv('data/MM cohort cata master 11.29.2017.csv')
 #allDats<-lapply(c('data/for Scott_2017_12_13.csv','data/For Scott - All bulk isol. alpha and beta.csv'),read.csv,stringsAsFactors=FALSE)
 #allDats<-lapply(c('data/for Scott_Data Marster.csv'),read.csv,stringsAsFactors=FALSE)
-allDats<-lapply(c('data/Data Master _ October 2018.csv'),read.csv,stringsAsFactors=FALSE)
+allDats<-lapply(c('data/For Scott November-Data Master.csv'),read.csv,stringsAsFactors=FALSE)
 allDats<-lapply(allDats,function(dat)dat[!is.na(dat$ID.for.Publications)&dat$ID.for.Publications!='',])
 allCols<-unique(unlist(lapply(allDats,colnames)))
 allDats<-lapply(allDats,function(dat){dat[,allCols[!allCols %in% colnames(dat)]]<-NA;dat[,allCols]})
@@ -44,6 +44,7 @@ dat$visit<-sapply(strsplit(dat$sample,'\\.'),'[',2)
 dat$virusId<-sapply(strsplit(dat$id,'\\.'),'[',3)
 dat$pat<-sub('\\.[^.]+$','',dat$sample)
 dat$time<-as.numeric(meta[dat$sample,'DFOSx'])
+dat$timeBeforArt<-meta[dat$sample,'daysBeforeArt']
 dat$vl<-meta[dat$sample,'vl']
 dat$CD4<-meta[dat$sample,'cd4']
 #dat<-dat[!is.na(dat$ic50)|!is.na(dat$vres)|!is.na(dat$beta)|!is.na(dat$betaVres),]
