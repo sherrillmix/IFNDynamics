@@ -28,20 +28,20 @@ seqs<-data.frame(
 )
 
 seqs$isNa<-is.na(seqs$seq)|seqs$seq==''|seqs$seq=='NA'
-dists<-withAs(xx=seqs[!seqs$isNa,'seq'],cacheOperation('work/combineDists.Rdat',cbind,levenR::leven(degap(xx),degap(xx[1]),substring2=TRUE,nThreads=3),levenR::leven(revComp(degap(xx)),degap(xx[1]),substring2=TRUE,nThreads=3)))
+dists<-withAs(xx=seqs[!seqs$isNa,'seq'],cbind(levenR::leven(degap(xx),degap(xx[1]),substring2=TRUE,nThreads=3),levenR::leven(revComp(degap(xx)),degap(xx[1]),substring2=TRUE,nThreads=3)))
 seqs$revComp[!seqs$isNa]<-dists[,1]>dists[,2]&dists[,2]<2000
 seqs$raw<-degap(ifelse(seqs$revComp,revComp(seqs$seq),seqs$seq),c('*','.','-','\n'))
-withAs(xx=seqs[!seqs$isNa,],write.fa(xx$id,seqs$raw,'combined/combined.fa'))
+withAs(xx=seqs[!seqs$isNa,],write.fa(xx$id,xx$raw,'combined/combined.fa'))
 rownames(seqs)<-seqs$id
 
 
-hmmer<-read.fa('combined/hmmer/AlignSeq.nt.fasta')
+hmmer<-read.fa('combined/align20190108_hmm/AlignSeq.nt.fasta')
 hxb2StartEnd<-noGap2Gap(hmmer[1,'seq'],c(1,nchar(degap(hmmer[1,'seq']))))
 hmmer$trim<-substring(hmmer$seq,hxb2StartEnd[1],hxb2StartEnd[2])
 coverRange<-range(which(apply(seqSplit(hmmer$trim)=='-',2,mean)<.25))
 substring(hmmer$trim[-1],1,coverRange[1]-1)<-gsub('[^-]','-',substring(hmmer$trim[-1],1,coverRange[1]-1))
 substring(hmmer$trim[-1],coverRange[2]+1)<-gsub('[^-]','-',substring(hmmer$trim[-1],coverRange[2]+1))
-allAligns<-readFaDir('combined/hmmer/')
+allAligns<-readFaDir('combined/align20190108_hmm/')
 allAligns<-allAligns[!allAligns$file %in% c('AlignSeq.nt.fasta','LTR.nt.fasta'),]
 allAligns$prot<-sub('.nt.fasta','',allAligns$file)
 
@@ -60,13 +60,13 @@ dev.off()
 
 rownames(hmmer)<-hmmer$name
 seqs$align<-hmmer[seqs$id,'trim']
-if(any(is.na(seqs$align)&!seqs$isNa))stop('Lost sequence during alignment')
+if(any(is.na(seqs$align)&!seqs$isNa))warning('Lost sequence during alignment')
 
 for(ii in unique(allAligns$prot)){
   tmp<-allAligns[allAligns$prot==ii,]
   rownames(tmp)<-tmp$name
   seqs[,ii]<-tmp[seqs$id,'seq']
-  if(any(is.na(seqs[,ii])&!seqs$isNa))stop('Lost genes sequence during alignment')
+  if(any(is.na(seqs[,ii])&!seqs$isNa))warning('Lost genes sequence during alignment')
 }
 
 
@@ -130,10 +130,10 @@ newSeqs$short<-sub('^S([0-9])','S-\\1',sub('Beat','BEAT',sub('-FL$','',newSeqs$n
 rownames(newSeqs)<-newSeqs$short
 dists2<-withAs(xx=newSeqs$seq,cbind(levenR::leven(degap(xx),degap(xx[1]),substring2=TRUE,nThreads=3),levenR::leven(revComp(degap(xx)),degap(xx[1]),substring2=TRUE,nThreads=3)))
 newIc50<-read.csv('rebound/combo.csv',stringsAsFactors=FALSE)
-newIc50[newIc50$class=='Rebound'|(newIc50$pat=='A09'&!is.na(newIc50$pat)),'Virus']
-if(any(!newSeqs$short %in% newIc50[newIc50$class=='Rebound','Virus']))stop('Unmatched sequence name found')
+newIc50[newIc50$class=='Rebound'|(newIc50$pat=='A09'&!is.na(newIc50$pat)),'virus']
+if(any(!newSeqs$short %in% newIc50[newIc50$class=='Rebound','virus']))stop('Unmatched sequence name found')
 newIc50$seq<-NA
-newIc50[newIc50$Virus %in% newSeqs$short,'seq']<-newSeqs[newIc50[newIc50$Virus %in% newSeqs$short,'Virus'],'seq']
+newIc50[newIc50$virus %in% newSeqs$short,'seq']<-newSeqs[newIc50[newIc50$virus %in% newSeqs$short,'virus'],'seq']
 
 katieSeqs<-read.fa('combined/A09finalQVOA_reb.isol.fasta')
 katieSeqs$short<-sub('Rebound_.*solate_(.*)','Rebound \\1',sub('Rebound_Bulk_.*solate_(.*)','A09-\\1 bulk',katieSeqs$name))
@@ -141,15 +141,17 @@ katieSeqs$short<-sub('A09.Q1.[0-9]+(M[0-9]+).*','621818B_\\1 pre',katieSeqs$shor
 katieSeqs$short<-sub('A09.Q2.[0-9]+(M[0-9]+).*','621818B_\\1 post',katieSeqs$short)
 #presumed typo
 katieSeqs$short<-sub('1A45 bulk','1A5 bulk',katieSeqs$short)
-katieSeqs<-katieSeqs[katieSeqs$short %in% newIc50$Virus,]
+katieSeqs<-katieSeqs[katieSeqs$short %in% newIc50$virus,]
 rownames(katieSeqs)<-katieSeqs$short
-if(any(!newIc50[newIc50$pat=='A09'&!is.na(newIc50$pat),'Virus'] %in% katieSeqs$short))stop('Problem finding A09 seq')
-newIc50[newIc50$Virus %in% katieSeqs$short,'seq']<-degap(katieSeqs[newIc50[newIc50$Virus %in% katieSeqs$short,'Virus'],'seq'])
+if(any(!newIc50[newIc50$pat=='A09'&!is.na(newIc50$pat),'virus'] %in% katieSeqs$short))stop('Problem finding A09 seq')
+newIc50[newIc50$virus %in% katieSeqs$short,'seq']<-degap(katieSeqs[newIc50[newIc50$virus %in% katieSeqs$short,'virus'],'seq'])
 
-out2<-out[,c('id','study','alphaIc50','patID','pair','donor','gender','select','fluid','subtype','time','bulk')]
+out2<-out[,c('id','study','alphaIc50','patID','pair','donor','gender','select','fluid','subtype','time','bulk','align')]
+out2$align<-degap(out2$align)
+colnames(out2)[colnames(out2)=='align']<-'seq'
 
 newDat<-newIc50[!is.na(newIc50$seq),]
-newDat$id<-newDat$Virus
+newDat$id<-newDat$virus
 newDat$study<-'rebound'
 newDat$alphaIc50<-newDat$ic50
 newDat$patID<-newDat$pat
