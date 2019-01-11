@@ -322,6 +322,11 @@ rownames(weauMeta)<-weauMeta$Time.Points<-sprintf('WEAU.%02d',weauMeta$id)
 compiledMeta<-rbind(compiledMeta,weauMeta[,colnames(compiledMeta)])
 meta<-rbind(meta,weauMeta[,colnames(meta)])
 
+#WEAU no ART but calling first record of low CD4 as when would have initiated
+meta$artDay<-c(artDfosx,'WEAU'=391)[meta$mm]
+meta$daysBeforeArt<-meta$artDay-as.numeric(meta$DFOSx)
+
+
 if(FALSE){
 comboMeta[which(!paste(comboMeta$mm,comboMeta$rDate) %in% paste(compiledMeta$mm,compiledMeta$rDate) & !is.na(comboMeta$mm)&(!is.na(comboMeta$vl)|!is.na(comboMeta$cd4))),c('mm','date','rDate','time','vl','cd4','source')]
 tmp<-comboMeta$vl
