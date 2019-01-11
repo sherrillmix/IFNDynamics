@@ -4,6 +4,7 @@
 #b = Hill’s slope of the curve (i.e. this is related to the steepness of the curve at point c).
 #c = the point of inflection (i.e. the point on the S shaped curve halfway between a and d)
 #d = the maximum value that can be obtained (i.e. what happens at infinite dose)
+#e assymetry
 #f<-function(B,x,transformX=function(x)x){if(any(x<=0))browser();exp(log(B[1]-B[4])-log(1+(transformX(x)/B[3])^B[2]))+B[4]}
 f5<-function(B,x,transformX=function(x)x){
   #if(x==-Inf)return(B[1])
@@ -50,7 +51,7 @@ calcIc50s<-function(dilutes,concAlpha){
   return(out)
 }
 
-readIfns<-function(file,exclude=1,firstCol=3,nameCol=firstCol-1,ifnCol=0){
+readIfns<-function(file,exclude=1,firstCol=3,nameCol=firstCol-1,ifnCol=0,minRows=10){
   wb <- loadWorkbook(file)
   counter<-0
   ic50Curves<-lapply(getSheets(wb),function(sheet){
@@ -68,7 +69,7 @@ readIfns<-function(file,exclude=1,firstCol=3,nameCol=firstCol-1,ifnCol=0){
       out[names(tmp)[names(tmp)!='']]<-tmp[names(tmp)!='']
       return(out)
     })
-    if(any(sapply(vals[1:10],function(xx)is.null(xx[[3]])))){message('  Not found');return(NULL)}
+    if(any(sapply(vals[1:minRows],function(xx)is.null(xx[[3]])))){message('  Not found');return(NULL)}
     #assuming col 3, first row contains 1
     firstRow<-min(c(Inf,which(!is.na(sapply(vals[1:10],'[[',firstCol))&sapply(vals[1:10],'[[',firstCol)=='1')))+1
     if(firstRow==Inf){message('  Not found');return(NULL)}
@@ -77,7 +78,7 @@ readIfns<-function(file,exclude=1,firstCol=3,nameCol=firstCol-1,ifnCol=0){
     #if((lastRow-firstRow+1) %%2 !=0)warning('Number of rows not a multiple of 2 on sheet ',counter,' of ',file)
     dat<-as.data.frame(apply(do.call(rbind,lapply(vals[firstRow:lastRow],function(zz)zz[firstCol+0:19])),2,function(xx){as.numeric(ifelse(xx==''|is.na(xx)|grepl('\\?\\?',xx),NA,sub('[><]','',xx)))}),stringsAsFactors=FALSE)
     dat$sample<-fillDown(sapply(vals[firstRow:lastRow],'[[',nameCol))
-    dat$ifn<-fillDown(sapply(vals[firstRow:lastRow],'[[',ifnCol),errorIfFirstEmpty=FALSE)
+    dat$ifn<-if(ifnCol==0)NA else fillDown(sapply(vals[firstRow:lastRow],'[[',ifnCol),errorIfFirstEmpty=FALSE)
     return(dat)
   })
   names(ic50Curves)<-names(getSheets(wb))
@@ -242,5 +243,61 @@ plotIfnStacked<-function(conc,p24,bioRep=rep(1,length(p24)),techRep=rep(1,length
   text(dnar::convertLineToUser(2.6,4),10^mean(par('usr')[3:4]),'Percent of maximum',xpd=NA,srt=-90)
   par('lheight'=.72)
   legend('topright',names(repCols),pch=21,pt.bg=repCols,inset=.01,cex=ifelse(length(repCols)==2,1,.6),pt.cex=1,y.intersp=ifelse(length(repCols)<=2,1,1.5))
+  fit<-fitter(origConcs,p24)
+  fakeConc<-10^seq(-10,10,.001)
+  fitLine<-fitFunc(fit,fakeConc)
+  lines(fakeConc,fitLine,col='#00000066',lwd=3)
+  #text(fit[3],fit[1]/2,sprintf('Line IC50: %0.3f',fit[3]))
+  #abline(v=fit[3],h=fit[1]/2+fit[4]/2,lty=3)
+  fifty<-fakeConc[which.min(abs(fitLine-fit[1]/2))]
+  #abline(v=fifty,lty=3)
+  return(c(fit[3],fifty))
 }
+
+read6ConcIfns<-function(file,exclude=1,firstCol=3,nameCol=firstCol-1,ifnCol=0,dilCol=0){
+  wb <- loadWorkbook(file)
+  counter<-0
+  ic50Curves<-lapply(getSheets(wb),function(sheet){
+    counter<<-counter+1
+    if(counter %in% exclude)return(NULL)
+    message(' Sheet ',counter)
+    #can get weird error otherwise
+    #rows<-lapply(1:40,function(xx)tryCatch(getCells(getRows(sheet)[xx])[[1]],error=function(e)return(NULL)))
+    if(length(getRows(sheet))==0)return(NULL)
+    rows<-getCells(getRows(sheet,1:40),1:50,simplify=FALSE)
+    vals<-lapply(rows,function(row){
+      tmp<-sapply(row,function(xx)ifelse(is.null(xx),NA,getCellValue(xx)))
+      out<-rep(NA,50)
+      names(out)<-1:50
+      out[names(tmp)[names(tmp)!='']]<-tmp[names(tmp)!='']
+      return(out)
+    })
+    if(any(sapply(vals[1:8],function(xx)is.null(xx[[3]])))){message('  Not found');return(NULL)}
+    #assuming col 3, first row contains 1
+    firstRow<-min(c(Inf,which(!is.na(sapply(vals[1:10],'[[',firstCol))&sapply(vals[1:10],'[[',firstCol)=='1')))+1
+    if(firstRow==Inf){message('  Not found');return(NULL)}
+    lastRow<-firstRow+min(c(Inf,which(sapply(vals[firstRow:40],function(xx)is.null(xx)||all(is.na(xx[firstCol+0:5])|is.null(xx[firstCol+0:5]))))))-1-1
+    if(lastRow==Inf)return(NULL)
+    #if((lastRow-firstRow+1) %%2 !=0)warning('Number of rows not a multiple of 2 on sheet ',counter,' of ',file)
+    dat<-as.data.frame(apply(do.call(rbind,lapply(vals[firstRow:lastRow],function(zz)zz[firstCol+0:23])),2,function(xx){as.numeric(ifelse(xx==''|is.na(xx)|grepl('\\?\\?',xx),NA,sub('[><]','',xx)))}),stringsAsFactors=FALSE)
+    dat$sample<-fillDown(sapply(vals[firstRow:lastRow],'[[',nameCol))
+    if(ifnCol!=0)dat$ifn<-fillDown(sapply(vals[firstRow:lastRow],'[[',ifnCol),errorIfFirstEmpty=FALSE)
+    if(dilCol!=0)dat$dilution<-fillDown(sapply(vals[firstRow:lastRow],'[[',dilCol),errorIfFirstEmpty=FALSE)
+    return(dat)
+  })
+  names(ic50Curves)<-names(getSheets(wb))
+  dilutes<-do.call(rbind,ic50Curves)
+  dilutes$sheet<-rep(names(ic50Curves),sapply(ic50Curves,function(xx)ifelse(is.null(xx),0,nrow(xx))))
+  dilutes$sample<-sprintf('%s (%s)',dilutes$sample,dilutes$sheet)
+  return(dilutes)
+}
+
+convertIfn6<-function(p24s){
+  nConc<-ncol(p24s)/2
+  bio1<-p24s[,1:nConc,drop=FALSE]
+  bio2<-p24s[,nConc+1:nConc,drop=FALSE]
+  colnames(bio1)<-colnames(bio2)<-1:nConc
+  do.call(rbind,lapply(1:nrow(bio1),function(xx)rbind(bio1[xx,,drop=FALSE],bio2[xx,,drop=FALSE])))
+}
+
 
