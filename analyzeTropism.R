@@ -680,3 +680,48 @@ slopes<-withAs(xx=tit[!is.na(tit$filter)&!tit$red,],by(xx[,c('n','dil')],list(xx
     coef(mod)['logDil']
 }))
 
+
+tit<-readCounts('ice/out/2019-01-14_infectivity/counts.csv')
+viruses<-read.csv('ice/20190109_virusSubset.csv',stringsAsFactors=FALSE)
+tit<-tit[tit$plate!='media_4_850',]
+tit$red<-grepl('red',tit$plate)
+tit$dextran<-ifelse(grepl('dex',tit$plate),'Dextran','Media')
+tit$dilPlate<-as.numeric(sapply(strsplit(tit$plate,'_'),'[[',2))
+tit$dilNum<-c(1:9,NA,1:9,NA,1:9,NA,1:9,1:9)[(tit$dilPlate-1)*12+tit$col]
+tit$plateNum<-rep(c(1,NA,2,NA,3,NA,4,5),c(9,1,9,1,9,1,9,9))[(tit$dilPlate-1)*12+tit$col]
+#50ul in well + 50ul virus, initial 400ul neat + 500ul media, 200ul remainder + 300ul at each dilution
+tit$dil<-1/(.5*(400/700)*2^-(tit$dilNum-1))
+tit$virus<-viruses[(tit$plateNum-1)*8+tit$rowNum,'id']
+tit[is.na(tit$dil),'virus']<-NA
+tit<-tit[order(tit$virus,tit$dextran,tit$red,tit$dil),]
+tit$filter<-ave(tit$n,tit$virus,tit$dextran,tit$red,tit$row,FUN=function(xx)ifelse(1:length(xx)>=which.max(xx)&xx>5,xx,NA))
+
+
+
+pdf('out/2019-01-14_infectivity.pdf',width=10,height=8)
+for(virus in viruses$id){
+  par(mfrow=c(1,2))
+  for(treat in c('Media','Dextran')){
+    thisDat<-tit[tit$virus==virus&tit$dextran==treat&!tit$red&!is.na(tit$virus),]
+    thisDat$logDil<--log(thisDat$dil)
+    withAs(zz=thisDat,plot(zz$dil,zz$n+1,xlab='Dilution',ylab='TZMBL count',las=1,log='yx',main=sprintf('%s %s',virus,treat),ylim=range(tit$n+1),xlim=c(1,max(tit$dil,na.rm=TRUE)),pch=21,bg=is.na(thisDat$filter)+1,cex=2))
+    if(sum(!is.na(thisDat$filter))>0){
+      mod<-glm(n~offset(logDil),thisDat[!is.na(thisDat$filter),],family='poisson')
+      fakeDat<-data.frame(logDil=-log(1:50000))
+      preds<-predict(mod,fakeDat)
+      lines(exp(-fakeDat$logDil),exp(preds)+1)
+      iuPerUl<-exp(coef(mod)['(Intercept)'])/100
+      mtext(sprintf('%0.1f IU/ul (%s)',iuPerUl,treat),3)
+    }
+  }
+}
+dev.off()
+
+ius2<-withAs(xx=tit[!is.na(tit$filter)&!tit$red&!is.na(tit$virus),],by(xx[,c('n','dil')],list(xx$virus,xx$dextran),function(thisDat){
+    thisDat$logDil<--log(thisDat$dil)
+    mod<-glm(n~offset(logDil),thisDat,family='poisson')
+    exp(coef(mod)['(Intercept)'])/100
+}))
+round(ius2[viruses$id,c('Media','Dextran')],2)
+
+
