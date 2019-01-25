@@ -41,6 +41,42 @@ iuCode<-'
 '
 iuMod <- stan_model(model_code = iuCode)
 
+iuCodeSimple<-'
+  data {
+    int<lower=0> nCount;
+    int<lower=0> counts[nCount];
+    vector<lower=0>[nCount] dilutions;
+    int maxCount;
+    real background;
+  }
+  parameters {
+    real<lower=0> baseIU;
+    vector<upper=0>[nCount] overKill;
+  }
+  transformed parameters{
+    vector<lower=0>[nCount] expectedCount;
+    for(ii in 1:nCount)expectedCount[ii]=baseIU/dilutions[ii]+background;
+  }
+  model {
+    //for(ii in 1:nCount){
+      //if(expectedCount[ii]<maxCount || ii>nCount-3) counts[ii]~poisson(expectedCount[ii]);
+      //else counts[ii]~poisson(expectedCount[ii]-overKill[ii]);
+      //if(expectedCount[ii]-overKill[ii]>0)counts[ii]~poisson(expectedCount[ii]-overKill[ii]+background);
+      //else counts[ii]~poisson(background);
+      //if(expectedCount[ii]>maxCount){
+        //overKill[ii]~double_exponential(0,expectedCount[ii]-maxCount);
+      //}else{
+        //overKill[ii]~double_exponential(0,1);
+      //}
+    //}
+    baseIU~normal(0,100000);
+    counts~poisson(expectedCount .*exp(overKill)+background);
+    overKill~double_exponential(0,.1);
+  }
+'
+iuModSimple <- stan_model(model_code = iuCodeSimple)
+
+
 countIU<-function(mod,counts,dilutions,virus,background,conditions=rep("Base",length(virus)),chains=50,...){
   virusId<-structure(1:length(unique(virus)),.Names=unique(virus))
   conditionId<-structure(1:length(unique(conditions)),.Names=unique(conditions))
@@ -60,6 +96,27 @@ countIU<-function(mod,counts,dilutions,virus,background,conditions=rep("Base",le
   #,
   fit <- sampling(mod, data = dat, iter=5000, chains=chains,thin=10,control=list(adapt_delta=.99,max_treedepth=15),...)
 }
+
+simpleCountIU<-function(mod,counts,dilutions,background,chains=20,...){
+  if(length(counts)==0)stop('No counts given')
+  if(length(counts)!=length(dilutions))stop('Length of counts and dilutions do not match')
+  dat=list(
+    nCount=length(counts),
+    counts=counts,
+    dilutions=dilutions,
+    maxCount=2000,
+    background=mean(background)
+  )
+  #,control=list(adapt_delta=.95,max_treedepth=15)
+  fit <- sampling(mod, data = dat, iter=4000, chains=chains,thin=2,control=list(adapt_delta=.95,max_treedepth=15),...)
+  return(fit)
+}
+
+
+
+print(system.time(fit<-withAs(xx=tit[!tit$red&tit$dextran=='Media'&tit$virus=='MM33.14.11B1'&!is.na(tit$virus),],simpleCountIU(iuModSimple,xx$n,xx$dil,tit[!tit$red&is.na(tit$dil),'n']))))
+
+fit<-withAs(xx=tit[!tit$red&tit$dextran=='Dextran'&tit$virus=='YU2'&!is.na(tit$virus),],simpleCountIU(iuModSimple,xx$n,xx$dil,tit[!tit$red&is.na(tit$dil),'n']));mean(fit)
 
 fit<-withAs(tit=tit[!tit$red,],countIU(iuMod,tit$n,tit$dil,tit$virus,tit[grepl('Media',tit$virus)&!tit$red,'n'],tit$treatSpin,chains=40))
 
