@@ -305,7 +305,7 @@ rebound<-rbind(
     calcBasicIc50(concBeta6,convertIfn6(xx[,1:24,drop=FALSE]))
   })))
 )
-write.csv(rebound,'out/reboundIc50.csv')
+#write.csv(rebound,'out/reboundIc50.csv')
 zz<-cbind(rebound[1:(nrow(rebound)/2),],rebound[nrow(rebound)/2+1:(nrow(rebound)/2),]);colnames(zz)<-sprintf('%s %s',rep(c('IFNa2','IFNb'),each=2),colnames(zz));rownames(zz)<-sub(' \\(.*','',rownames(zz))
 
 pdf('out/reboundIc50.pdf',width=6,height=4)
@@ -318,7 +318,15 @@ reboundRaw$isBeta<-TRUE
 reboundRedo<-as.data.frame(do.call(rbind, by(reboundRaw[reboundRaw$isBeta,],reboundRaw$sample[reboundRaw$isBeta],function(xx){
     calcBasicIc50(concBeta6,convertIfn6(xx[,1:24,drop=FALSE]))
 })))
-write.csv(reboundRedo,'out/reboundRedoIc50.csv')
+#write.csv(reboundRedo,'out/reboundRedoIc50.csv')
+newNames<-sub(' \\(.+$','',rownames(reboundRedo))
+oldNames<-sub(' \\(.+$','',rownames(rebound))
+for(ii in  1:nrow(reboundRedo)){
+  oldRow<-which(oldNames==newNames[ii]&grepl('Beta|beta',rownames(rebound)))
+  if(length(oldRow)!=1)stop('Ambiguous redo')
+  rebound[oldRow,]<-reboundRedo[ii,]
+}
+write.csv(rebound,'out/reboundIc50.csv')
 
 reboundRedoConvert<-convertIfn6(reboundRaw[,1:24])
 reboundRedoConvert$sample<-rep(reboundRaw$sample,each=2)
@@ -329,8 +337,27 @@ dev.off()
 voaRaw<-readIfns('data/IC50s - new VOAs 01.10.2019.xlsx',minRows=8)
 voaRaw$isBeta<-grepl('beta|Beta',voaRaw$sheet)
 voa<-rbind(as.data.frame(do.call(rbind, by(voaRaw[!voaRaw$isBeta,],voaRaw$sample[!voaRaw$isBeta],function(xx){calcBasicIc50(concAlpha,xx[,1:20,drop=FALSE])}))), as.data.frame(do.call(rbind, by(voaRaw[voaRaw$isBeta,],voaRaw$sample[voaRaw$isBeta],function(xx){calcBasicIc50(concBeta,xx[,1:20,drop=FALSE])}))))
+write.csv(voa,'out/voa_2019-01-10.csv')
 
 pdf('out/voaCheck.pdf',width=6,height=4)
   plotIfns(voaRaw[!voaRaw$isBeta,],concAlpha,'IFNa2 concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
   plotIfns(voaRaw[voaRaw$isBeta,],concBeta,'IFNb concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
 dev.off()
+
+rebound130Raw<-read6ConcIfns('data/Rebound IC50s a2-b 6 doses.xlsx')
+rebound130Raw$isBeta<-grepl('beta|Beta',rebound130Raw$sheet)
+rebound130<-rbind(
+  as.data.frame(do.call(rbind, by(rebound130Raw[!rebound130Raw$isBeta,],rebound130Raw$sample[!rebound130Raw$isBeta],function(xx) calcBasicIc50(concAlpha6,convertIfn6(xx[,1:24,drop=FALSE]))))),
+  as.data.frame(do.call(rbind, by(rebound130Raw[rebound130Raw$isBeta,],rebound130Raw$sample[rebound130Raw$isBeta],function(xx) calcBasicIc50(concBeta6,convertIfn6(xx[,1:24,drop=FALSE])))))
+)
+write.csv(rebound130,'out/rebound_2019-01-30_Ic50.csv')
+
+rebound130Convert<-convertIfn6(rebound130Raw[,1:24])
+rebound130Convert$sample<-rep(rebound130Raw$sample,each=2)
+rebound130Convert$isBeta<-grepl('Beta|beta',rebound130Convert$sample)
+pdf('out/rebound_2019-01-30_Ic50.pdf',width=6,height=4)
+  plotIfns(rebound130Convert[!rebound130Convert$isBeta,],concAlpha6,'IFNa concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
+  plotIfns(rebound130Convert[rebound130Convert$isBeta,],concBeta6,'IFNb concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
+dev.off()
+
+
