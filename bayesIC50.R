@@ -52,7 +52,7 @@ ic50Code<-'
       expectedIC50[ii]=acute[patients[ii]];
       if(days[ii]<exp(nadirTime[patients[ii]]))expectedIC50[ii]=expectedIC50[ii]+nadirChange[patients[ii]]*days[ii]/exp(nadirTime[patients[ii]]);
       else expectedIC50[ii]=expectedIC50[ii]+nadirChange[patients[ii]];
-      if(hasArt[ii] && days[ii]>exp(nadirTime[patients[ii]])){
+      if(hasArt[ii]){ // && days[ii]>exp(nadirTime[patients[ii]])
         if(daysBeforeArt[ii]<0){
           expectedIC50[ii]=expectedIC50[ii]+riseChange[artIds[ii]];
         }else{
@@ -74,6 +74,10 @@ ic50Code<-'
     nadirChangeRaw~normal(0,1);
     riseChangeSD~gamma(1,.1);
     riseChangeRaw~normal(0,1);
+    riseChangeMean~normal(0,30);
+    nadirChangeMean~normal(0,30);
+    nadirTimeMean~normal(0,30);
+    riseTimeMean~normal(0,30);
   }
 '
 ic50Mod <- stan_model(model_code = ic50Code)
@@ -117,10 +121,14 @@ calcSims<-function(fit,dat){
     if(pat %in% names(artStart[!is.na(artStart)])){
       riseChange<-mat[,sprintf('riseChange[%d]',arts[pat])]
       riseTime<-exp(mat[,sprintf('riseTime[%d]',arts[pat])])
+      riseTime[riseTime==0]<-1e-9
       timeBeforeArt<-artStart[pat]-fakeTimes
       riseProp<-1-matrix(timeBeforeArt,nrow=length(riseTime),ncol=length(timeBeforeArt),byrow=TRUE)/riseTime
       riseProp[riseProp<0]<-0
       riseProp[riseProp>1]<-1
+      nadTimes<-matrix(nadirTime,nrow=length(riseTime),ncol=length(fakeTimes))
+      timeMat<-matrix(fakeTimes,nrow=length(riseTime),ncol=length(fakeTimes),byrow=TRUE)
+      riseProp[timeMat<nadTimes]<-0
       predIc50<-predIc50 + riseChange * riseProp
     }
     sigmas<-mat[,'sigma']
@@ -128,6 +136,7 @@ calcSims<-function(fit,dat){
     predInt<-rbind(apply(predIc50-sigmas,2,quantile,.025),apply(predIc50+sigmas,2,quantile,.975))
     summaries<-apply(predIc50,2,function(xx)c('mean'=mean(xx),quantile(xx,c(.025,.975))))
     summaries<-rbind(summaries,predInt)
+    if(any(summaries['mean',]< -1e+08))browser()
     rownames(summaries)<-c('mean','lowCI','highCI','lowPred','highPred')
     return(rbind('time'=fakeTimes,summaries))
   })
@@ -157,3 +166,7 @@ plotFit<-function(sims,dat){
 pdf('test.pdf')
 plotFit(sims,dat)
 dev.off()
+
+mat<-as.matrix(fit$fit)
+cbind(exp(apply(mat[,grepl('riseTime\\[',colnames(mat))],2,mean)),c(artDfosx,'WEAU'=391))
+exp(apply(mat[,grepl('nadirTime\\[',colnames(mat))],2,mean))
