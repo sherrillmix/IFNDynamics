@@ -292,6 +292,8 @@ vals<-lapply(getSheets(wb),function(sheet){
   return(do.call(rbind,vals))
 })
 compiledMeta<-do.call(rbind,mapply(function(xx,yy){xx$pat<-yy;xx},vals,names(vals),SIMPLIFY=FALSE))
+compiledMeta[compiledMeta$origDate=='05.01.12'&compiledMeta$id=='108.1','id']<-'108.10'
+compiledMeta[compiledMeta$id=='85.12MW'&!is.na(compiledMeta$id),'id']<-'85.13'
 compiledMeta$mm<-sub('.* ','',sub('MM ','MM',compiledMeta$pat))
 compiledMeta$ej<-sub(' .*','',sub('EJ ','EJ',compiledMeta$pat))
 compiledMeta<-compiledMeta[compiledMeta$mm %in% mmLookup,]
@@ -321,10 +323,16 @@ rownames(weauMeta)<-weauMeta$Time.Points<-sprintf('WEAU.%02d',weauMeta$id)
 
 compiledMeta<-rbind(compiledMeta,weauMeta[,colnames(compiledMeta)])
 meta<-rbind(meta,weauMeta[,colnames(meta)])
+compiledMeta$visit<-sub('[^.]+\\.','',compiledMeta$id)
+compiledMeta$visit<-ifelse(grepl('^[0-9]+$',compiledMeta$visit),sprintf('%02d',suppressWarnings(as.integer(compiledMeta$visit))),compiledMeta$visit)
+compiledMeta$sample<-ifelse(compiledMeta$visit==''|is.na(compiledMeta$id),sprintf('XX%s',1:nrow(compiledMeta)),paste(compiledMeta$mm,compiledMeta$visit,sep='.'))
+rownames(compiledMeta)<-compiledMeta$sample
 
 #WEAU no ART but calling first record of low CD4 as when would have initiated
 meta$artDay<-c(artDfosx,'WEAU'=391)[meta$mm]
 meta$daysBeforeArt<-meta$artDay-as.numeric(meta$DFOSx)
+compiledMeta$artDay<-c(artDfosx,'WEAU'=391)[compiledMeta$mm]
+compiledMeta$daysBeforeArt<-compiledMeta$artDay-as.numeric(compiledMeta$DFOSx)
 
 
 if(FALSE){

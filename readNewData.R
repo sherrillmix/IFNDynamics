@@ -1,7 +1,7 @@
 library(dnar)
 library(lubridate)
 
-if(!exists('meta'))source('readMeta.R')
+if(!exists('compiledMeta'))source('readMeta.R')
 
 
 patCols<-c('MM23'='#e41a1c','MM33'='#4daf4a','MM34'='#984ea3','MM39'='#377eb8','MM40'='#FF7f00','MM14'='#FFD700','MM15'='#f781bf','MM55'='#a65628','MM62'='#00CED1')
@@ -15,8 +15,9 @@ names(patCols2)<-names(patCols3)<-names(patCols)
 #dat<-read.csv('data/MM cohort cata master 11.29.2017.csv')
 #allDats<-lapply(c('data/for Scott_2017_12_13.csv','data/For Scott - All bulk isol. alpha and beta.csv'),read.csv,stringsAsFactors=FALSE)
 #allDats<-lapply(c('data/for Scott_Data Marster.csv'),read.csv,stringsAsFactors=FALSE)
-allDats<-lapply(c('data/For Scott November-Data Master.csv'),read.csv,stringsAsFactors=FALSE)
-allDats<-lapply(allDats,function(dat)dat[!is.na(dat$ID.for.Publications)&dat$ID.for.Publications!='',])
+allDats<-lapply(c('data/For Scott Jan.2019.csv'),read.csv,stringsAsFactors=FALSE)
+idCol<-'ID.for.statistical.analysis.....Scott.March..2018.'
+allDats<-lapply(allDats,function(dat)dat[!is.na(dat[,idCol])&dat[,idCol]!='',])
 allCols<-unique(unlist(lapply(allDats,colnames)))
 allDats<-lapply(allDats,function(dat){dat[,allCols[!allCols %in% colnames(dat)]]<-NA;dat[,allCols]})
 dat<-do.call(rbind,allDats)
@@ -25,8 +26,8 @@ dat<-do.call(rbind,allDats)
 #dat2<-read.csv('data/For Scott - All bulk isol. alpha and beta.csv')
 
 #Standardize BULK naming and catch _BULK with no .
-dat$qvoa<-grepl('VOA',dat$ID.for.Publications)
-dat$id<-sub('[ _.][Bb]ulk-([IVX]+)','.\\1.bulk',sub('VOA[_ ]','',sub(' +[Bb]ulk|_Bulk|_BULK','.bulk',dat$ID.for.Publications)))
+dat$qvoa<-grepl('VOA',dat[,idCol])
+dat$id<-sub('[ _.][Bb]ulk-([IVX]+)','.\\1.bulk',sub('VOA[_ ]','',sub(' +[Bb]ulk|_Bulk|_BULK','.bulk',dat[,idCol])))
 dat$id<-sprintf('%s%s',dat$id,ifelse(dat$qvoa&!grepl('\\.VOA$',dat$id),'.VOA',''))
 dat$id<-sub('^Mm','MM',dat$id)
 dat$id<-sub('^(MM[0-9]+)\\.([0-9])\\.','\\1.0\\2.',dat$id)
@@ -36,17 +37,17 @@ dat[probs,'id']<-withAs(xx=dat[probs,],ave(sub('\\.bulk','',xx$id),sub('\\.bulk'
 splits<-strsplit(dat$id,'\\.')
 probs<-!(sapply(splits,length)==3 & !dat$qvoa & !dat$bulk) & !(sapply(splits,length)==4 & (dat$qvoa|dat$bulk))
 if(any(probs))stop('Problem id found')
-tmp<-dat[,c('ID.for.Publications','id')]
-tmp$diff<-tmp$ID.for.Publications!=tmp$id
+tmp<-dat[,c(idCol,'id')]
+tmp$diff<-tmp[,idCol]!=tmp$id
 write.csv(tmp,'newIds.csv',row.names=FALSE)
 dat$sample<-sapply(strsplit(dat$id,'\\.'),function(xx)paste(xx[1:2],collapse='.'))
 dat$visit<-sapply(strsplit(dat$sample,'\\.'),'[',2)
 dat$virusId<-sapply(strsplit(dat$id,'\\.'),'[',3)
 dat$pat<-sub('\\.[^.]+$','',dat$sample)
-dat$time<-as.numeric(meta[dat$sample,'DFOSx'])
-dat$timeBeforArt<-meta[dat$sample,'daysBeforeArt']
-dat$vl<-meta[dat$sample,'vl']
-dat$CD4<-meta[dat$sample,'cd4']
+dat$time<-as.numeric(compiledMeta[dat$sample,'DFOSx'])
+dat$timeBeforArt<-compiledMeta[dat$sample,'daysBeforeArt']
+dat$vl<-compiledMeta[dat$sample,'vl']
+dat$CD4<-compiledMeta[dat$sample,'cd4']
 #dat<-dat[!is.na(dat$ic50)|!is.na(dat$vres)|!is.na(dat$beta)|!is.na(dat$betaVres),]
 if(any(is.na(dat$time)))stop('Missing time')
 #if(any(is.na(dat$vl)))stop('Missing vl')
