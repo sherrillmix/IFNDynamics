@@ -51,12 +51,14 @@ ic50Code<-'
     for(ii in 1:nVirus){
       expectedIC50[ii]=acute[patients[ii]];
       if(days[ii]<exp(nadirTime[patients[ii]]))expectedIC50[ii]=expectedIC50[ii]+nadirChange[patients[ii]]*days[ii]/exp(nadirTime[patients[ii]]);
-      else expectedIC50[ii]=expectedIC50[ii]+nadirChange[patients[ii]];
-      if(hasArt[ii]){ // && days[ii]>exp(nadirTime[patients[ii]])
-        if(daysBeforeArt[ii]<0){
-          expectedIC50[ii]=expectedIC50[ii]+riseChange[artIds[ii]];
-        }else{
-          if(daysBeforeArt[ii]<exp(riseTime[artIds[ii]]))expectedIC50[ii]=expectedIC50[ii]+riseChange[artIds[ii]]*(1-daysBeforeArt[ii]/exp(riseTime[artIds[ii]]));
+      else{
+        expectedIC50[ii]=expectedIC50[ii]+nadirChange[patients[ii]];
+        if(hasArt[ii]){ // && days[ii]>exp(nadirTime[patients[ii]])
+          if(daysBeforeArt[ii]<0){
+            expectedIC50[ii]=expectedIC50[ii]+riseChange[artIds[ii]];
+          }else{
+            if(daysBeforeArt[ii]<exp(riseTime[artIds[ii]])&)expectedIC50[ii]=expectedIC50[ii]+riseChange[artIds[ii]]*(1-daysBeforeArt[ii]/exp(riseTime[artIds[ii]]));
+          }
         }
       }
     }
