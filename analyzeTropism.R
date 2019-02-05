@@ -765,7 +765,9 @@ plotBigBatch<-function(tit,viruses,ius=NULL,ius2=NULL){
     for(treat in c('Media','Dextran')){
       thisDat<-tit[tit$virus==virus&tit$dextran==treat&!tit$red&!is.na(tit$virus),]
       thisDat$logDil<--log(thisDat$dil)
-      withAs(zz=thisDat,plot(zz$dil,zz$n+1,xlab='Dilution',ylab='TZMBL count',las=1,log='yx',main=sprintf('%s %s',virus,treat),ylim=range(tit$n+1),xlim=c(1,max(tit$dil,na.rm=TRUE)),pch=21,bg=is.na(thisDat$filter)+1,cex=2))
+      withAs(zz=thisDat,plot(zz$dil,zz$n+1,xlab='Dilution',ylab='TZMBL count',las=1,log='yx',main=sprintf('%s %s',virus,treat),ylim=range(tit$n+1),xlim=c(1,max(tit$dil,na.rm=TRUE)),pch=21,bg=is.na(thisDat$filter)+1,cex=2,yaxt='n'))
+      logAxis(2,offset=1,axisMin=1,las=1)
+      axis(2,1,0,las=1)
       fakeDils=2^seq(0,16,length.out=1000)
       if(!is.null(ius)){
         preds<-ius[virus,treat]/fakeDils*100
