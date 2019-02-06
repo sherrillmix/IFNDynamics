@@ -5,18 +5,106 @@ options(mc.cores = parallel::detectCores())
 
 if(!exists('dat'))source('readNewData.R')
 
+ic50CodeSample<-'
+  data {
+    int<lower=0> nVirus;
+    int<lower=0> nPatient;
+    int<lower=0> nArt;
+    real ic50[nVirus];
+    int<lower=0,upper=nPatient> patients[nVirus];
+    int<lower=0> artIds[nVirus];
+    real<lower=0> days[nVirus];
+    real daysBeforeArt[nVirus];
+    real artStart[nArt];
+    real<lower=0> hasArt[nVirus];
+    int<lower=0> nSample;
+    int<lower=0,upper=nSample> sample[nVirus];
+  }
+  parameters {
+    vector[nPatient] acuteRaw;
+    vector[nPatient] nadirTimeRaw;
+    vector[nPatient] nadirChangeRaw;
+    //DEFSSUB
+    //vector[nArt] riseTimeRaw;
+    vector[nArt] riseChangeRaw;
+    real<lower=0> sigma;
+    real nadirTimeMean;
+    real<lower=0> nadirTimeSD;
+    real riseTimeMean;
+    real<lower=0> riseTimeSD;
+    real acuteMean;
+    real<lower=0> acuteSD;
+    real riseChangeMean;
+    real<lower=0> riseChangeSD;
+    real nadirChangeMean;
+    real<lower=0> nadirChangeSD;
+    real sampleNoiseRaw[nSample];
+    real<lower=0> sampleSD;
+  }
+  transformed parameters{
+    vector[nPatient] acute;
+    real expectedIC50[nVirus];
+    vector[nPatient] nadirTime;
+    vector[nPatient] nadirChange;
+    vector[nArt] riseChange;
+    vector[nArt] riseTime;
+    acute=acuteMean+acuteRaw*acuteSD;
+    nadirChange=nadirChangeMean+nadirChangeRaw*nadirChangeSD;
+    nadirTime=nadirTimeMean+nadirTimeRaw*nadirTimeSD;
+    //TRANSSUB
+    //riseTime=riseTimeMean+riseTimeRaw*riseTimeSD;
+    riseChange=riseChangeMean+riseChangeRaw*riseChangeSD;
+    for(ii in 1:nVirus){
+      expectedIC50[ii]=acute[patients[ii]]+sampleNoiseRaw[sample[ii]]*sampleSD;
+      if(days[ii]<exp(nadirTime[patients[ii]]))expectedIC50[ii]=expectedIC50[ii]+nadirChange[patients[ii]]*days[ii]/exp(nadirTime[patients[ii]]);
+      else{
+        expectedIC50[ii]=expectedIC50[ii]+nadirChange[patients[ii]];
+      }
+      if(hasArt[ii]){
+        if(daysBeforeArt[ii]<0){
+          expectedIC50[ii]=expectedIC50[ii]+riseChange[artIds[ii]];
+        }else{
+          if(daysBeforeArt[ii]<exp(riseTime[artIds[ii]]))expectedIC50[ii]=expectedIC50[ii]+riseChange[artIds[ii]]*(1-daysBeforeArt[ii]/exp(riseTime[artIds[ii]]));
+        }
+      }
+    }
+  }
+  model {
+    //MODELSUB
+    //riseTimeRaw~normal(0,1);
+    ic50~normal(expectedIC50,sigma);
+    sigma~gamma(1,.1);
+    nadirTimeSD~gamma(1,.1);
+    nadirTimeRaw~normal(0,1);
+    riseTimeSD~gamma(1,.1);
+    acuteSD~gamma(1,.1);
+    acuteRaw~normal(0,1);
+    nadirChangeSD~gamma(1,.1);
+    nadirChangeRaw~normal(0,1);
+    riseChangeSD~gamma(1,.1);
+    riseChangeRaw~normal(0,1);
+    riseChangeMean~normal(0,10);
+    nadirChangeMean~normal(0,10);
+    nadirTimeMean~normal(0,10);
+    riseTimeMean~normal(0,10);
+    sampleNoiseRaw~normal(0,1);
+    sampleSD~gamma(1,.1);
+  }
+'
 ic50Code<-'
   data {
     int<lower=0> nVirus;
     int<lower=0> nPatient;
     int<lower=0> nArt;
     real ic50[nVirus];
-    int<lower=0> patients[nVirus];
+    int<lower=0,upper=nPatient> patients[nVirus];
     int<lower=0> artIds[nVirus];
     real<lower=0> days[nVirus];
     real daysBeforeArt[nVirus];
     real artStart[nArt];
     real<lower=0> hasArt[nVirus];
+    int<lower=0> nSample;
+    int<lower=0,upper=nSample> sample[nVirus];
   }
   parameters {
     vector[nPatient] acuteRaw;
@@ -85,12 +173,15 @@ ic50Code<-'
     riseTimeMean~normal(0,10);
   }
 '
+
 #ic50Mod <- stan_model(model_code = ic50Code)
 
 bayesIC50<-function(mod,ic50,time,timePreArt,patient,chains=50,...){
   patientId<-structure(1:length(unique(patient)),.Names=sort(unique(patient)))
   artId<-structure(1:length(unique(patient[!is.na(timePreArt)])),.Names=sort(unique(patient[!is.na(timePreArt)])))
   artStart<-tapply(time+timePreArt,patient,unique)
+  sample<-paste(patient,time,sep='_')
+  sampleId<-structure(1:length(unique(sample)),.Names=unique(sample[order(patient,time)]))
   defs<-paste(sprintf('real<upper=%f> riseTimeRaw%d;',log(artStart[names(artId)]),1:length(artId)),collapse='\n')
   mods<-paste(sprintf('riseTimeRaw%d~normal(riseTimeMean,riseTimeSD);',1:length(artId)),collapse='\n')
   trans<-paste(sprintf('riseTime[%d]=riseTimeRaw%d;',1:length(artId),1:length(artId)),collapse='\n')
@@ -105,11 +196,13 @@ bayesIC50<-function(mod,ic50,time,timePreArt,patient,chains=50,...){
     artIds=ifelse(is.na(artId[patient]),9999,artId[patient]),
     days=time,
     artStart=artStart[names(artId)],
+    nSample=max(sampleId),
+    sample=sampleId[sample],
     daysBeforeArt=ifelse(is.na(timePreArt),9999,timePreArt),
     hasArt=!is.na(timePreArt)
   )
-  fit <- sampling(ic50Mod, data = dat, iter=3000, chains=chains,thin=3,control=list(adapt_delta=.9,max_treedepth=15),...)
-  return(list('fit'=fit,pats=patientId,arts=artId,code=filledCode,artStart=artStart))
+  fit <- sampling(ic50Mod, data = dat, iter=4000, chains=chains,thin=2,control=list(adapt_delta=.99,max_treedepth=15),...)
+  return(list('fit'=fit,pats=patientId,arts=artId,code=filledCode,artStart=artStart,sample=sampleId))
 }
 
 
@@ -181,15 +274,22 @@ plotSummaries<-function(fit){
   for(ii in names(vars)){
     nadirTimes<-c(colnames(mat)[grep(sprintf('%s\\[',ii),colnames(mat))],sprintf('%sMean',ii))
     nadMeans<-apply(mat[,nadirTimes],2,mean)
-    print(nadMeans)
     nadRanges<-apply(mat[,nadirTimes],2,quantile,c(.025,.975))
     if(grepl('rise',ii)) pats<-fit$arts
     else pats<-fit$pats
-    plot(1,1,type='n',xlim=exp(range(nadRanges))/7,ylim=c(1,length(nadirTimes)),xlab=vars[ii],yaxt='n',ylab='',log=ifelse(grepl('Change',ii),'x',''),xaxt=ifelse(grepl('Change',ii),'n','s'))
+    if(grepl('Change',ii)){
+      xlim<-exp(max(abs(nadRanges))*c(-1,1))
+      scale<-1
+    } else{
+      scale<-7
+      xlim<-exp(range(nadRanges))/scale
+    }
+    plot(1,1,type='n',xlim=xlim,ylim=c(1,length(nadirTimes)),xlab=vars[ii],yaxt='n',ylab='',log=ifelse(grepl('Change',ii),'x',''),xaxt=ifelse(grepl('Change',ii),'n','s'))
     if(grepl('Change',ii))logAxis(1)
     axis(2,c(pats,length(pats)+1),c(names(pats),'Overall'),las=1)
-    points(exp(nadMeans)/7,1:length(nadirTimes))
-    segments(exp(nadRanges[1,])/7,1:length(nadirTimes),exp(nadRanges[2,])/7,1:length(nadirTimes))
+    points(exp(nadMeans)/scale,1:length(nadirTimes))
+    segments(exp(nadRanges[1,])/scale,1:length(nadirTimes),exp(nadRanges[2,])/scale,1:length(nadirTimes))
+    if(grepl('Change',ii))abline(v=1,lty=2)
   }
 }
 pdf('out/bayesSummary.pdf',width=8,height=12)
