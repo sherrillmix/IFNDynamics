@@ -84,3 +84,40 @@ for(ii in list.files('trees/qvoa','ph$',full.name=TRUE)){
   #plot.phylo(tree,show.tip.label=FALSE,tip.color=timeCols[days])
 }
 dev.off()
+
+pdf('out/update_trees.pdf',width=3,height=6)
+for(ii in list.files('trees/updated','ph$',full.name=TRUE)){
+  message(ii)
+  tree<-read.tree(ii)
+  isHxb2<-grepl('HXB2',tree$tip.label)
+  if(any(isHxb2)){
+    message(ii,' has HXB2')
+    tree<-root(tree,outgroup=tree$tip.label[isHxb2],resolve.root=TRUE)
+    tree<-drop.tip(tree,tree$tip.label[isHxb2])
+  }
+  times<-sapply(strsplit(tree$tip.label,'\\.'),'[[',2)
+  datIds<-sapply(strsplit(tree$tip.label,'\\.'),function(xx){
+    if(!grepl('isol',xx[3])&&length(xx)!=3)return(NA) 
+    id<-which(dat$pat==xx[1]&as.numeric(dat$visit)==as.numeric(xx[2])&dat$virusId==xx[length(xx)])
+    if(length(id)!=1){
+      warning('Problem finding ',paste(xx,collapse='.'))
+      return(nrow(dat)+9999)
+    }
+    return(id)
+  })
+  datIds[is.na(datIds)]<-nrow(dat)+9999
+  ids<-sapply(strsplit(tree$tip.label,'\\.'),function(xx)paste(xx[1:2],collapse='.'))
+  days<-as.numeric(meta[ids,'DFOSx'])
+  subject<-dnar::mostAbundant(sapply(strsplit(tree$tip.label,'[-.]'),'[[',1))
+  timeCols<-rainbow.lab(length(unique(times)))
+  names(timeCols)<-unique(times)[order(as.numeric(gsub('[^0-9]','',unique(times))))]
+  #,layout='unrooted'
+  out<-ggtree(tree)+
+    geom_tippoint(color=timeCols[times],show.legend=TRUE,size=1.5)+
+    ggtitle(unique(subject))+
+    theme(plot.title = element_text(hjust = .5,size=12,margin=margin(b=-10,unit='pt')))+
+    geom_treescale(offset=-5,fontsize=3,x=.01,y=-8)+
+    scale_color_manual('',breaks=names(timeCols),values=timeCols)
+  print(out)
+}
+dev.off()
