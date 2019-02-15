@@ -105,7 +105,7 @@ plotVlCd4<-function(thisMeta,main,xlim,cd4Lim,vlLim,xAxis=TRUE,vlAxis=TRUE,cd4Ax
   reduceDat<-thisDat[c(TRUE,!sapply(2:(nrow(thisDat)-1),function(zz)all(thisDat[zz+-1:1,'vl']<=50)),TRUE),]
   #connects two <50 or big gap to <50
   isDashed<-(reduceDat$vl[-nrow(reduceDat)]<=lowerP24Limit&reduceDat$vl[-1]<=lowerP24Limit)|(reduceDat$vl[-1]<=lowerP24Limit&reduceDat$time[-1]-reduceDat$time[-nrow(reduceDat)]>120)
-  segments(reduceDat$time[-nrow(reduceDat)]/7,reduceDat$vl[-nrow(reduceDat)],reduceDat$time[-1]/7,reduceDat$vl[-1],col='red',lwd=2,lty=ifelse(isDashed,2,1))
+  segments(reduceDat$time[-nrow(reduceDat)]/7,reduceDat$vl[-nrow(reduceDat)],reduceDat$time[-1]/7,reduceDat$vl[-1],col='red',lwd=ifelse(isDashed,1.5,2),lty=ifelse(isDashed,3,1))
   if(xAxis)axis(1,pretty(xlim),cex.axis=1.2)
   if(vlAxis)logAxis(2,mgp=c(3,1,0),las=1,col.axis='red',cex.axis=1.3)
 }
@@ -128,8 +128,17 @@ pdf('out/subjects_condense_new.pdf',width=4,height=8)
       rect(artDfosx[ii]/7,10^par('usr')[3],thisLast/7,10^par('usr')[4],col='#00000022',border=NA)
       #text(mean(c(artDfosx[ii]/7,par('usr')[2])),10^(par('usr')[4]-diff(par('usr')[3:4])*.3),'ART treatment',xpd=NA)
     }
-    abline(v=thisLast/7,lty=2)
-  }
+    if(!is.na(thisSuper<-founders[ii,'superTime'])){
+      superTime<-compiledMeta[compiledMeta$mm==ii&compiledMeta$time==thisSuper,]
+      baseY<-20
+      segments(rep(thisSuper/7,3)+c(-9,0,9),rep(baseY,3)*c(6,2,6),rep(thisSuper/7,3)+c(0,9,-9),rep(baseY,3)*c(2,6,6),lwd=1.2)
+    }
+    if(nrow(thisVoa<-dat[dat$pat==ii&dat$qvoa,])>0){
+      baseY<-6e5 #superTime$vl*3
+      for(jj in 1:nrow(thisVoa)){
+        segments(rep(thisVoa$time[jj]/7,3),rep(baseY,3),rep(thisVoa$time[jj]/7,3)+c(-7,0,7),rep(baseY,3)*c(2,6,2),lwd=1.2,col='purple')
+      }
+    }
 dev.off()
 
 
