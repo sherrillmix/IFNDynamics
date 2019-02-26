@@ -1,9 +1,10 @@
 library(dnar)
 out<-read.csv('combined/combinedIC50.csv.gz',stringsAsFactors=FALSE)
-isCompleteEnv<-regexpr('[^-]-*$',out$Env)>regexpr('[^-]-*$',out$Env[out$id=='B.FR.83.HXB2_LAI_IIIB_BRU_K03455'])-50
+out$isRef<-out$id=='B.FR.83.HXB2_LAI_IIIB_BRU_K03455'
+isCompleteEnv<-regexpr('[^-]-*$',out$Env)>regexpr('[^-]-*$',out$Env[out$isRef])-50
 envCheck<-out[isCompleteEnv&!is.na(out$alphaIc50),]
 envCheck$cg<-sapply(gregexpr('CG',degap(envCheck$Env)),length)
-envCheck$lm<-substring(envCheck$Env,noGap2Gap(out$Env[out$id=='B.FR.83.HXB2_LAI_IIIB_BRU_K03455'],87),noGap2Gap(out$Env[out$id=='B.FR.83.HXB2_LAI_IIIB_BRU_K03455'],1086))
+envCheck$lm<-substring(envCheck$Env,noGap2Gap(out$Env[out$isRef],87),noGap2Gap(out$Env[out$isRef],1086))
 envCheck$lmCg<-sapply(gregexpr('CG',degap(envCheck$lm)),length)
 uniqPair<-sort(unique(envCheck$pair))
 pdf('env_cg_vs_ic50.pdf',width=10,height=10)
@@ -46,6 +47,52 @@ dev.off()
 
 
 library(dnar)
-arupPos<-noGap2Gap(out$EnvAA[grep('HXB2',out$id)],c(149,177))
-lapply(arupPos,function(xx)table(substring(out$EnvAA,xx,xx)))
+gappedPos<-c(150,177,178,447)+c(1,1,1,1)
+ungappedPos<-gap2NoGap(out$EnvAA[out$isRef],gappedPos)
+lapply(ungappedPos,function(xx)table(substring(out$EnvAA,xx,xx)))
+plotOut<-out
+plotOut$niceLab<-sprintf('%s%s',ifelse(plotOut$isRef,'HXB2',plotOut$patID),ifelse(grepl('^[0-9]+$',plotOut$pair)&!is.na(plotOut$pair),sprintf(' (%s %s)',ifelse(plotOut$donor,'D','R'),plotOut$pair),''))
+patOrder<-unique(plotOut$niceLab[order(plotOut$isRef,plotOut$pair,plotOut$donor,plotOut$niceLab)])
+plotOut$groupLabel<-factor(plotOut$niceLab,levels=c(patOrder))
+pdf('out/envAA.pdf',height=10,width=10)
+par(mar=c(3.5,3,2,6))
+dnaplotr::plotAA(rep(plotOut$EnvAA,ifelse(plotOut$isRef,10,1)),refSeq=plotOut$EnvAA[plotOut$isRef],groups=rep(plotOut$groupLabel,ifelse(plotOut$isRef,10,1)),xlab='HXB2 Env position')
+axis(3,151,150,cex.axis=.8)
+axis(3,178,177,cex.axis=.8)
+axis(3,448,447,cex.axis=.8)
+#dnaplotr::plotAA(rep(substring(plotOut$EnvAA,1,200),ifelse(plotOut$isRef,10,1)),refSeq=plotOut$EnvAA[plotOut$isRef],groups=rep(plotOut$groupLabel,ifelse(plotOut$isRef,10,1)))
+#axis(3,c(150,177))
+xStart<-gap2NoGap(out$EnvAA[out$isRef],125)
+dnaplotr::plotAA(rep(substring(plotOut$EnvAA,125,202),ifelse(plotOut$isRef,10,1)),refSeq=substring(plotOut$EnvAA[plotOut$isRef],125,202),groups=rep(plotOut$groupLabel,ifelse(plotOut$isRef,10,1)),xStart=xStart,xlab='HXB2 Env position')
+axis(3,c(150,177)+1-125+xStart,as.character(c(150,177)))
+xStart<-gap2NoGap(out$EnvAA[out$isRef],400)
+dnaplotr::plotAA(rep(substring(plotOut$EnvAA,400,500),ifelse(plotOut$isRef,10,1)),refSeq=substring(plotOut$EnvAA[plotOut$isRef],400,500),groups=rep(plotOut$groupLabel,ifelse(plotOut$isRef,10,1)),xStart=xStart,xlab='HXB2 Env position')
+axis(3,c(447+1)-400+xStart,'447')
+dev.off()
 
+pdf('out/position_vs_ic50.pdf',width=10)
+for(ii in gappedPos){
+  xx<-out[!is.na(out$alphaIc50),]
+  aas<-substring(xx$EnvAA,ii,ii)
+  aaPos<-structure(1:length(unique(aas)),.Names=sort(unique(aas)))
+  xOffset<-vipor::offsetX(log(xx$alphaIc50),aas,width=.35)
+  pairCols<-structure(rainbow.lab(length(unique(xx$pair)),alpha=.5),.Names=sort(unique(xx$pair)))
+  plot(aaPos[aas]+xOffset,xx$alphaIc50,log='y',xaxt='n',main=sprintf('Position %d (HXB2 %d)',ii-1,ungappedPos[gappedPos==ii]),xlab='',ylab='IFNa2 IC50',yaxt='n',xlim=c(.5,max(aaPos)+.5),xaxs='i',pch=ifelse(out$study=='gondim',21,22),bg=pairCols[xx$pair])
+  axis(1,aaPos,names(aaPos))
+  logAxis(las=1)
+  abline(v=.5+0:100,col='#00000033')
+  legend(grconvertX(0.01,'device','user'),grconvertY(0.01,'device','user'),names(pairCols),pch=ifelse(sapply(names(pairCols),function(yy)xx[xx$pair==yy,'study'][1]=='gondim'),21,22),pt.bg=pairCols,xpd=NA,xjust=0,yjust=0,ncol=6,bty='n')
+}
+dev.off()
+
+marvinTargets<-c('NGKDSAIRLT','LTGRANE','RDNSTAG');shilpaTargets<-c('GKAFLSNW','TSDEGNVPLC','ARMDNTPCKV')
+test<-lapply(1:3,function(ii){
+  sapply(1:600,function(jj){
+    thisAA<-substring(out$EnvAA,jj,jj)
+    marvin<-all(sapply(strsplit(marvinTargets[ii],'')[[1]],function(xx)any(grepl(xx,thisAA[out$study=='gondim']))))
+    shilpa<-all(sapply(strsplit(shilpaTargets[ii],'')[[1]],function(xx)any(grepl(xx,thisAA[out$study=='iyer']))))
+    return(c(marvin,shilpa))
+  })
+})
+sapply(test,which,arr.ind=TRUE)
+gap2NoGap(out$EnvAA[out$isRef],c(151,178,179))
