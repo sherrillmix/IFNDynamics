@@ -87,6 +87,25 @@ rownames(dat)<-dat$id
 weau<-dat[dat$pat=='WEAU',]
 #dat<-dat[dat$pat!='WEAU',]
 
+infect<-read.csv('out/ius.csv',stringsAsFactors=FALSE)
+infect$id[infect$id=='VOA_MM23.18.1A1']<-'MM23.18.1A1.VOA'
+infect$id[infect$id=='MM33.13 Bulk-I']<-'MM33.13.1.bulk'
+infect$id[infect$id=='MM33.14_Bulk-I']<-'MM33.14.1A1.bulk'
+infect$id[infect$id=='MM33.17_Bulk-I']<-'MM33.17.1A1.bulk'
+infect$id<-sub(' bulk','.bulk',infect$id)
+if(any(!infect$id %in% dat$id))stop('Problem associating infectivity with isolates')
+dat$infectivityMedia<-dat$infectivityDextran<-NA
+dat[infect$id,'infectivityMedia']<-infect$media
+dat[infect$id,'infectivityDextran']<-infect$dextran
+
+replicative<-read.csv('out/weau3_ic50.csv',row.names=1)
+replicative<-replicative[grep('Alpha|alpha',rownames(replicative)),]
+replicative$id<-sub('(UK[0-9]+|EJ[0-9]+|WEAU)\\.([0-9])[._-]','\\1.0\\2.',sub(' .*$','',rownames(replicative)))
+for(ii in names(mmLookup))replicative$id<-sub(sprintf('%s|%s',ii,sub('EJ','UK',ii)),mmLookup[ii],replicative$id)
+replicative$id<-sub('[._-]P','.',replicative$id)
+replicative$id<-sprintf('%s%s',replicative$id,ifelse(grepl('WEAU|MM55|MM62|MM15',replicative$id),'.bulk',''))
+inDat<-replicative$id %in% dat$id
+dat[replicative$id[inDat],'replication']<-replicative$replication[inDat]
 
 #withAs(xx=dat[dat$time>35*7,],plot(ave(xx$vl,xx$pat,FUN=function(xx)(xx-min(xx,na.rm=TRUE))/max(xx-min(xx,na.rm=TRUE),na.rm=TRUE)),xx$ic50,bg=patCols[xx$pat],log='y',pch=21,cex=2))
 
