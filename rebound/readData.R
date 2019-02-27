@@ -62,7 +62,7 @@ newRebound$type<-ifelse(grepl('Rebound|S-22|BEAT',newRebound$virus),'Rebound',if
 newRebound$label<-sprintf('%s %s',newRebound$type,newRebound$pat)
 newRebound$source<-'newRebound'
 newRebound[,colnames(dat)[!colnames(dat) %in% colnames(newRebound)]]<-NA
-
+newRebound<-newRebound[!grepl('MM[0-9]+\\.',rownames(newRebound)),]
 
 combo<-rbind(dat,mm[,colnames(dat)],pair[,colnames(dat)],mont[,colnames(dat)],newRebound[,colnames(dat)])
 combo<-combo[combo$class!='Control',]
@@ -70,7 +70,7 @@ combo$study<-ifelse(grepl('^A[0-9]+$',combo$pat),'VRC01',
   ifelse(grepl('^B[0-9]+$',combo$pat),'Reservoir',
     ifelse(grepl('^BEAT-',combo$pat),'BEAT',
       ifelse(grepl('^92[0-9][0-9]|60[0-9]',combo$pat),'3BNC117/10-1074',
-        ifelse(grepl('^MM[0-9]+',combo$pat),'MM',
+        ifelse(grepl('^MM[0-9]+|WEAU',combo$pat),'MM',
           ifelse(grepl('^S-[0-9]+',combo$pat),'ATI',
             ifelse(grepl('^Donor|Recipient',combo$pat),'Transmission',
                 'UNKNOWN'

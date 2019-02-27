@@ -67,6 +67,7 @@ newRebound$source<-'newRebound'
 newRebound$beta<-newRebound$ic50
 newRebound<-newRebound[!is.na(newRebound$ic50),]
 newRebound[,colnames(beta)[!colnames(beta) %in% colnames(newRebound)]]<-NA
+newRebound<-newRebound[!grepl('MM[0-9]+\\.',rownames(newRebound)),]
 
 combo<-rbind(beta,mm[,colnames(beta)],pair[,colnames(beta)],mont[,colnames(beta)],newRebound[,colnames(beta)])
 combo<-combo[combo$class!='Control',]
@@ -74,7 +75,7 @@ combo$study<-ifelse(grepl('^A[0-9]+$',combo$pat),'VRC01',
   ifelse(grepl('^B[0-9]+$',combo$pat),'Reservoir',
     ifelse(grepl('^BEAT-',combo$pat),'BEAT',
       ifelse(grepl('^92[0-9][0-9]|60[0-9]',combo$pat),'3BNC117/10-1074',
-        ifelse(grepl('^MM[0-9]+',combo$pat),'MM',
+        ifelse(grepl('^MM[0-9]+|WEAU',combo$pat),'MM',
           ifelse(grepl('^S-[0-9]+',combo$pat),'ATI',
             ifelse(grepl('^Donor|Recipient',combo$pat),'Transmission',
               'UNKNOWN'
