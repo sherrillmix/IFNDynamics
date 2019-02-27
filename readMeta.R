@@ -273,8 +273,6 @@ colnames(customCols)<-c('sample','color')
 customCols$name<-fixDecimals(sub(' ?\\(.*$','',customCols$sample))
 rownames(customCols)<-customCols$name
 
-founders<-read.csv('founder.csv',stringsAsFactors=FALSE,row.names=1)
-
 
 
 wb <- loadWorkbook("meta/EJ MM CD4 VL pre and post ART 08June2018_sasm.xlsx")
@@ -333,6 +331,10 @@ meta$artDay<-c(artDfosx,'WEAU'=391)[meta$mm]
 meta$daysBeforeArt<-meta$artDay-as.numeric(meta$DFOSx)
 compiledMeta$artDay<-c(artDfosx,'WEAU'=391)[compiledMeta$mm]
 compiledMeta$daysBeforeArt<-compiledMeta$artDay-as.numeric(compiledMeta$DFOSx)
+
+founders<-read.csv('founder.csv',stringsAsFactors=FALSE,row.names=1)
+superDate<-ymd(founders$superDate)
+founders$superTime<-superDate-ymd(startDates[rownames(founders)])
 
 
 if(FALSE){
