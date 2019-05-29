@@ -1,6 +1,6 @@
 if(!exists('mmLookup'))source('readNewData.R')
 
-hxb2<-read.fa('work/hxb2.fa')$seq
+hxb2<-dnar::read.fa('work/hxb2.fa')$seq
 cohortRegex<-paste(c(sub('EJ','UK',ejLookup),ejLookup,mmLookup),collapse='|')
 seqs<-dnar::readFaDir('seqs')
 corrections<-dnar::readFaDir('seqs/correct')
@@ -10,6 +10,9 @@ if(any(!corrections$name %in% seqs$name))stop('Unmatched correction name')
 corrections[seqs$name[seqs$name %in% corrections$name],'rev']<-levenR::leven(seqs[seqs$name %in% corrections$name,'seq'],dnar::revComp(corrections[seqs$name[seqs$name %in% corrections$name],'seq']),oneToOne=TRUE,substring2=TRUE)<levenR::leven(seqs[seqs$name %in% corrections$name,'seq'],corrections[seqs$name[seqs$name %in% corrections$name],'seq'],oneToOne=TRUE,substring2=TRUE)
 corrections$seq[corrections$rev]<-dnar::revComp(corrections$seq[corrections$rev])
 seqs[seqs$name %in% corrections$name,'seq']<-corrections[seqs$name[seqs$name %in% corrections$name],'seq'] 
+deletions<-read.csv('seqs/correct/delete.csv',stringsAsFactors=FALSE)$delete
+if(any(!deletions %in% seqs$name))stop('Deletion not found')
+seqs<-seqs[!seqs$name %in% deletions,]
 sampleRegex<-'^.*(UK|MM)([0-9]+)[.-]([0-9]+).*$'
 if(any(!grepl(sampleRegex,seqs$name)))stop('UK/MM not found in all seqs')
 seqs$inCohort<-grepl(cohortRegex,seqs$name)
@@ -42,7 +45,7 @@ if(any(!grepl('VOA',inCohort[inCohort$voa,'isolate'])))stop('VOA not matched wit
 pruned<-c('MM40.07.11C4','MM33.17.1D5') 
 inCohort<-inCohort[!inCohort$internal %in% pruned,]
 if(any(is.na(inCohort$isolate)&inCohort$hasId&!inCohort$internal %in% pruned))stop('Unmatched ID')
-if(any(dat$Sequence!='' & !dat$id %in% inCohort$isolate))stop('Problem finding known sequence in all')
+#if(any(dat$Sequence!='' & !dat$id %in% inCohort$isolate))stop('Problem finding known sequence in all')
 if(any(!apply(cbind(inCohort[,c('voa','sga','pbmc')],!is.na(inCohort$isolate)),1,any)))stop('Unassigned sequence')
 if(any(inCohort$pbmc & inCohort$sga))stop('Overlapping pbmc and sga')
 if(any(!is.na(inCohort$isolate) & inCohort$sga))stop('Overlapping isolate and sga')
@@ -56,7 +59,7 @@ write.fa(inCohort$newName,inCohort$seq,'out/mmLongitudinalSequences.fa')
 
 #align on LANL with HMM
 refName<-'B.FR.83.HXB2_LAI_IIIB_BRU_K03455'
-aligned<-read.fa('work/alignHmm_2019-04-23/AlignSeq.nt.fasta.gz')
+aligned<-read.fa('work/alignHmm_2019-05-07/AlignSeq.nt.fasta.gz')
 aligned$full5<-nchar(degap(substring(aligned$seq,2000,4000)))>1000
 aligned$five<-nchar(degap(substring(aligned$seq,5000,6000)))>500
 aligned$env<-nchar(degap(substring(aligned$seq,7000,8000)))>500
@@ -153,3 +156,73 @@ dev.off()
 
 
 any(!unlist(bad) %in% zz$name & !grepl('SGS',unlist(bad)))
+xx<-dnar::read.fa('tmpMM55/Consensus sequences cleaned.fasta')
+#xx<-xx[nchar(gsub('[ACTGN]','',xx$seq))<100,]
+mm55<-seqs[grep('MM55',seqs$name),]
+dists<-levenR::leven(xx$seq,mm55$seq,nThreads=20)
+write.fa(c(seqs[grep('MM55',seqs$name),'name'],xx$name),c(seqs[grep('MM55',seqs$seq),'name'],xx$seq),'tmpMM55/combined.fa')
+al<-levenR::levenAlign(c(xx$seq,mm55$seq),hxb2,substring2=TRUE)
+  #read.fa('tmpMM55/align20190507/AlignSeq.nt.fasta')
+pdf('test.pdf');dnaplotr::plotDNA(al[[2]]);dev.off()
+cuts<-substring(al[[2]],6100,8500)
+splits<-dnar::seqSplit(cuts)
+times<-gsub('MM55\\.([0-9]+).*','\\1',mm55$name)
+xx$time<-gsub('MM55-([0-9]+)-.*','\\1',xx$name)
+dists<-levenR::leven(dnar::degap(cuts[1:nrow(xx)]),dnar::degap(cuts[nrow(xx)+1:nrow(mm55)]),nThreads=50)
+hams<-do.call(rbind,lapply(1:nrow(xx),function(ii){
+  good<-splits[ii,] %in% c('A','C','T','G')
+  hams<-sapply(nrow(xx)+1:nrow(mm55),function(jj)sum(splits[ii,good]!=splits[jj,good]))
+  return(hams)
+}))
+out<-t(apply(hams,1,function(xx)tapply(xx,times,min)))
+rownames(out)<-sub('MM55-([^-]+-[^-]+)-.*','\\1',xx$name)
+
+hams2<-do.call(rbind,lapply(1:nrow(xx),function(ii){
+  hams<-sapply(1:nrow(xx),function(jj){
+    good<-splits[ii,] %in% c('A','C','T','G')&splits[jj,] %in% c('A','C','T','G')
+    sum(splits[ii,good]!=splits[jj,good])
+  })
+  return(hams)
+}))
+
+data.frame('id'=sub('MM55-([^-]+-[^-]+)-.*','\\1',xx$name),'ambig'=nchar(gsub('[ACGTN-]+','',xx$seq)))
+
+env<-read.fa('work/alignHmm_2019-05-07/Env.nt.fasta.gz')
+hxEnv<-env[1,]
+env<-env[-1,]
+env$mm<-sapply(strsplit(env$name,'\\.'),'[',1)
+env$time<-as.numeric(sapply(strsplit(env$name,'\\.'),'[',4))
+cols<-c(A = "green",T = "red", C = "blue", G = "yellow", `-` = "grey")
+pdf('out/highlight.pdf',height=10,width=8)
+  par(mar=c(3,3,1,.1))
+  for(ii in sort(unique(env$mm))){
+    for(early in c(TRUE,FALSE)){
+      thisDat<-env[env$mm==ii&nchar(dnar::degap(env$seq))>500,]
+      if(early)thisDat<-thisDat[thisDat$time<100,]
+      splits<-do.call(rbind,strsplit(thisDat[,'seq'],''))
+      minTime<-min(thisDat$time)
+      consensus<-apply(splits[thisDat$time<=minTime+10,],2,mostAbundant)
+      dists<-outer(1:nrow(thisDat),1:nrow(thisDat),function(xx,yy)mapply(function(xxx,yyy)sum(splits[xxx,]!=splits[yyy,]),xx,yy))
+      consDist<-apply(splits,1,function(xx)sum(xx!=consensus))
+      clOrder<-sapply(1:nrow(thisDat),function(xx)which(hclust(as.dist(dists))$order==xx))
+      thisDat<-thisDat[order(thisDat$time,consDist!=0,-clOrder),]
+      splits<-do.call(rbind,strsplit(thisDat[,'seq'],''))
+      plot(1,1,type='n',ylim=c(nrow(thisDat),1)+c(1,-1),xlim=c(1,ncol(splits)),bty='n',yaxt='n',xaxt='n',main=ii,ylab='',xlab='',yaxs='i',xaxs='i')
+      abline(h=1:nrow(thisDat),col='#00000033')
+      diffs<-t(apply(splits,1,function(xx)ifelse(xx!=consensus,xx,NA)))
+      for(jj in 1:nrow(diffs)){
+        if(any(selector<-!is.na(diffs[jj,]))) segments(which(selector),rep(jj,sum(selector))-.4,which(selector),rep(jj,sum(selector))+.4,col=cols[diffs[jj,selector]],pch='|')
+      }
+      timePos<-tapply(1:nrow(thisDat),thisDat$time,mean)
+      axis(2,timePos,names(timePos),las=1,lwd=0,mgp=c(3,.2,0))
+      xpos<-dnar::convertLineToUser(.1,2)
+      segments(xpos,tapply(1:nrow(thisDat),thisDat$time,min),xpos,tapply(1:nrow(thisDat),thisDat$time,max),xpd=NA)
+      xpos<-dnar::convertLineToUser(.1,4)
+      segments(xpos,tapply(1:nrow(thisDat),thisDat$time,min),xpos,tapply(1:nrow(thisDat),thisDat$time,max),xpd=NA)
+      xLabs<-c(1,seq(0,nchar(dnar::degap(hxEnv$seq)),250))
+      axis(1,dnar::noGap2Gap(hxEnv$seq,xLabs),xLabs)
+      mtext('HXB2 env position (nt)',1,line=2)
+      mtext('Time after onset of symptoms',1,line=2)
+    }
+  }
+dev.off()
