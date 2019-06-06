@@ -307,17 +307,31 @@ compiledMeta$time<-compiledMeta$rDate-as.Date(startDates[compiledMeta$mm])
 if(any(abs(compiledMeta$time-compiledMeta$DFOSx)>1))warning('Disagreement in dfosx')
 
 
+#2nd column likely gives day from exposure
+weauSymptomDate<-ymd('1990-06-04')
 weauMeta<-read.csv('meta/weau.csv',stringsAsFactors=FALSE)
-weauMeta$cd4<-as.numeric(ifelse(weauMeta$CD4=='nd',NA,weauMeta$CD4))
-weauMeta$vl<-as.numeric(ifelse(weauMeta$VL=='nd',NA,weauMeta$VL))
-weauMeta$time<-weauMeta$Time
-weauMeta$ID<-weauMeta$id<-weauMeta$visit<-1:nrow(weauMeta)
 weauMeta$origDate<-weauMeta$date<-weauMeta$Date
 weauMeta$rDate<-dmy(weauMeta$Date)
-weauMeta$DFOSx<-weauMeta$Time
+weauMeta$ID<-weauMeta$id<-weauMeta$visit<-1:nrow(weauMeta)
+weauMeta$time<-weauMeta$rDate-weauSymptomDate
+weauAdditional<-read.csv('meta/additionalWEAUMeta.csv')
+weauAdditional$origDate<-weauAdditional$date<-weauAdditional$Date
+weauAdditional$rDate<-mdy(weauAdditional$Date)
+weauAdditional$ID<-weauAdditional$id<-weauAdditional$visit<-nrow(weauMeta)+1:nrow(weauAdditional)
+weauAdditional$VL<-NA
+weauAdditional$Time<-NA
+weauAdditional$Available<-NA
+weauAdditional$time<-weauAdditional$rDate-weauSymptomDate
+weauAdditional<-weauAdditional[weauAdditional$time>100,]
+weauMeta<-rbind(weauMeta,weauAdditional[,colnames(weauMeta)])
+weauMeta$cd4<-as.numeric(ifelse(weauMeta$CD4=='nd',NA,weauMeta$CD4))
+weauMeta$vl<-as.numeric(ifelse(weauMeta$VL=='nd',NA,weauMeta$VL))
+weauMeta$DFOSx<-weauMeta$time
 weauMeta$ART<-weauMeta$Notes<-NA
 weauMeta$pat<-weauMeta$mm<-weauMeta$ej<-'WEAU'
 rownames(weauMeta)<-weauMeta$Time.Points<-sprintf('WEAU.%02d',weauMeta$id)
+weauMeta<-weauMeta[order(weauMeta$time),]
+
 
 compiledMeta<-rbind(compiledMeta,weauMeta[,colnames(compiledMeta)])
 meta<-rbind(meta,weauMeta[,colnames(meta)])
@@ -336,6 +350,16 @@ founders<-read.csv('founder.csv',stringsAsFactors=FALSE,row.names=1)
 superDate<-ymd(founders$superDate)
 founders$superTime<-superDate-ymd(startDates[rownames(founders)])
 
+less350Time<-by(compiledMeta[!is.na(compiledMeta$cd4),],compiledMeta[!is.na(compiledMeta$cd4),'mm'],function(xx){
+  lastInfect<-ifelse(is.na(founders[xx$mm[1],'superTime']),1,founders[xx$mm[1],'superTime'])
+  xx$previousLess<-c(Inf,xx$cd4[-nrow(xx)])<350
+  out<-min(c(xx[xx$time>lastInfect+180&xx$cd4<350&xx$previousLess,'time'],Inf))
+  if(out==Inf)out<-NA
+  if(is.na(out)&!is.na(artDfosx[xx$mm[1]]))out<-artDfosx[xx$mm[1]]
+  return(out)
+})
+compiledMeta$day350<-less350Time[compiledMeta$mm]
+compiledMeta$daysBefore350<-compiledMeta$day350-as.numeric(compiledMeta$DFOSx)
 
 if(FALSE){
 comboMeta[which(!paste(comboMeta$mm,comboMeta$rDate) %in% paste(compiledMeta$mm,compiledMeta$rDate) & !is.na(comboMeta$mm)&(!is.na(comboMeta$vl)|!is.na(comboMeta$cd4))),c('mm','date','rDate','time','vl','cd4','source')]
