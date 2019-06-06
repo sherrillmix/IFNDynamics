@@ -1,6 +1,8 @@
 library(ggtree)
 library(phangorn)
 library(dnar)
+library(ape)
+library(grid)
 
 if(!exists('meta'))source('readNewData.R')
 
@@ -50,8 +52,6 @@ for(ii in list.files('trees','ph$',full.name=TRUE)){
 dev.off()
 
 
-library(ape)
-library(grid)
 pdf('out/voa_trees.pdf',width=3,height=6)
 for(ii in list.files('trees/qvoa','ph$',full.name=TRUE)){
   message(ii)
@@ -85,8 +85,8 @@ for(ii in list.files('trees/qvoa','ph$',full.name=TRUE)){
 }
 dev.off()
 
-pdf('out/update_trees.pdf',width=3,height=6)
-for(ii in list.files('trees/updated','ph$',full.name=TRUE)){
+pdf('out/update_trees.pdf',width=2.,height=6)
+for(ii in list.files('trees/updated2','ph$',full.name=TRUE)){
   message(ii)
   tree<-read.tree(ii)
   isHxb2<-grepl('HXB2',tree$tip.label)
@@ -96,28 +96,125 @@ for(ii in list.files('trees/updated','ph$',full.name=TRUE)){
     tree<-drop.tip(tree,tree$tip.label[isHxb2])
   }
   times<-sapply(strsplit(tree$tip.label,'\\.'),'[[',2)
-  datIds<-sapply(strsplit(tree$tip.label,'\\.'),function(xx){
-    if(!grepl('isol',xx[3])&&length(xx)!=3)return(NA) 
-    id<-which(dat$pat==xx[1]&as.numeric(dat$visit)==as.numeric(xx[2])&dat$virusId==xx[length(xx)])
-    if(length(id)!=1){
-      warning('Problem finding ',paste(xx,collapse='.'))
-      return(nrow(dat)+9999)
-    }
-    return(id)
-  })
-  datIds[is.na(datIds)]<-nrow(dat)+9999
-  ids<-sapply(strsplit(tree$tip.label,'\\.'),function(xx)paste(xx[1:2],collapse='.'))
-  days<-as.numeric(meta[ids,'DFOSx'])
+  #datIds<-sapply(strsplit(tree$tip.label,'\\.'),function(xx){
+    #if(!grepl('isol',xx[3])&&length(xx)!=3)return(NA) 
+    #id<-which(dat$pat==xx[1]&as.numeric(dat$visit)==as.numeric(xx[2])&dat$virusId==xx[length(xx)])
+    ##if(length(id)!=1){
+      #warning('Problem finding ',paste(xx,collapse='.'))
+      #return(nrow(dat)+9999)
+    #}
+    #return(id)
+  #})
+  #datIds[is.na(datIds)]<-nrow(dat)+9999
+  ids<-sub('^(MM[0-9]+)[.-]([0-9]+)-.*','\\1.\\2',sub('^(Marvin_)?(VOA_)?','',sapply(strsplit(tree$tip.label,'\\.'),function(xx)paste(xx[1:2],collapse='.'))))
+  #days<-as.numeric(meta[ids,'DFOSx'])
+  days<-sapply(ids,function(xx)ifelse(any(compiledMeta$sample==xx),
+      compiledMeta[compiledMeta$sample==xx,'time'],
+      ifelse(grepl('MM[0-9]+[.-]d([0-9]+)$',xx),as.numeric(sub('MM[0-9]+[.-]d([0-9]+)$','\\1',xx)),NA)
+  ))
+  if(any(is.na(days))){
+    warning('Removing tips ',paste(tree$tip.label[is.na(days)],collapse=', '))
+    tree<-drop.tip(tree,tree$tip.label[is.na(days)])
+    times<-times[!is.na(days)]
+    days<-days[!is.na(days)]
+  }
+  isVoa<-grepl('VOA',tree$tip.label)
+  isPbmc<-grepl('pbmc|PBMC',tree$tip.label)
+  fakeDays<-min(c(0,days)):max(days[!isVoa&!isPbmc])
+  cols<-rainbow.lab(length(fakeDays))
+  timeCols<-cols[fakeDays %in% days[!isVoa&!isPbmc]]
+  names(timeCols)<-sort(unique(days[!isVoa&!isPbmc]))
+  voaDays<-unique(days[isVoa])
+  pbmcDays<-unique(days[isPbmc])
+  timeCols<-c(timeCols,c('voa'='purple','pbmc'='grey'))
+  times<-as.character(ifelse(isPbmc,'pbmc',ifelse(isVoa,'voa',days)))
   subject<-dnar::mostAbundant(sapply(strsplit(tree$tip.label,'[-.]'),'[[',1))
-  timeCols<-rainbow.lab(length(unique(times)))
-  names(timeCols)<-unique(times)[order(as.numeric(gsub('[^0-9]','',unique(times))))]
+  #timeCols<-rainbow.lab(length(unique(times)))
+  #names(timeCols)<-unique(times)[order(as.numeric(gsub('[^0-9]','',unique(times))))]
   #,layout='unrooted'
+  firsts<-which(days==min(days))
+  firsts<-firsts[order(!grepl('consensus',tree$tip.label[firsts]),!grepl('[Vv]1',tree$tip.label[firsts]))]
+  print(tree$tip.label[firsts])
+  tree<-root(tree,tree$tip.label[firsts[1]])
   out<-ggtree(tree)+
-    geom_tippoint(color=timeCols[times],show.legend=TRUE,size=1.5)+
+    #geom_tippoint(color=timeCols[times],show.legend=TRUE,size=5/log(length(days)))+
+    geom_tiplab(color=timeCols[times],size=7.5,label='-',vjust=.35)+
+    geom_tiplab(color=timeCols[times],size=7.5,label=ifelse(times=='voa','  *',NA),vjust=.8)+
     ggtitle(unique(subject))+
-    theme(plot.title = element_text(hjust = .5,size=12,margin=margin(b=-10,unit='pt')))+
-    geom_treescale(offset=-5,fontsize=3,x=.01,y=-8)+
-    scale_color_manual('',breaks=names(timeCols),values=timeCols)
+    theme(plot.title = element_text(hjust = .5,size=12,margin=margin(b=-10,unit='pt')),plot.margin=margin(2,0,20,0))+
+    geom_treescale(offset=-length(days)/90,fontsize=2.5,x=.01,y=0)+
+    scale_x_continuous(limits = c(0,max(node.depth.edgelength(tree))*1.2))
+    #scale_color_manual('',breaks=names(timeCols),values=timeCols)
+  vp<-viewport()
+  par(mar=c(0,0,0,0))
+  plot(1,1,type='n',xaxt='n',yaxt='n',xlab='',ylab='',bty='n')
+  print(out,vp=vp)
+  ticks<-pretty(fakeDays,n=3)
+  par(lheight=.75)
+  insetScale(c(fakeDays-.5,tail(fakeDays,1)+.5),cols,main='Days after onset\nof symptoms',insetPos = c(0.025, 0.1, 0.04, 0.9),at=ticks[ticks<max(fakeDays)],cex=.7)
+  out<-ggtree(tree)+
+    #geom_tippoint(color=timeCols[times],show.legend=TRUE,size=5/log(length(days)))+
+    geom_tiplab(color=timeCols[times],size=1,vjust=.35)+
+    ggtitle(unique(subject))+
+    theme(plot.title = element_text(hjust = .5,size=12),plot.margin=margin(2,0,20,0))+
+    geom_treescale(offset=-length(days)/90,fontsize=2.5,x=.01,y=-1)+
+    scale_x_continuous(limits = c(0,max(node.depth.edgelength(tree))*2))
+    #scale_color_manual('',breaks=names(timeCols),values=timeCols)
+  print(out)
+}
+dev.off()
+
+recomb<-read.csv('lindsey/recombinant.csv',stringsAsFactors=FALSE)
+reroot<-c('MM23'="MM23.PLAS.ISO.00009.002.01",'MM14'='MM14.PLAS.SGS.00040.007.01')
+pdf('out/lindsey_trees.pdf',width=2.,height=6)
+for(ii in list.files('lindsey/rooted/','MM[0-9]+.bs100.rooted.nex$',full.name=TRUE)){
+  message(ii)
+  tree<-read.nexus(ii)
+  tree$tip.label<-gsub("'",'',tree$tip.label)
+  days<-as.numeric(sapply(strsplit(tree$tip.label,'\\.'),'[[',4))
+  ids<-sapply(strsplit(tree$tip.label,'\\.'),function(xx)paste(xx[2:3],collapse='.'))
+  print(unique(ids))
+  isVoa<-grepl('VOA',ids)
+  isSgs<-grepl('SGS',ids)
+  isPbmc<-grepl('PBMC',ids)&!isVoa
+  fakeDays<-min(c(0,days)):max(days[!isVoa&!isPbmc])
+  cols<-rainbow.lab(length(fakeDays))
+  timeCols<-cols[fakeDays %in% days[!isVoa&!isPbmc]]
+  names(timeCols)<-sort(unique(days[!isVoa&!isPbmc]))
+  timeCols<-c(timeCols,c('voa'='purple','pbmc'='grey'))
+  times<-as.character(ifelse(isPbmc,'pbmc',ifelse(isVoa,'voa',days)))
+  subject<-sub("'",'',dnar::mostAbundant(sapply(strsplit(tree$tip.label,'[-.]'),'[[',1)))
+  firsts<-which(days==min(days))
+  firsts<-firsts[order(!grepl('consensus',tree$tip.label[firsts]),!grepl('[Vv]1',tree$tip.label[firsts]))]
+  #lindsey order
+  if(subject %in% names(reroot)){
+    tree<-root(tree,reroot[subject])
+  }
+  out<-ggtree(tree)+
+    #geom_tippoint(color=timeCols[times],show.legend=TRUE,size=5/log(length(days)))+
+    geom_tiplab(color=timeCols[times],size=7.5,label='-',vjust=1.5)+
+    geom_tiplab(color=timeCols[times],size=7.5,label=ifelse(times=='voa','  *',NA),vjust=.8)+
+    geom_tiplab(color=timeCols[times],size=3,label=ifelse(tree$tip.label %in% recomb$Sequence,'         r',NA))+
+    ggtitle(unique(subject))+
+    theme(plot.title = element_text(hjust = .5,size=12,margin=margin(b=-10,unit='pt')),plot.margin=margin(2,0,20,0))+
+    geom_treescale(offset=-length(days)/90,fontsize=2.5,x=.01,y=0)+
+    scale_x_continuous(limits = c(0,max(node.depth.edgelength(tree))*1.2))
+    #scale_color_manual('',breaks=names(timeCols),values=timeCols)
+  vp<-viewport()
+  par(mar=c(0,0,0,0))
+  plot(1,1,type='n',xaxt='n',yaxt='n',xlab='',ylab='',bty='n')
+  print(out,vp=vp)
+  ticks<-pretty(fakeDays,n=3)
+  par(lheight=.75)
+  insetScale(c(fakeDays-.5,tail(fakeDays,1)+.5),cols,main='Days after onset\nof symptoms',insetPos = c(0.025, 0.1, 0.04, 0.9),at=ticks[ticks<max(fakeDays)],cex=.7)
+  out<-ggtree(tree)+
+    #geom_tippoint(color=timeCols[times],show.legend=TRUE,size=5/log(length(days)))+
+    geom_tiplab(color=timeCols[times],size=1,vjust=.35)+
+    ggtitle(unique(subject))+
+    theme(plot.title = element_text(hjust = .5,size=12),plot.margin=margin(2,0,20,0))+
+    geom_treescale(offset=-length(days)/90,fontsize=2.5,x=.01,y=-1)+
+    scale_x_continuous(limits = c(0,max(node.depth.edgelength(tree))*2))
+    #scale_color_manual('',breaks=names(timeCols),values=timeCols)
   print(out)
 }
 dev.off()
