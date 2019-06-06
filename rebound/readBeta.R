@@ -1,7 +1,13 @@
 library(vipor)
 library(dnar)
+source('functions.R')
 
 beta<-read.csv('stephanieBeta.csv',stringsAsFactors=FALSE)
+beta2<-read.csv('stephanieBeta2.csv',stringsAsFactors=FALSE)
+beta2<-beta2[,c('Sample','IFN.b')]
+colnames(beta2)<-c('virus','ic50')
+extraBeta<-read.csv('QVOA for A06 + Nussenz. - Beta.csv')
+beta<-rbind(beta,extraBeta[,c('virus','ic50')],beta2)
 beta$pat<-ifelse(grepl('621803B',beta$virus),'A06',
   ifelse(grepl('621818B|A09-|Rebound ',beta$virus),'A09',
     ifelse(grepl('^B[0-9]+_',beta$virus),sub('_.*','',beta$virus),'')))
@@ -15,7 +21,7 @@ beta$class<-ifelse(beta$type %in% qvoaGroups,'QVOA',beta$type)
 beta$label<-sprintf('%s%s%s',beta$type,ifelse(beta$pat!='',' ',''),beta$pat)
 beta$beta<-apply(beta[,grepl('ic50',colnames(beta)),drop=FALSE],1,mean)
 beta$source<-'stephanie'
-beta<-beta[colnames(beta)!='ic50',]
+beta<-beta[,colnames(beta)!='ic50']
 
 mm<-read.csv('firstNadir.csv',stringsAsFactors=FALSE)
 mm<-mm[mm$isFirst|mm$qvoa|mm$isSix|mm$isLast|mm$isBetaNadir,]
@@ -27,6 +33,8 @@ mm$label<-sprintf('%s',ifelse(mm$class=='QVOA',sprintf('Outgrowth %s',mm$pat),mm
 mm<-mm[!is.na(mm$beta),]
 mm[,colnames(beta)[!colnames(beta) %in% colnames(mm)]]<-NA
 mm$source<-'marvin'
+mm$virus<-mm[,1]
+
 
 pair<-read.csv('donorRecipient.csv',stringsAsFactors=FALSE)
 pair$class<-ifelse(pair$donor,'Donor','Recipient')
@@ -82,11 +90,21 @@ combo$study<-ifelse(grepl('^A[0-9]+$',combo$pat),'VRC01',
 )))))))
 if(any(combo$study=='UNKNOWN'))stop('Unknown study')
 
+standardRegex<-'MM14|MM23|MM33|MM34|MM39|MM40'
+fastRegex<-'MM15|WEAU'
+slowRegex<-'MM55|MM62'
+combo$speed<-ifelse(grepl(fastRegex,combo$virus),'Fast',ifelse(grepl(slowRegex,combo$virus),'Slow',ifelse(grepl(standardRegex,combo$virus),'Standard','Other')))
+#combo$speed[combo$class=='QVOA']<-'Standard'
 
-write.csv(combo[!combo$source %in% c('marvin','shilpa'),c('virus','pat','type','class','study','source','ic50')],'comboBeta.csv',row.names=FALSE)
 
-ordering<-c('Pre-ATI A06','Post-ATI A06','Pre-ATI A09','Rebound A09','Post-ATI A09','Rebound A08','Rebound 601','Pre-ATI 9201','Rebound 9201','Rebound 9202','Pre-ATI 9203','Rebound 9203','Rebound 9207','Rebound BEAT-004','Rebound BEAT-030','Rebound BEAT-044','Rebound S-22','Rebound S-30','Lorenzi et al. B106','Lorenzi et al. B199','Outgrowth MM14','Outgrowth MM15','Outgrowth MM23','Outgrowth MM34','Outgrowth MM40','Outgrowth MM34','Acute','6 Month','Nadir','Last','Acute Recipient','Chronic Donor')
+
+write.csv(combo[!combo$source %in% c('marvin','shilpa'),c('virus','pat','type','class','study','source','beta')],'comboBeta.csv',row.names=FALSE)
+
+ordering<-c('Rebound S-22','Rebound S-30','Pre-ATI A06','Post-ATI A06','Pre-ATI A09','Rebound A09','Post-ATI A09','Rebound A08','Rebound 601','Pre-ATI 9201','Rebound 9201','Rebound 9202','Pre-ATI 9203','Rebound 9203','Rebound 9207','Rebound BEAT-004','Rebound BEAT-030','Rebound BEAT-044','Lorenzi et al. B106','Lorenzi et al. B199','Outgrowth MM14','Outgrowth MM15','Outgrowth MM23','Outgrowth MM34','Outgrowth MM40','Outgrowth MM34','Acute','6 Month','Nadir','Last','Acute Recipient','Chronic Donor')
 pos<-structure(1:length(unique(combo$label)),.Names=unique(combo$label[orderIn(combo$label,ordering)]))
+posStudy<-sapply(names(pos),function(xx)combo[combo$label==xx,'study'][1])
+studySpace<-1.5
+pos<-pos+cumsum(c(0,posStudy[-length(posStudy)]!=posStudy[-1]))*studySpace
 deemphasize<-c('Acute','6 Month','Donor','Nadir','Last')
 uniqClass<-unique(combo$class)
 uniqClass<-c(uniqClass[uniqClass!='Rebound'],'Rebound')
@@ -98,8 +116,12 @@ rangeClass<-sapply(rownames(ranges),function(xx)combo[combo$label==xx,'class'][1
 
 subs<-c('A06'='Patient A06','A09'='Patient A09','B106'='Patient B106','B199'='Patient B199','Recipient'='Recipients','Donor'='Donors','Lorenzi et al.'='Outgrowth','S-30'='Patient S-30','BEAT-044'='Patient BEAT-044','BEAT-030'='Patient BEAT-030','MM23'='Patient MM23','MM34'='Patient MM34','ATI'='ATI Outgrowth')
 newNames<-sapply(names(pos),function(xx){for(ii in names(subs))xx<-sub(ii,subs[ii],xx);xx})
-pos<-pos+cumsum(names(pos)=='Acute')*.5+cumsum(names(pos)=='Acute Recipient')*.5 #+cumsum(names(pos)=='Lorenzi et al. B106')*.5+cumsum(names(pos)=='Outgrowth MM23')*.5
+acuteSpace<-.5
+pos<-pos+cumsum(names(pos)=='Acute')*acuteSpace+cumsum(names(pos)=='Acute Recipient')*acuteSpace #+cumsum(names(pos)=='Lorenzi et al. B106')*.5+cumsum(names(pos)=='Outgrowth MM23')*.5
+extraSpace<-1
+pos<-pos+cumsum(grepl('Acute|6 Month|Nadir|Last|Chronic',names(pos)))*extraSpace
 subsets<-rev(list('mm'=names(pos)[!grepl('ATI|Rebound|Lorenzi',names(pos))],'lorenzi'=names(pos)[!grepl('ATI|Rebound',names(pos))],'prePost'=names(pos)[!grepl('Rebound',names(pos))],'noMont'=names(pos)[!grepl('BEAT|S-[0-9]',names(pos))],'all'=names(pos)))
+
 pdf('beta_qvoa_compare.pdf',width=9,height=6)
 ylim=range(combo$beta)
 spread<-offsetX(log10(combo$beta),combo$label,width=.25)
@@ -124,70 +146,17 @@ for(ii in names(subsets)){
 }
 dev.off()
 
-pdf('beta_qvoa_compare2.pdf',width=9,height=6)
-ylim=range(combo$beta)
-spread<-offsetX(log10(combo$beta),combo$label,width=.25)
-ii<-'all'
-  message(ii)
-marSpace<-0
-  selector<-combo$label %in% subsets[[ii]]
-  par(mar=c(6,4,.1,3))
-  plot(pos[combo$label[selector]]+spread[selector],combo$beta[selector],log='y',yaxt='n',ylab='IFNb IC50 (pg/ml)',xlab='',xaxt='n',type='n',cex.lab=1.2,ylim=ylim)
-  if(ii=='all')marSpaces<-sapply(subsets,function(xx)diff(convertUserToLine(1:0,2))*sum(!names(pos) %in% xx))
-  slantAxis(1,pos[!grepl('Outgrowth',names(pos)) &names(pos) %in% subsets[['mm']]],newNames[!grepl('Outgrowth',names(pos)) &names(pos) %in% subsets[['mm']]],srt=-45)
-  logAxis(las=1)
-  #segments(pos[rownames(ranges)],ranges[,1],pos[rownames(ranges)],ranges[,2],col=classCols2[rangeClass],lwd=2)
-  #,cex=ifelse(combo$class %in% deemphasize,1.5)
-  points(pos[combo$label[selector]]+spread[selector],combo$beta[selector],pch=21,bg=classCols[combo$class[selector]],col=ifelse(combo$class[selector] %in% deemphasize,'#00000066','#000000CC'),lwd=ifelse(combo$class[selector]=='Rebound',1.75,1.5),cex=2)
-  abline(v=pos['Acute Recipient']-.75,lty=2,col='#00000099')
-  abline(v=pos['Acute']-.75,lty=1,col='#00000099')
-  cols<-c('#00000033','#00000000')
-  counter<-1
-  studyOrder<-unique(sapply(names(pos),function(xx)combo[combo$label==xx,'study'][1]))
-  studyOrder<-studyOrder[studyOrder!='Transmission']
-  for(ii in studyOrder){
-    if(ii=='MM'){
-      minPos<-pos[min(which(names(pos) %in% combo$label[combo$study==ii&combo$class=='QVOA']))]
-      maxPos<-pos[max(which(names(pos) %in% combo$label[combo$study==ii&combo$class=='QVOA']))]
-    }else{
-      minPos<-pos[min(which(names(pos) %in% combo$label[combo$study==ii]))]
-      maxPos<-pos[max(which(names(pos) %in% combo$label[combo$study==ii]))]
-      abline(v=maxPos+.5,lty=2)
-    }
-    #rect(minPos-.5,10^par('usr')[3],maxPos+.5,10^par('usr')[4],col=cols[counter%%2+1],border=NA)
-    counter<-counter+1
-    axis(1,mean(c(minPos,maxPos)),sub('MM','Dynamics',sub('ATI','Interrupt',sub('BEAT','IFNa2',sub('/','/\n',ii)))),padj=1,mgp=c(3,.2+counter%%2,0),tcl=-.5+-1*counter%%2)
-  }
-  #abline(v=pos['Outgrowth MM23']-.75,lty=2,col='#00000099')
-  #abline(v=pos['Lorenzi et al. B106']-.75,lty=2,col='#00000099')
+pdf('beta_qvoa_compare2.pdf',width=8,height=5.5)
+plotQvoa2(combo$beta,combo$label,pos,combo$class,combo$study,combo$speed,ylab='IFNb IC50 (pg/ml)')
 dev.off()
 
-
-spread<-offsetX(log10(combo$beta),combo$label,width=.4,varwidth=TRUE)
-pdf('studiesBeta.pdf',height=3,width=9)
-for(ii in sort(unique(combo$study))){
-  message(ii)
-  selector<-combo$study==ii
-  par(mar=c(3,4,.1,.1))
-  pos<-structure(1:length(unique(combo$label[selector])),.Names=unique(combo$label[selector][orderIn(combo$label[selector],ordering)]))
-  #two missing samples in beta so move over to keep alignment
-  if(ii=='VRC01' & !all(c('Pre-ATI Outgrowth A06','Post-ATI Outgrowth A06') %in% names(pos)))pos<-pos+2
-  plot(pos[combo$label[selector]]+spread[selector],combo$beta[selector],log='y',yaxt='n',ylab='IFNb IC50 (pg/ml)',xlab='',xaxt='n',type='n',cex.lab=1.2,ylim=ylim,xlim=c(.5,max(pos)+.5))
-  par(lheight=.75)
-  prettyNames<-sub(' MM','\nMM',sub('ATI ','ATI\n',sub('Rebound ','Rebound\n',sub('outgrowth ','outgrowth\n',sub('Outgrowth (Patient )?','Outgrowth\n',newNames[names(pos)])))))
-  twoLines<-grepl('\n',prettyNames)
-  for(jj in 1:length(pos))axis(1,pos[jj],prettyNames[jj],mgp=c(3,0,0),padj=1)
-  logAxis(las=1)
-  if(any(combo[selector,'class']=='Rebound')){
-    for(reb in unique(combo[selector&combo$class=='Rebound','pat'])){
-      if(any(combo$pat==reb&combo$class=='QVOA')){
-        rect(pos[min(grep(reb,prettyNames))]-.2,10^par('usr')[3],pos[max(grep(reb,prettyNames))]+.2,10^par('usr')[4],col='#00000033',border=NA)
-      }
-    }
-  }
-  points(pos[combo$label[selector]]+spread[selector],combo$beta[selector],pch=21,bg=classCols[combo$class[selector]],col=ifelse(combo$class[selector] %in% deemphasize,'#00000066','#000000CC'),lwd=ifelse(combo$class[selector]=='Rebound',1.75,1.5),cex=2)
-}
+pdf('studiesBeta.pdf',height=2.5,width=7)
+plotStudies(combo$study,combo$label,combo$beta,combo$pat,combo$speed,combo$class,ylab='IFNb IC50 (pg/ml)')
 dev.off()
 
+pdf('A09beta.pdf',height=3,width=7)
+  selector<-grepl('A09',combo$label)
+  plotStudies(combo$study[selector],combo$label[selector],combo$beta[selector],combo$pat[selector],combo$speed[selector],combo$class[selector],ylab='IFNb IC50 (pg/ml)')
+dev.off()
 
 
