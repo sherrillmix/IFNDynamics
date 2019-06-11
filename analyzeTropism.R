@@ -1,29 +1,7 @@
 library(dnar)
 source('iuStan.R')
-readCounts<-function(countFile){
-  counts<-read.csv(countFile,stringsAsFactors=FALSE)
-  counts$plate<-basename(counts$dir)
-  counts$well<-sub('\\.CTL$','',counts$file)
-  counts$col<-as.numeric(sub('^[A-Z]','',counts$well))
-  counts$row<-sub('[0-9]+$','',counts$well)
-  letterLookup<-structure(1:26,.Names=LETTERS)
-  counts$rowNum<-letterLookup[counts$row]
-  return(counts)
-}
-readPlateViruses<-function(plateFile,virusFile){
-  plate<-read.csv(plateFile,row.names=1,check.names=FALSE,stringsAsFactors=FALSE)
-  viruses<-read.csv(virusFile,stringsAsFactors=FALSE)
-  plate<-apply(plate,2,trimws)
-  viruses<-rbind(viruses,c('Empty','Empty'))
-  rownames(viruses)<-viruses$id
-  if(any(!unlist(plate) %in% viruses$id))warning('Unknown virus ',unique(unlist(plate)[!unlist(plate) %in% viruses$id]))
-  plateIds<-data.frame('row'=rep(rownames(plate),ncol(plate)),'col'=rep(colnames(plate),each=nrow(plate)),'vId'=as.vector(unlist(plate)),stringsAsFactors=FALSE)
-  plateIds$well<-sprintf('%s%s',plateIds$row,plateIds$col)
-  rownames(plateIds)<-plateIds$well
-  plateIds$virus<-viruses[plateIds$vId,'sample']
-  return(plateIds)
-}
-
+source('functions.R')
+ 
 if(!exists('dat'))source('readNewData.R')
 
 counts<-readCounts('ice/out/coreceptor_iceAssay_18-03-15/counts.csv')
@@ -729,6 +707,7 @@ for(virus in viruses$id){
 dev.off()
 
 
+
 readBigBatch<-function(countsFile,virusFile){
   viruses<-read.csv(virusFile,skip=1,stringsAsFactors=FALSE)[,-1]$id
   tit<-readCounts(countsFile)
@@ -757,9 +736,16 @@ readBigBatch<-function(countsFile,virusFile){
       fit<-simpleCountIU(iuModSimple,thisDat$n,thisDat$dil,tit[!tit$red&grepl('MEDIA|Media',tit$virus),'n'])
       return(mean(as.matrix(fit)[,'baseIU'])/100)
   })},tit,mc.cores=20))
-  return(list('tit'=tit,'viruses'=viruses,'ius'=ius,'iusBayes'=iusStan))
+  iusLessThanX<-withAs(xx=tit[!tit$red&!is.na(tit$virus),],by(xx[,c('n','dil','filter')],list(xx$virus,xx$dextran),function(thisDat){
+      thisDat$logDil<--log(thisDat$dil)
+      if(all(is.na(thisDat$filter)))return(NA)
+      firstSmall<-max(c(0,which(thisDat$n>750)))+1
+      mod<-glm(n~offset(logDil),thisDat[firstSmall:nrow(thisDat),],family='poisson')
+      exp(coef(mod)['(Intercept)'])/100
+  }))
+  return(list('tit'=tit,'viruses'=viruses,'ius'=ius,'iusBayes'=iusStan,'iusX'=iusLessThanX))
 }
-plotBigBatch<-function(tit,viruses,ius=NULL,ius2=NULL){
+plotBigBatch<-function(tit,viruses,ius=NULL,ius2=NULL,ius3=NULL){
   for(virus in unique(viruses)){
     par(mfrow=c(1,2))
     for(treat in c('Media','Dextran')){
@@ -778,29 +764,38 @@ plotBigBatch<-function(tit,viruses,ius=NULL,ius2=NULL){
         lines(fakeDils,predsStan+1,col='red')
         mtext(sprintf('%0.1f IU/ul (%s)',ius2[virus,treat],treat),3)
       }
+      if(!is.null(ius3)){
+        predsStan<-ius3[virus,treat]/fakeDils*100
+        lines(fakeDils,predsStan+1,col='blue')
+      }
     }
   }
 }
+makeDf<-function(tit){
+  data.frame('id'=rownames(tit$iusBayes),'media'=tit$iusBayes[,'Media'],'dextran'=tit$iusBayes[,'Dextran'],'run'='2019-01-17',stringsAsFactors=FALSE)
+}
 
-tit<-dnar::cacheOperation('work/2019-01-17_titration.Rdat',readBigBatch,'ice/out/2019-01-17_titration/counts.csv','ice/2019-01-14-titration.csv',OVERWRITE=TRUE)
-pdf('out/2019-01-17_infectivity.pdf',width=10,height=8)
-  plotBigBatch(tit$tit,tit$viruses,tit$ius,tit$iusBayes)
+tit<-dnar::cacheOperation('work/2019-01-17_titration.Rdat',readBigBatch,'ice/out/2019-01-17_titration2/counts.csv','ice/2019-01-14-titration.csv',OVERWRITE=TRUE)
+out<-makeDf(tit)
+pdf('out/2019-01-17_infectivity2.pdf',width=10,height=8)
+  plotBigBatch(tit$tit,tit$viruses,tit$ius,tit$iusBayes,tit$iusX)
 dev.off()
-tit<-dnar::cacheOperation('work/2019-01-18_titration.Rdat',readBigBatch,'ice/out/2019-01-18_titration/counts.csv','ice/2019-01-15-titration.csv',OVERWRITE=TRUE)
-pdf('out/2019-01-18_infectivity.pdf',width=10,height=8)
-  plotBigBatch(tit$tit,tit$viruses,tit$ius,tit$iusBayes)
+tit<-dnar::cacheOperation('work/2019-01-18_titration.Rdat',readBigBatch,'ice/out/2019-01-18_titration2/counts.csv','ice/2019-01-15-titration.csv',OVERWRITE=TRUE)
+out<-rbind(out,makeDf(tit))
+pdf('out/2019-01-18_infectivity2.pdf',width=10,height=8)
+  plotBigBatch(tit$tit,tit$viruses,tit$ius,tit$iusBayes,tit$iusX)
 dev.off()
-tit<-dnar::cacheOperation('work/2019-01-25_titration.Rdat',readBigBatch,'ice/out/2019-01-25_titration/counts.csv','ice/2019-01-22-titration.csv',OVERWRITE=TRUE)
-pdf('out/2019-01-25_infectivity.pdf',width=10,height=8)
-  plotBigBatch(tit$tit,tit$viruses,tit$ius,tit$iusBayes)
+tit<-dnar::cacheOperation('work/2019-01-25_titration.Rdat',readBigBatch,'ice/out/2019-01-25_titration2/counts.csv','ice/2019-01-22-titration.csv',OVERWRITE=TRUE)
+out<-rbind(out,makeDf(tit))
+pdf('out/2019-01-25_infectivity.pdf2',width=10,height=8)
+  plotBigBatch(tit$tit,tit$viruses,tit$ius,tit$iusBayes,tit$iusX)
 dev.off()
-tit<-dnar::cacheOperation('work/2019-01-28_titration.Rdat',readBigBatch,'ice/out/2019-01-28_titration/counts.csv','ice/2019-01-23-titration.csv',OVERWRITE=TRUE)
-pdf('out/2019-01-28_infectivity.pdf',width=10,height=8)
-  plotBigBatch(tit$tit,tit$viruses,tit$ius,tit$iusBayes)
+tit<-dnar::cacheOperation('work/2019-01-28_titration.Rdat',readBigBatch,'ice/out/2019-01-28_titration2/counts.csv','ice/2019-01-23-titration.csv',OVERWRITE=TRUE)
+out<-rbind(out,makeDf(tit))
+pdf('out/2019-01-28_infectivity2.pdf',width=10,height=8)
+  plotBigBatch(tit$tit,tit$viruses,tit$ius,tit$iusBayes,tit$iusX)
 dev.off()
 
-
-
-
-
+ius<-out[grepl('^VOA|^MM|^WEAU',out$id),]
+write.csv(ius,'out/ius.csv')
 
