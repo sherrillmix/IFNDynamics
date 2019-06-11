@@ -24,6 +24,8 @@ seqs<-data.frame(
   'envPerRT'=c(hiv$Env.RT,rep(NA,nrow(dat))),
   'infectivity'=c(hiv$Infectivity.RLU.pg.RT...T1249,rep(NA,nrow(dat))),
   'p24Release'=c(hiv$p24.release.No.IFN,rep(NA,nrow(dat))),
+  'viralLoad'=c(rep(NA,nrow(hiv)),dat$vl),
+  'cd4Count'=c(rep(NA,nrow(hiv)),dat$CD4),
   stringsAsFactors=FALSE
 )
 
@@ -35,13 +37,13 @@ withAs(xx=seqs[!seqs$isNa,],write.fa(xx$id,xx$raw,'combined/combined.fa'))
 rownames(seqs)<-seqs$id
 
 
-hmmer<-read.fa('combined/align20190108_hmm/AlignSeq.nt.fasta')
+hmmer<-read.fa('combined/align20190411_hmm/AlignSeq.nt.fasta')
 hxb2StartEnd<-noGap2Gap(hmmer[1,'seq'],c(1,nchar(degap(hmmer[1,'seq']))))
 hmmer$trim<-substring(hmmer$seq,hxb2StartEnd[1],hxb2StartEnd[2])
 coverRange<-range(which(apply(seqSplit(hmmer$trim)=='-',2,mean)<.25))
 substring(hmmer$trim[-1],1,coverRange[1]-1)<-gsub('[^-]','-',substring(hmmer$trim[-1],1,coverRange[1]-1))
 substring(hmmer$trim[-1],coverRange[2]+1)<-gsub('[^-]','-',substring(hmmer$trim[-1],coverRange[2]+1))
-allAligns<-readFaDir('combined/align20190108_hmm/')
+allAligns<-readFaDir('combined/align20190411_hmm/')
 allAligns<-allAligns[!allAligns$file %in% c('AlignSeq.nt.fasta','LTR.nt.fasta'),]
 allAligns$prot<-sub('.nt.fasta','',allAligns$file)
 
