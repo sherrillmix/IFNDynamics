@@ -7,7 +7,8 @@ envCheck$cg<-sapply(gregexpr('CG',degap(envCheck$Env)),length)
 envCheck$lm<-substring(envCheck$Env,noGap2Gap(out$Env[out$isRef],87),noGap2Gap(out$Env[out$isRef],1086))
 envCheck$lmCg<-sapply(gregexpr('CG',degap(envCheck$lm)),length)
 uniqPair<-sort(unique(envCheck$pair))
-pdf('env_cg_vs_ic50.pdf',width=10,height=10)
+
+pdf('out/env_cg_vs_ic50.pdf',width=10,height=10)
   thisDat<-envCheck
   spreadX<-vipor::offsetX(log(thisDat$alphaIc50),thisDat$lmCg,width=.2)
   xlim<-range(envCheck$lmCg)
@@ -33,7 +34,7 @@ pdf('env_cg_vs_ic50.pdf',width=10,height=10)
   }
 dev.off()
 
-pdf('env_cg_vs_time.pdf',width=10,height=10)
+pdf('out/env_cg_vs_time.pdf',width=10,height=10)
   xlim<-range(envCheck$time,na.rm=TRUE)
   ylim<-range(envCheck$lmCg)
   uniqPair<-sort(unique(envCheck$pair[!is.na(envCheck$time)]))
@@ -44,6 +45,21 @@ pdf('env_cg_vs_time.pdf',width=10,height=10)
     withAs(xx=thisDat,plot(xx$time,xx$lmCg+spreadX,main=ii,xlab='Days after onset of symptoms',ylab='Number of CG in LM region of Env',xlim=xlim,ylim=ylim,pch=21,bg='#FF000055',col='#00000033',las=1))
   }
 dev.off()
+
+
+pdf('out/env_cg_vs_vl.pdf',width=10,height=10)
+  xlim<-range(envCheck$viralLoad,na.rm=TRUE)
+  ylim<-range(envCheck$lmCg)
+  uniqPair<-sort(unique(envCheck$pair[!is.na(envCheck$viralLoad)]))
+  par(mfrow=c(2,ceiling(length(uniqPair)/2)))
+  for(ii in uniqPair){
+    thisDat<-envCheck[envCheck$pair==ii,]
+    spreadX<-vipor::offsetX(thisDat$viralLoad,thisDat$lmCg,width=.2)
+    withAs(xx=thisDat,plot(xx$viralLoad,xx$lmCg+spreadX,main=ii,xlab='Viral load',ylab='Number of CG in LM region of Env',xlim=xlim,ylim=ylim,pch=21,bg='#FF000055',col='#00000033',las=1,log='x',xaxt='n'))
+    dnar::logAxis(1)
+  }
+dev.off()
+
 
 
 library(dnar)
@@ -96,3 +112,28 @@ test<-lapply(1:3,function(ii){
 })
 sapply(test,which,arr.ind=TRUE)
 gap2NoGap(out$EnvAA[out$isRef],c(151,178,179))
+
+
+table(substring(out[,'GagAA'],146+50-1,146+50-1),out$subtype)
+table(substring(out[,'GagAA'],146+120-1,146+120-1))
+lanl<-dnar::read.fa('lanl/HIV1_ALL_2017_gag_PRO.fasta')
+lanl$subtype<-sub('\\..*','',lanl$name)
+lanl2<-dnar::read.fa('lanl/HIV2_ALL_2017_gag_PRO.fasta')
+lanl3<-dnar::read.fa('lanl/SIV_ALL_2017_gag_PRO.fasta')
+regexpr('PIVQN',lanl$seq)
+regexpr('PIVQN',lanl3$seq)
+regexpr('PVQQ',lanl3$seq)
+regexpr('PVQQ',lanl2$seq)
+lanl$cap<-substring(lanl$seq,171)
+lanl2$cap<-substring(lanl2$seq,136)
+noGap2Gap(lanl2$cap[1],50)
+lanl3$cap<-substring(lanl3$seq,163)
+noGap2Gap(lanl3$cap[1],50)
+noGap2Gap(lanl$cap[grep('HXB2',lanl$name)],50)
+table(substring(lanl$cap,51,51))
+noGap2Gap(lanl$cap[grep('HXB2',lanl$name)],120)
+t(t(sort(table(substring(lanl$cap,137,137)),decreasing=TRUE)))
+
+t(t(sort(table(substring(lanl2$cap,50,50)),decreasing=TRUE)))
+
+substring(lanl3$cap,50-2,50+2)
