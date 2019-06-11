@@ -29,6 +29,7 @@ if(!exists('dilutes')){
 }
 
 
+
 pdf('out/allCurves.pdf',width=6,height=4)
   plotIfns(dilutes,concAlpha,'IFNa2 concentration (pg/ml)')
   plotIfns(dilutes,concAlpha,'IFNa2 concentration (pg/ml)',log='x')
@@ -42,6 +43,11 @@ pdf('out/newCurves.pdf',width=6,height=4)
   plotIfns(newDilutes,concAlpha,'IFNa2 concentration (pg/ml)',log='x')
 dev.off()
 #system('pdftk A=out/allCurves.pdf B=out/allCurvesBeta.pdf cat A164 A180 B208 B218 output out/example_ic50.pdf')
+
+pdf('out/allCurvesSimple.pdf',width=5,height=4)
+  plotIfns(dilutesBeta,concBeta,'IFNb concentration (pg/ml)',log='x',showVres=FALSE,showMax=TRUE,showMain=FALSE,showLegend=FALSE,showPercent=TRUE)
+dev.off()
+
 
 pdf('out/allCurvesCombo.pdf',width=10,height=5)
   plotDualIfns(dilutes,dilutesBeta,concAlpha,concBeta)
@@ -256,16 +262,19 @@ weauRaw3<-readIfns('data/IC50 alpha and beta for WEAU and few EJs BULK isolates 
 weauRaw3$isBeta<-grepl('beta|Beta',weauRaw3$sheet)
 weauRaw3$sample<-paste(weauRaw3$sample,weauRaw3$ifn)
 weau3<-rbind(as.data.frame(do.call(rbind, by(weauRaw3[!weauRaw3$isBeta,],weauRaw3$sample[!weauRaw3$isBeta],function(xx){calcBasicIc50(concAlpha,xx[,1:20,drop=FALSE])}))), as.data.frame(do.call(rbind, by(weauRaw3[weauRaw3$isBeta,],weauRaw3$sample[weauRaw3$isBeta],function(xx){calcBasicIc50(concBeta,xx[,1:20,drop=FALSE])}))))
+weau3$replication<-weau3$max*as.numeric(sapply(rownames(weau3),function(xx)weauRaw3[weauRaw3$sample==xx,'ifn'][1]))/1000
 write.csv(weau3,'out/weau3_ic50.csv')
 pdf('out/weau3Check.pdf',width=6,height=4)
   plotIfns(weauRaw3[!weauRaw3$isBeta,],concAlpha,'IFNa2 concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
   plotIfns(weauRaw3[weauRaw3$isBeta,],concBeta,'IFNb concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
 dev.off()
 
-montaner<-readIfns('data/Rebound Montaner_for Scott.xlsx',ifnCol=1)
+
+montaner<-readIfns('data/IC50 - Rebounds from Montaner_Dilutions fixed.xls',ifnCol=1)
+montaner$dilution<-montaner$ifn
 montaner$isBeta<-grepl('beta|Beta',montaner$sheet)
 montaner$sample<-paste(montaner$sample,montaner$ifn)
-montanerIc<-rbind(as.data.frame(do.call(rbind, by(montaner[!montaner$isBeta,],montaner$sample[!montaner$isBeta],function(xx){calcBasicIc50(concAlpha,xx[,1:20,drop=FALSE])}))), as.data.frame(do.call(rbind, by(montaner[montaner$isBeta,],montaner$sample[montaner$isBeta],function(xx){calcBasicIc50(concBeta,xx[,1:20,drop=FALSE])}))))
+montanerIc<-rbind(as.data.frame(do.call(rbind, by(montaner[!montaner$isBeta,],montaner$sample[!montaner$isBeta],function(xx){calcBasicIc50(concAlpha,xx[,1:20,drop=FALSE],dil=as.numeric(xx[,'dilution']))}))), as.data.frame(do.call(rbind, by(montaner[montaner$isBeta,],montaner$sample[montaner$isBeta],function(xx){calcBasicIc50(concBeta,xx[,1:20,drop=FALSE],dil=as.numeric(xx[,'dilution']))}))))
 write.csv(montanerIc,'out/montaner_ic50.csv')
 pdf('out/montanerCheck.pdf',width=6,height=4)
   plotIfns(montaner[!montaner$isBeta,],concAlpha,'IFNa2 concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
@@ -279,6 +288,7 @@ pdf('out/montanerCheckSubset.pdf',width=6,height=4)
   plotIfns(montaner[montaner$isBeta,minusCols],concBeta[subsetConc],'IFNb concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
 dev.off()
 system(sprintf('pdftk A=out/montanerCheck.pdf B=out/montanerCheckSubset.pdf shuffle A B output out/montanerCompare.pdf'))
+
 
 
 weauRaw3<-readIfns('data/IC50 alpha and beta for WEAU and few EJs BULK isolates .xlsx',ifnCol=1)
@@ -300,9 +310,9 @@ reboundRawConvert$sample<-rep(reboundRaw$sample,each=2)
 reboundRawConvert$isBeta<-rep(reboundRaw$isBeta,each=2)
 rebound<-rbind(
   as.data.frame(do.call(rbind, by(reboundRaw[!reboundRaw$isBeta,],reboundRaw$sample[!reboundRaw$isBeta],function(xx){
-    calcBasicIc50(concAlpha6,convertIfn6(xx[,1:24,drop=FALSE]))
+    calcBasicIc50(concAlpha6,convertIfn6(xx[,1:24,drop=FALSE]),dil=as.numeric(xx[,'dilution']))
   }))),as.data.frame(do.call(rbind, by(reboundRaw[reboundRaw$isBeta,],reboundRaw$sample[reboundRaw$isBeta],function(xx){
-    calcBasicIc50(concBeta6,convertIfn6(xx[,1:24,drop=FALSE]))
+    calcBasicIc50(concBeta6,convertIfn6(xx[,1:24,drop=FALSE]),dil=as.numeric(xx[,'dilution']))
   })))
 )
 #write.csv(rebound,'out/reboundIc50.csv')
@@ -316,7 +326,7 @@ dev.off()
 reboundRaw<-read6ConcIfns('data/p24 repeat IC50 rebounds 12.14.2018.xls',dilCol=1)
 reboundRaw$isBeta<-TRUE
 reboundRedo<-as.data.frame(do.call(rbind, by(reboundRaw[reboundRaw$isBeta,],reboundRaw$sample[reboundRaw$isBeta],function(xx){
-    calcBasicIc50(concBeta6,convertIfn6(xx[,1:24,drop=FALSE]))
+    calcBasicIc50(concBeta6,convertIfn6(xx[,1:24,drop=FALSE]),dil=as.numeric(xx[,'dilution']))
 })))
 #write.csv(reboundRedo,'out/reboundRedoIc50.csv')
 newNames<-sub(' \\(.+$','',rownames(reboundRedo))
@@ -334,9 +344,10 @@ pdf('out/reboundRedoIc50.pdf',width=6,height=4)
   plotIfns(reboundRedoConvert,concBeta6,'IFNb concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
 dev.off()
 
-voaRaw<-readIfns('data/IC50s - new VOAs 01.10.2019.xlsx',minRows=8)
+voaRaw<-readIfns('data/IC50s - new VOAs 01.10.2019.xlsx',minRows=8,ifnCol=1)
+voaRaw$dilution<-voaRaw$ifn
 voaRaw$isBeta<-grepl('beta|Beta',voaRaw$sheet)
-voa<-rbind(as.data.frame(do.call(rbind, by(voaRaw[!voaRaw$isBeta,],voaRaw$sample[!voaRaw$isBeta],function(xx){calcBasicIc50(concAlpha,xx[,1:20,drop=FALSE])}))), as.data.frame(do.call(rbind, by(voaRaw[voaRaw$isBeta,],voaRaw$sample[voaRaw$isBeta],function(xx){calcBasicIc50(concBeta,xx[,1:20,drop=FALSE])}))))
+voa<-rbind(as.data.frame(do.call(rbind, by(voaRaw[!voaRaw$isBeta,],voaRaw$sample[!voaRaw$isBeta],function(xx){calcBasicIc50(concAlpha,xx[,1:20,drop=FALSE],dil=as.numeric(xx[,'dilution']))}))), as.data.frame(do.call(rbind, by(voaRaw[voaRaw$isBeta,],voaRaw$sample[voaRaw$isBeta],function(xx){calcBasicIc50(concBeta,xx[,1:20,drop=FALSE],dil=as.numeric(xx[,'dilution']))}))))
 write.csv(voa,'out/voa_2019-01-10.csv')
 
 pdf('out/voaCheck.pdf',width=6,height=4)
@@ -344,11 +355,11 @@ pdf('out/voaCheck.pdf',width=6,height=4)
   plotIfns(voaRaw[voaRaw$isBeta,],concBeta,'IFNb concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
 dev.off()
 
-rebound130Raw<-read6ConcIfns('data/Rebound IC50s a2-b 6 doses.xlsx')
+rebound130Raw<-read6ConcIfns('data/Rebound IC50s a2-b 6 doses.xlsx',dilCol=1)
 rebound130Raw$isBeta<-grepl('beta|Beta',rebound130Raw$sheet)
 rebound130<-rbind(
-  as.data.frame(do.call(rbind, by(rebound130Raw[!rebound130Raw$isBeta,],rebound130Raw$sample[!rebound130Raw$isBeta],function(xx) calcBasicIc50(concAlpha6,convertIfn6(xx[,1:24,drop=FALSE]))))),
-  as.data.frame(do.call(rbind, by(rebound130Raw[rebound130Raw$isBeta,],rebound130Raw$sample[rebound130Raw$isBeta],function(xx) calcBasicIc50(concBeta6,convertIfn6(xx[,1:24,drop=FALSE])))))
+  as.data.frame(do.call(rbind, by(rebound130Raw[!rebound130Raw$isBeta,],rebound130Raw$sample[!rebound130Raw$isBeta],function(xx) calcBasicIc50(concAlpha6,convertIfn6(xx[,1:24,drop=FALSE]),dil=as.numeric(xx[,'dilution']))))),
+  as.data.frame(do.call(rbind, by(rebound130Raw[rebound130Raw$isBeta,],rebound130Raw$sample[rebound130Raw$isBeta],function(xx) calcBasicIc50(concBeta6,convertIfn6(xx[,1:24,drop=FALSE]),dil=as.numeric(xx[,'dilution'])))))
 )
 write.csv(rebound130,'out/rebound_2019-01-30_Ic50.csv')
 
@@ -360,4 +371,20 @@ pdf('out/rebound_2019-01-30_Ic50.pdf',width=6,height=4)
   plotIfns(rebound130Convert[rebound130Convert$isBeta,],concBeta6,'IFNb concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
 dev.off()
 
+tmp1<-readIfns('tmpMM55/IC50 Alpha for New patients BULK isol. .xls',ifnCol=1)
+tmp2<-readIfns('tmpMM55/IC50 alpha and beta for BULK isolates .xlsx',ifnCol=1)
+tmp2$sheet<-paste(tmp2$sheet,ifelse(grepl('[4-8]',tmp2$sheet),'beta','alpha'))
+tmp3<-readIfns('tmpMM55/IC50 alpha and beta for WEAU and few EJs BULK isolates .xlsx',ifnCol=1)
+tmp4<-readIfns('tmpMM55/IC50 Beta for all BULK isolates .xlsx',ifnCol=1)
+tmp4$sheet<-paste(tmp4$sheet,'beta')
+mm55<-rbind(tmp1,tmp2,tmp3,tmp4)
+mm55<-mm55[grep('EJ101|MM55|UK101',mm55$sample),]
+mm55$isBeta<-grepl('beta|Beta',mm55$sheet)
+#mm55$sample<-paste(mm55$sample,mm55$ifn)
+mm55<-mm55[order(sub('EJ101|MM55','',mm55$sample)),]
+mm55Ic<-rbind(as.data.frame(do.call(rbind, by(mm55[!mm55$isBeta,],mm55$sample[!mm55$isBeta],function(xx){calcBasicIc50(concAlpha,xx[,1:20,drop=FALSE])}))), as.data.frame(do.call(rbind, by(mm55[mm55$isBeta,],mm55$sample[mm55$isBeta],function(xx){calcBasicIc50(concBeta,xx[,1:20,drop=FALSE])}))))
+pdf('out/mm55Check.pdf',width=6,height=4)
+  plotIfns(mm55[!mm55$isBeta,],concAlpha,'IFNa2 concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
+  plotIfns(mm55[mm55$isBeta,],concBeta,'IFNb concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
+dev.off()
 
