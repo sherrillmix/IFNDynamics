@@ -9,13 +9,21 @@ patCols<-c(patCols,'WEAU'='#708090')
 patCols2<-sprintf('%s33',patCols)
 patCols3<-sprintf('%s11',patCols)
 names(patCols2)<-names(patCols3)<-names(patCols)
+lay<-matrix(0,nrow=7,ncol=4)
+lay[2:6,2:3]<-matrix(1:10,nrow=5,byrow=TRUE)
+
+lay2<-matrix(0,nrow=7+2,ncol=4)
+lay2[c(2,3,4,6,8),2:3]<-matrix(1:10,nrow=5,byrow=TRUE)
+lowerP24Limit<-60
+patOrder<-c("MM14","MM23","MM33","MM34","MM39","MM40","MM55","MM62","MM15","WEAU")
 
 
 #dat<-read.csv('data/Data Master MG, Sept_2.csv')
 #dat<-read.csv('data/MM cohort cata master 11.29.2017.csv')
 #allDats<-lapply(c('data/for Scott_2017_12_13.csv','data/For Scott - All bulk isol. alpha and beta.csv'),read.csv,stringsAsFactors=FALSE)
 #allDats<-lapply(c('data/for Scott_Data Marster.csv'),read.csv,stringsAsFactors=FALSE)
-allDats<-lapply(c('data/For Scott Jan.2019.csv'),read.csv,stringsAsFactors=FALSE)
+#allDats<-lapply(c('data/For Scott Jan.2019.csv'),read.csv,stringsAsFactors=FALSE)
+allDats<-lapply(c('data/Data Master Marvin_2019-04-10.csv'),read.csv,stringsAsFactors=FALSE)
 idCol<-'ID.for.statistical.analysis.....Scott.March..2018.'
 allDats<-lapply(allDats,function(dat)dat[!is.na(dat[,idCol])&dat[,idCol]!='',])
 allCols<-unique(unlist(lapply(allDats,colnames)))
@@ -45,7 +53,8 @@ dat$visit<-sapply(strsplit(dat$sample,'\\.'),'[',2)
 dat$virusId<-sapply(strsplit(dat$id,'\\.'),'[',3)
 dat$pat<-sub('\\.[^.]+$','',dat$sample)
 dat$time<-as.numeric(compiledMeta[dat$sample,'DFOSx'])
-dat$timeBeforArt<-compiledMeta[dat$sample,'daysBeforeArt']
+dat$timeBeforeArt<-compiledMeta[dat$sample,'daysBeforeArt']
+dat$timeBefore350<-compiledMeta[dat$sample,'daysBefore350']
 dat$vl<-compiledMeta[dat$sample,'vl']
 dat$CD4<-compiledMeta[dat$sample,'cd4']
 #dat<-dat[!is.na(dat$ic50)|!is.na(dat$vres)|!is.na(dat$beta)|!is.na(dat$betaVres),]
@@ -95,8 +104,8 @@ infect$id[infect$id=='MM33.17_Bulk-I']<-'MM33.17.1A1.bulk'
 infect$id<-sub(' bulk','.bulk',infect$id)
 if(any(!infect$id %in% dat$id))stop('Problem associating infectivity with isolates')
 dat$infectivityMedia<-dat$infectivityDextran<-NA
-dat[infect$id,'infectivityMedia']<-infect$media
-dat[infect$id,'infectivityDextran']<-infect$dextran
+dat[infect$id,'infectivityMedia']<-infect$media/dat[infect$id,'rt']
+dat[infect$id,'infectivityDextran']<-infect$dextran/dat[infect$id,'rt']
 
 replicative<-read.csv('out/weau3_ic50.csv',row.names=1)
 replicative<-replicative[grep('Alpha|alpha',rownames(replicative)),]
@@ -106,6 +115,13 @@ replicative$id<-sub('[._-]P','.',replicative$id)
 replicative$id<-sprintf('%s%s',replicative$id,ifelse(grepl('WEAU|MM55|MM62|MM15',replicative$id),'.bulk',''))
 inDat<-replicative$id %in% dat$id
 dat[replicative$id[inDat],'replication']<-replicative$replication[inDat]
+
+ice<-read.csv('out/iceHalf.csv',row.names=1)
+ice$id<-sub('VOA_(.*)','\\1.VOA',sub(' bulk','.bulk',rownames(ice)))
+ice$id[ice$id=='MM33.13 Bulk-I']<-'MM33.13.1.bulk'
+inDat<-ice$id %in% dat$id
+dat[ice$id[inDat],'iceHalf']<-ice$half[inDat]
+
 
 #withAs(xx=dat[dat$time>35*7,],plot(ave(xx$vl,xx$pat,FUN=function(xx)(xx-min(xx,na.rm=TRUE))/max(xx-min(xx,na.rm=TRUE),na.rm=TRUE)),xx$ic50,bg=patCols[xx$pat],log='y',pch=21,cex=2))
 
@@ -144,6 +160,6 @@ dat$isBetaNadir<-dat$meanBeta==ave(dat$meanBeta,dat$pat,FUN=function(xx)min(xx,n
 dat$isFirst<-dat$time==ave(dat$time,dat$pat,FUN=function(xx)min(xx,na.rm=TRUE))
 #dat$isSix<-dat$time==ave(dat$time,dat$pat,FUN=function(xx){diff<-abs(180-xx);out<-xx[which.min(diff)][1];if(diff[which.min(diff)][1]>30)return(FALSE);out})
 dat$isSix<-abs(dat$time-180)<30
-dat$isLast<-dat$time==ave(dat$time,dat$pat,FUN=max)
-write.csv(dat[dat$isFirst|dat$isNadir|dat$qvoa|dat$isSix|dat$isLast|dat$isBetaNadir,c('pat','time','ic50','isFirst','isNadir','isBetaNadir','isSix','isLast','qvoa','beta')],'out/firstNadir.csv')
+dat$isLast<-dat$time==ave(dat$time*ifelse(dat$qvoa,0,1),dat$pat,FUN=max)
+write.csv(dat[dat$isFirst|dat$isNadir|dat$qvoa|dat$isSix|dat$isLast|dat$isBetaNadir,c('pat','time','ic50','isFirst','isNadir','isBetaNadir','isSix','isLast','qvoa','beta','replication')],'out/firstNadir.csv')
 
