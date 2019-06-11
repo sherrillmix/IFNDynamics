@@ -91,11 +91,11 @@ readIfns<-function(file,exclude=1,firstCol=3,nameCol=firstCol-1,ifnCol=0,minRows
 #assuming 
 #bio#1-tech#1 bio#1-tech#2
 #bio#2-tech#1 bio#2-tech#2
-plotIfn<-function(concAlpha,p24s,main='',xlab='',ylims=range(p24s),log='xy',scaleMax=FALSE,findVresIc50=findVresIc50){
+plotIfn<-function(concAlpha,p24s,main='',xlab='',ylims=range(p24s),log='xy',scaleMax=FALSE,findVresIc50Func=findVresIc50,showVres=TRUE,showMax=FALSE,showLegend=FALSE,showPercent=grepl('y',log)){
   origConcs<-concs<-rep(concAlpha,each=ncol(p24s)/length(concAlpha)*nrow(p24s))
   if(scaleMax)maxs<-unlist(p24s[,1:2])
   else maxs<-1
-  vresIc50<-findVresIc50(concAlpha,p24s)
+  vresIc50<-findVresIc50Func(concAlpha,p24s)
   zeroOffset<-.01
   concs[concs==0]<-min(concs[concs>0])*zeroOffset
   if(nrow(p24s)*ncol(p24s)/length(concAlpha)==8){
@@ -134,28 +134,42 @@ plotIfn<-function(concAlpha,p24s,main='',xlab='',ylims=range(p24s),log='xy',scal
   #abline(v=fit[3],lty=3,col='#00000055')
   #isAbove<-vresIc50['ic50']>10^(par('usr')[3]*.75+par('usr')[4]*.25)
   isAbove<-vresIc50['vres']>10^mean(par('usr')[3:4])
-  abline(v=vresIc50['ic50'],lty=2,col='#FF000055')
-  abline(h=vresIc50['vres']/mean(maxs),lty=2,col='#0000FF55')
-  yCoord<-ifelse(grepl('y',log),vresIc50['vres']/2^ifelse(isAbove,1,-1),vresIc50['vres']+diff(par('usr')[3:4])*ifelse(isAbove,-.1,.1))
+  abline(v=vresIc50['ic50'],lty=2,col='#FF000055',lwd=1.5)
   xCoord<-10^(par('usr')[1]*.72+par('usr')[2]*.28)
-  text(xCoord,yCoord,sprintf('Vres=%s%%',format(vresIc50['percVres'],digits=2,width=3)),adj=c(1,0.5),col='blue')
-  segments(xCoord*1.1,yCoord,10^(par('usr')[1]*.65+par('usr')[2]*.35),vresIc50['vres']/mean(maxs),col='blue')
+  if(showVres){
+    abline(h=vresIc50['vres']/mean(maxs),lty=2,col='#0000FF55',lwd=1.5)
+    yCoord<-ifelse(grepl('y',log),vresIc50['vres']/2^ifelse(isAbove,1,-1),vresIc50['vres']+diff(par('usr')[3:4])*ifelse(isAbove,-.1,.1))
+    text(xCoord,yCoord,sprintf('Vres=%s%%',format(vresIc50['percVres'],digits=2,width=3)),adj=c(1,0.5),col='blue')
+    segments(xCoord*1.1,yCoord,10^(par('usr')[1]*.65+par('usr')[2]*.35),vresIc50['vres']/mean(maxs),col='blue')
+  }
+  if(showMax){
+    abline(h=vresIc50['max'],lty=2,lwd=1.5,col='#00000055')
+  }
   #ic50 label
   yCoord<-ifelse(grepl('y',log),ifelse(isAbove,10^(par('usr')[3]*.8+par('usr')[4]*.2),10^(par('usr')[3]*.7+par('usr')[4]*.3)*1.2),par('usr')[3]*.7+par('usr')[4]*.3)
   text(vresIc50['ic50']/1.85,yCoord,sprintf('IC50=%s',format(vresIc50['ic50'],digits=2)),adj=c(1,0.5),col='red')
   segments(vresIc50['ic50']/1.75,yCoord,vresIc50['ic50'],yCoord*ifelse(isAbove,1.2,.8),col='red')
   if(is.na(vresIc50['max']))browser()
-  if(grepl('y',log))axis(4,vresIc50['max']/c(1,2,10,100,1000),as.character(c(1,.5,.1,.01,.001)*100),las=1,tcl=-.2,mgp=c(0,.6,0))
-  abline(h=vresIc50['max']/2,lty=3,col='#00000055')
-  text(dnar::convertLineToUser(2.6,4),10^mean(par('usr')[3:4]),'Percent of maximum',xpd=NA,srt=-90)
+  if(showPercent){
+    if(grepl('y',log)){
+      labs<-c(1,2,10,100,1000)
+      yPos<-10^mean(par('usr')[3:4])
+    }else{
+      labs<-c(1,2,Inf)
+      yPos<-mean(par('usr')[3:4])
+    }
+    axis(4,vresIc50['max']/labs,as.character(1/labs*100),las=1,tcl=-.2,mgp=c(0,.6,0))
+    text(dnar::convertLineToUser(2.4,4),yPos,'Percent of untreated',xpd=NA,srt=-90)
+  }
+  abline(h=vresIc50['max']/2,lty=2,lwd=1.5,col='#00000055')
   par('lheight'=.72)
-  legend('topright',names(cols),pch=21,pt.bg=cols,inset=.01,cex=ifelse(length(cols)==2,1,.6),pt.cex=1,y.intersp=ifelse(length(cols)<=2,1,1.5))
+  if(showLegend)legend('topright',names(cols),pch=21,pt.bg=cols,inset=.01,cex=ifelse(length(cols)==2,1,.6),pt.cex=1,y.intersp=ifelse(length(cols)<=2,1,1.5))
   return(fit)
 }
 condenseReps<-function(xx){
   do.call(cbind,lapply(seq(1,ncol(xx),2),function(ii)apply(xx[,ii+0:1,drop=FALSE],1,mean,na.rm=TRUE)))
 }
-plotIfns<-function(dilutes,concAlpha,xlab='',condenseTechs=TRUE,log='xy',multiple=1,...){
+plotIfns<-function(dilutes,concAlpha,xlab='',condenseTechs=TRUE,log='xy',multiple=1,showMain=TRUE,...){
   nCol<-length(concAlpha)*2
   ylims<-range(dilutes[,1:nCol],na.rm=TRUE)
   dilutes[,1:nCol]<-dilutes[,1:nCol]*multiple
@@ -164,9 +178,9 @@ plotIfns<-function(dilutes,concAlpha,xlab='',condenseTechs=TRUE,log='xy',multipl
   for(thisSample in sort(unique(dilutes$sample))){
     xx<-dilutes[dilutes$sample==thisSample,1:nCol]
     if(!grepl('y',log))ylims<-c(0,max(xx,na.rm=TRUE))
-    fits[[thisSample]]<-plotIfn(concAlpha,xx,main=thisSample,xlab=xlab,ylims=ylims,log=log,...)
+    fits[[thisSample]]<-plotIfn(concAlpha,xx,main=ifelse(showMain,thisSample,''),xlab=xlab,ylims=ylims,log=log,...)
     if(!grepl('y',log))ylims<-c(0,max(condenseReps(xx),na.rm=TRUE))
-    if(condenseTechs)plotIfn(concAlpha,condenseReps(xx),main=thisSample,xlab=xlab,ylims=ylims,log=log,...)
+    if(condenseTechs)plotIfn(concAlpha,condenseReps(xx),main=ifelse(showMain,thisSample,''),xlab=xlab,ylims=ylims,log=log,...)
   }
   invisible(fits)
 }
@@ -208,7 +222,15 @@ calculateBasicIc50<-function(concs,p24s,vocal=FALSE,means=condenseReps(p24s)){
   max<-mean(means[,1])
   return(c('ic50'=ic50,'vres'=vres,'percVres'=percVres,'max'=max))
 }
-calcBasicIc50<-function(...){out<-calculateBasicIc50(...);out<-out[c('ic50','percVres')];names(out)[2]<-'vres';out}
+calcBasicIc50<-function(...,dil=NULL){
+  if(any(dil!=dil[1]))stop("Multiple dilutions")
+  dil<-dil[1]
+  out<-calculateBasicIc50(...)
+  out<-out[c('ic50','percVres','max')]
+  names(out)[2]<-'vres'
+  if(!is.null(dil))out<-c(out,'repCap'=unname(out['max']*dil/1000))
+  out
+}
 
 plotIfnStacked<-function(conc,p24,bioRep=rep(1,length(p24)),techRep=rep(1,length(p24)),main='',xlab='',ylims=range(p24),log='xy',scaleMax=FALSE,findVresIc50=findVresIc50){
   origConcs<-conc
@@ -300,4 +322,83 @@ convertIfn6<-function(p24s){
   do.call(rbind,lapply(1:nrow(bio1),function(xx)rbind(bio1[xx,,drop=FALSE],bio2[xx,,drop=FALSE])))
 }
 
+readCounts<-function(countFile){
+  counts<-read.csv(countFile,stringsAsFactors=FALSE)
+  counts$plate<-basename(counts$dir)
+  counts$well<-sub('\\.CTL$','',counts$file)
+  counts$col<-as.numeric(sub('^[A-Z]','',counts$well))
+  counts$row<-sub('[0-9]+$','',counts$well)
+  letterLookup<-structure(1:26,.Names=LETTERS)
+  counts$rowNum<-letterLookup[counts$row]
+  return(counts)
+}
+readPlateViruses<-function(plateFile,virusFile){
+  plate<-read.csv(plateFile,row.names=1,check.names=FALSE,stringsAsFactors=FALSE)
+  viruses<-read.csv(virusFile,stringsAsFactors=FALSE)
+  plate<-apply(plate,2,trimws)
+  viruses<-rbind(viruses,c('Empty','Empty'))
+  rownames(viruses)<-viruses$id
+  if(any(!unlist(plate) %in% viruses$id))warning('Unknown virus ',unique(unlist(plate)[!unlist(plate) %in% viruses$id]))
+  plateIds<-data.frame('row'=rep(rownames(plate),ncol(plate)),'col'=rep(colnames(plate),each=nrow(plate)),'vId'=as.vector(unlist(plate)),stringsAsFactors=FALSE)
+  plateIds$well<-sprintf('%s%s',plateIds$row,plateIds$col)
+  rownames(plateIds)<-plateIds$well
+  plateIds$virus<-viruses[plateIds$vId,'sample']
+  return(plateIds)
+}
 
+source('iuStan.R')
+runIuStan<-function(virus,tit){
+  times<-sort(unique(tit$time))
+  do.call(rbind,lapply(structure(times,.Names=times),function(time){
+    thisDat<-tit[!is.na(tit$virus)&tit$virus==virus&tit$time==time,c('n','dilution')]
+    fit<-simpleCountIU(iuModSimple,thisDat$n,thisDat$dilution,tit[grepl('MEDIA|Media',tit$virus)&!is.na(tit$virus),'n'])
+    means<-mean(as.matrix(fit)[,'baseIU'])/100
+    sds<-sd(as.matrix(fit)[,'baseIU'])/100
+    return(c(mean=means,sd=sds))
+  }))
+}
+runAllIu<-function(viruses,tit,mc.cores=20){
+  out<-parallel::mclapply(viruses,runIuStan,tit,mc.cores=20)
+  means<-do.call(rbind,lapply(out,function(xx)xx[,'mean']))
+  sds<-do.call(rbind,lapply(out,function(xx)xx[,'sd']))
+  return(list(mean=means,sd=sds))
+}
+plotRawIce<-function(tit,viruses,ius,sds=NULL){
+  timeCols<-structure(dnar::rainbow.lab(length(unique(tit$time))),.Names=sort(unique(tit$time)))
+  fakeDils=2^seq(0,16,length.out=1000)
+  iuRange<-range(ius)
+  par(mfrow=c(1,2),mar=c(4,4,1,3))
+  for(virus in unique(viruses)){
+    thisDat<-tit[tit$virus==virus&!is.na(tit$virus),]
+    dnar::withAs(zz=thisDat,plot(zz$dilution,zz$n+1,xlab='Dilution',ylab='TZMBL count',las=1,log='yx',main=sprintf('%s',virus),ylim=range(tit$n+1),xlim=c(1,max(tit$dilution,na.rm=TRUE)),pch=21,bg=timeCols[as.character(zz$time)],cex=2,yaxt='n'))
+    dnar::logAxis(2,offset=1,axisMin=1,las=1)
+    axis(2,1,0,las=1)
+    legend('topright',pch=21,names(timeCols),pt.bg=timeCols,bty='n')
+    for(ii in names(timeCols)){
+      preds<-ius[virus,ii]/fakeDils*100
+      lines(fakeDils,preds+1,col=timeCols[ii])
+    }
+    plot(as.numeric(colnames(ius)),ius[virus,],xlab='Time on ice',ylab='Estimated IU/ul',las=1,log='y',ylim=iuRange,yaxt='n',type='b')
+    dnar::logAxis(2,las=1)
+    prettyY<-c(1,.5,.1,.01,.001)
+    axis(4,prettyY*ius[virus,'0'],prettyY,las=1)
+    if(any(ius[virus,]>1)){
+      abline(h=ius[virus,'0']*.5,lty=2)
+      times<-as.numeric(colnames(ius))
+      half<-approx(ius[virus,]/ius[virus,'0'],times,.5)$y
+      if(!is.null(sds)){
+        thisSd<-sds[virus,colnames(ius)]
+        segments(times,pmax(10^(par('usr')[3]),ius[virus,]-2*thisSd),times,ius[virus,]+2*thisSd)
+      }
+      #n<-log10(ius[virus,])
+      #mod<-lm(n~times)
+      #fakeTime<-seq(0,60,.01) 
+      #preds<-predict(mod,data.frame(times=fakeTime),interval='confidence')
+      #lines(fakeTime,10^(preds[,1]))
+      #polygon(c(fakeTime,rev(fakeTime)),10^(c(preds[,2],rev(preds[,3]))),border=NA,col='#00000033')
+      #half<-log10(.5)/coefficients(mod)[2]
+      abline(v=half,lty=3)
+      title(main=sprintf('Ice half life: %s hr',ifelse(is.na(half),'>48',format(half,digits=3))))
+    }
+  }
+}
