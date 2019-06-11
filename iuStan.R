@@ -47,6 +47,7 @@ iuCodeSimple<-'
     int<lower=0> counts[nCount];
     vector<lower=0>[nCount] dilutions;
     real background;
+    real<lower=0> overKillDisperse;
   }
   parameters {
     real<lower=0> baseIU;
@@ -70,7 +71,7 @@ iuCodeSimple<-'
     //}
     baseIU~normal(0,100000);
     counts~poisson(expectedCount .*exp(overKill)+background);
-    overKill~double_exponential(0,.1);
+    overKill~double_exponential(0,overKillDisperse);
   }
 '
 iuModSimple <- stan_model(model_code = iuCodeSimple)
@@ -90,20 +91,21 @@ countIU<-function(mod,counts,dilutions,virus,background,conditions=rep("Base",le
     nBackground=length(background),
     backgrounds=background,
     maxCount=500,
-    background=mean(background)
+    background=mean(background),
   )
   #,
   fit <- sampling(mod, data = dat, iter=5000, chains=chains,thin=10,control=list(adapt_delta=.99,max_treedepth=15),...)
 }
 
-simpleCountIU<-function(mod,counts,dilutions,background,chains=20,...){
+simpleCountIU<-function(mod,counts,dilutions,background,chains=20,disperse=.01,...){
   if(length(counts)==0)stop('No counts given')
   if(length(counts)!=length(dilutions))stop('Length of counts and dilutions do not match')
   dat=list(
     nCount=length(counts),
     counts=counts,
     dilutions=dilutions,
-    background=mean(background)
+    background=mean(background),
+    overKillDisperse=disperse
   )
   #,control=list(adapt_delta=.95,max_treedepth=15)
   fit <- sampling(mod, data = dat, iter=4000, chains=chains,thin=2,control=list(adapt_delta=.95,max_treedepth=15),...)
