@@ -17,6 +17,8 @@ dat$label<-sprintf('%s%s%s',dat$type,ifelse(dat$pat!='',' ',''),dat$pat)
 dat$ic50<-apply(dat[,grepl('IFNA2',colnames(dat))],1,mean)
 dat$repCap<-NA
 dat$source<-'stephanie'
+repCap<-read.csv('stephanieRepCap.csv',stringsAsFactors=FALSE,row.names=1)
+dat$repCap<-repCap[dat$virus,'Rep.Cap.']
 
 #Add Shilpa acute vs chronic, add Marvin nadir/first, add Marvin QVOA
 mm<-read.csv('firstNadir.csv',stringsAsFactors=FALSE)
@@ -32,7 +34,7 @@ mm$virus<-mm[,1]
 mm$source<-'marvin'
 
 
-#write.csv(hiv[hiv$select=='UT'&hiv$fluid=='PL',c('sample','donor','IFNa2.Pooled.Donor.cells.IC50..pg..ml','IFNbeta.Pooled.Donor.cells.IC50..pg.ml')],'out/donorRecipient.csv')
+#write.csv(hiv[hiv$select=='UT'&hiv$fluid=='PL',c('sample','donor','IFNa2.Pooled.Donor.cells.IC50..pg..ml','IFNbeta.Pooled.Donor.cells.IC50..pg.ml','Replicative.capacity.Pooled.Donor.cells.p24.d7')],'out/donorRecipient.csv')
 pair<-read.csv('donorRecipient.csv',stringsAsFactors=FALSE)
 pair$class<-ifelse(pair$donor,'Donor','Recipient')
 pair$type<-'CHAVI cohort'
@@ -41,6 +43,7 @@ pair$label<-sprintf('%s %s',ifelse(pair$class=='Donor','Chronic','Acute'),pair$c
 pair$ic50<-pair$IFNa2.Pooled.Donor.cells.IC50..pg..ml
 pair[pair$class=='Recipient','class']<-'Acute'
 pair$pat<-pair$sample
+pair$repCap<-pair$Replicative.capacity.Pooled.Donor.cells.p24.d7
 pair[,colnames(dat)[!colnames(dat) %in% colnames(pair)]]<-NA
 pair$source<-'shilpa'
 
@@ -190,3 +193,6 @@ pdf('A09.pdf',height=3,width=7)
   plotStudies(combo$study[selector],combo$label[selector],combo$ic50[selector],combo$pat[selector],combo$speed[selector],combo$class[selector])
 dev.off()
 
+pdf('alpha_repCap_compare.pdf',width=8,height=5.5)
+  withAs(combo=combo[!is.na(combo$repCap),],plotQvoa2(combo$repCap,combo$label,pos,combo$class,combo$study,combo$speed,ylab='Replication capacity'))
+dev.off()

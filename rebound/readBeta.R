@@ -22,6 +22,8 @@ beta$label<-sprintf('%s%s%s',beta$type,ifelse(beta$pat!='',' ',''),beta$pat)
 beta$beta<-apply(beta[,grepl('ic50',colnames(beta)),drop=FALSE],1,mean)
 beta$source<-'stephanie'
 beta<-beta[,colnames(beta)!='ic50']
+repCap<-read.csv('stephanieRepCap.csv',stringsAsFactors=FALSE,row.names=1)
+beta$repCap<-repCap[beta$virus,'Rep.Cap.']
 
 mm<-read.csv('firstNadir.csv',stringsAsFactors=FALSE)
 mm<-mm[mm$isFirst|mm$qvoa|mm$isSix|mm$isLast|mm$isBetaNadir,]
@@ -31,6 +33,7 @@ mm$type<-'MM cohort'
 #mm$label<-sprintf('MM %s',ifelse(mm$class=='QVOA',sprintf('Outgrowth %s',mm$pat),mm$class))
 mm$label<-sprintf('%s',ifelse(mm$class=='QVOA',sprintf('Outgrowth %s',mm$pat),mm$class))
 mm<-mm[!is.na(mm$beta),]
+mm$repCap<-mm$replication
 mm[,colnames(beta)[!colnames(beta) %in% colnames(mm)]]<-NA
 mm$source<-'marvin'
 mm$virus<-mm[,1]
@@ -46,6 +49,7 @@ pair$beta<-pair$IFNbeta.Pooled.Donor.cells.IC50..pg.ml
 pair$beta<-pair$beta*6386
 pair[pair$class=='Recipient','class']<-'Acute'
 pair$pat<-pair$sample
+pair$repCap<-pair$Replicative.capacity.Pooled.Donor.cells.p24.d7
 pair[,colnames(beta)[!colnames(beta) %in% colnames(pair)]]<-NA
 pair$source<-'shilpa'
 
@@ -160,3 +164,6 @@ pdf('A09beta.pdf',height=3,width=7)
 dev.off()
 
 
+pdf('beta_repCap_compare.pdf',width=8,height=5.5)
+  withAs(combo=combo[!is.na(combo$repCap),],plotQvoa2(combo$repCap,combo$label,pos,combo$class,combo$study,combo$speed,ylab='Replication capacity'))
+dev.off()
