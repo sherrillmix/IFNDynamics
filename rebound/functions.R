@@ -1,14 +1,14 @@
 speedPch<-c('Fast'=8,'Slow'=21,'Standard'=21,'Other'=21)
 speedCex<-c('Fast'=1,'Slow'=2,'Standard'=2,'Other'=2)
 
-plotQvoa2<-function(ic50,label,pos,class,study,speed,ylab='IFNa2 IC50 (pg/ml)'){
+plotQvoa2<-function(ic50,label,pos,class,study,speed,ylab='IFNa2 IC50 (pg/ml)',mar=c(6.9,4,.1,3.9)){
   spread<-offsetX(log10(ic50),label,width=.25)
   ylim=range(ic50)
   spread<-offsetX(log10(ic50),label,width=.25)
   ii<-'all'
   marSpace<-0
   selector<-label %in% subsets[[ii]]
-  par(mar=c(6.9,4,.1,3.9))
+  par(mar=mar)
   plot(pos[label[selector]]+spread[selector],ic50[selector],log='y',yaxt='n',ylab=ylab,xlab='',xaxt='n',type='n',cex.lab=1.2,ylim=ylim)
   if(ii=='all')marSpaces<-sapply(subsets,function(xx)diff(convertUserToLine(1:0,2))*sum(!names(pos) %in% xx))
   slantAxis(1,pos[!grepl('Outgrowth',names(pos)) &names(pos) %in% subsets[['mm']]],newNames[!grepl('Outgrowth',names(pos)) &names(pos) %in% subsets[['mm']]],srt=-45,cex=1.275,location=1)
@@ -33,6 +33,7 @@ plotQvoa2<-function(ic50,label,pos,class,study,speed,ylab='IFNa2 IC50 (pg/ml)'){
       counter<-counter+1
       axis(1,mean(c(minPos,maxPos)),sub('MM','Outgrowth',sub('ATI','Interrupt',sub('BEAT','IFNa2',sub('/','/\n',ii)))),padj=1,mgp=c(3,.2+2*counter%%2,0),tcl=-.7+-2*counter%%2,cex.axis=1.3)
     }
+  return(list(ylim=ylim))
 }
 
 plotStudies<-function(study,label,ic50,pat,speed,class,ylab='IFNa2 IC50 (pg/ml)'){

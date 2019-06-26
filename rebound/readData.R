@@ -196,3 +196,17 @@ dev.off()
 pdf('alpha_repCap_compare.pdf',width=8,height=5.5)
   withAs(combo=combo[!is.na(combo$repCap),],plotQvoa2(combo$repCap,combo$label,pos,combo$class,combo$study,combo$speed,ylab='Replication capacity'))
 dev.off()
+
+acuteRebound<-combo[combo$class %in% c("Acute","Rebound") & combo$source != "shilpa",]
+pdf('out/ifna2_acuteRebound.pdf',width=4,height=4)
+par(mar=c(2,4,.1,.1))
+suppressWarnings(vipor::vpPlot(acuteRebound$class,acuteRebound$ic50,ylab='IFNa2 IC50',pch=21,bg=classCols[acuteRebound$class],las=1,log='y',yaxt='n'))
+dnar::logAxis(las=1)
+dev.off()
+10^(t.test(log10(acuteRebound[acuteRebound$class=='Rebound','ic50']),log10(acuteRebound[acuteRebound$class=='Acute','ic50']))$conf.int)
+10^(diff(t.test(log10(acuteRebound[acuteRebound$class=='Acute','ic50']),log10(acuteRebound[acuteRebound$class=='Rebound','ic50']))$estimate))
+t.test(log10(acuteRebound[acuteRebound$class=='Acute','ic50']),log10(acuteRebound[acuteRebound$class=='Rebound','ic50']))
+means<-tapply(log10(acuteRebound$ic50),list(acuteRebound$class,acuteRebound$pat),mean)
+t.test(means['Acute',],means['Rebound',])
+
+
