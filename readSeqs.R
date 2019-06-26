@@ -68,10 +68,21 @@ rownames(timeConvert)<-paste(timeConvert$ID,timeConvert$days.post.infection)
 sga<-dnar::read.fa('seqs/new/SGA and PBMC SGA for London Cohort.fasta')
 sga$clean<-sub('B\\.US\\.199.\\.WEAUd?','WEAU.',sga$name)
 sga$pat<-sub('\\..*','',sga$clean)
+sga$pbmc<-grepl('pbmc',sga$name)
+bakSga<-sga[sga$pat=='MM33'|sga$pat=='MM23',]
+sga<-sga[sga$pbmc|(sga$pat!='MM33'&sga$pat!='MM23'),]
+#MM23.18.pbmc.72: weird pol sequence in middle of env
+sgaExclude<-c('MM23.18.pbmc.72')
+sga<-sga[!sga$name %in% sgaExclude,]
+mm23mm33<-rbind(dnar::read.fa('seqs/new/MM33 SGA ORIGINAL.fasta'),dnar::read.fa('seqs/new/MM23 SGA original sequences.fasta'))
+mm23mm33$clean<-sub('UK61\\.','MM23.',mm23mm33$name)
+mm23mm33$pat<-sub('\\..*','',mm23mm33$clean)
+mm23mm33$pbmc<-FALSE
+sga<-rbind(sga,mm23mm33)
 sga$timeString<-sapply(strsplit(sga$clean,'[_.]'),'[[',2)
 sga[sga$timeString=='12MW'&sga$pat=='MM39','timeString']<-'13'
 isD<-grep('^d[0-9]+$',sga$timeString)
-if(any(!paste(sga[isD,'pat'],sub('^d0*','',sga[isD,'timeString'])) %in% rownames(timeConvert)))stop('Problem matching dxxx and consersion')
+if(any(!paste(sga[isD,'pat'],sub('^d0*','',sga[isD,'timeString'])) %in% rownames(timeConvert)))stop('Problem matching dxxx and conversion')
 sga[isD,'timeString']<-timeConvert[paste(sga[isD,'pat'],sub('^d0*','',sga[isD,'timeString'])),'visit']
 #symptoms started 20 days after infection
 sga[sga$pat=='WEAU','time']<-as.numeric(sga[sga$pat=='WEAU','timeString'])-20
@@ -100,3 +111,6 @@ write.csv(table(sprintf('%s.%05d (%s)',combine$mm,combine$time,combine$visit),co
 write.csv(combine[,c('name','isolate','newName','seq')],'out/newNames.csv',row.names=FALSE)
 dnar::withAs(combine=combine[!combine$mm %in% bulk,],write.fa(combine$newName,combine$seq,'out/mmLongitudinalSequences_noBulk.fa'))
 
+for(ii in unique(combine$mm)){
+  dnar::withAs(combine=combine[combine$mm==ii,],write.fa(combine$newName,combine$seq,sprintf('out/seqSplit/%s.fa.gz',ii)))
+}
