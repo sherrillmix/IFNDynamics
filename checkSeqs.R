@@ -130,3 +130,13 @@ hams2<-do.call(rbind,lapply(1:nrow(xx),function(ii){
 
 data.frame('id'=sub('MM55-([^-]+-[^-]+)-.*','\\1',xx$name),'ambig'=nchar(gsub('[ACGTN-]+','',xx$seq)))
 
+
+xx<-read.fa('~/Downloads/MM39 MM40 isolate documents To Scott.fasta')
+xx$sample<-sub('\\.([0-9])$','.0\\1',sub('UK85','MM39',sub('_.*','',sub('^_','',sub('_con.*','',sub('U[0-9]+_','',sub('-.*','',xx$name)))))))
+xx[xx$sample=='MM39.10','seq'] %in% sga[sga$pat=='MM39'&sga$timeString=='10','seq']
+xx$name %in% inCohort[,'name']
+withAs(xxxx=inCohort[inCohort$mm %in% c('MM39','MM40')&!is.na(inCohort$isolate),'name'], xxxx[!xxxx %in% xx$name])
+
+
+lapply(sga[sga$pat=='MM39'&sga$timeString=='10','seq'],function(xxx)grep(xxx,xx[xx$sample=='MM39.10','seq'],perl=TRUE))
+
