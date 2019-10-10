@@ -1,3 +1,15 @@
+library(xlsx)
+library(dnar)
+#concAlpha<-c(0, 0.001, 0.003, 0.008, 0.023, 0.068, 0.204, 0.611, 1.833, 5.5)
+concAlpha<-c(0,5.55*3^(-8:0))
+#concBeta<-c(0, 4.4E-05, 0.00044, 0.0044, 0.044, 0.44, 4.4, 44, 440, 4400)
+concBeta<-c(0,4400*10^(-8:0))
+lowerLimit<-50
+
+concAlpha6<-concAlpha[c(1,seq(2,length(concAlpha),2))]
+concBeta6<-concBeta[c(1,seq(2,length(concBeta),2))]
+
+
 #https://www.myassays.com/four-parameter-logistic-regression.html
 #http://stats.stackexchange.com/questions/61144/how-to-do-4-parametric-regression-for-elisa-data-in-r
 #a = the minimum value that can be obtained (i.e. what happens at 0 dose)
@@ -51,7 +63,7 @@ calcIc50s<-function(dilutes,concAlpha){
   return(out)
 }
 
-readIfns<-function(file,exclude=1,firstCol=3,nameCol=firstCol-1,ifnCol=0,minRows=10){
+readIfns<-function(file,exclude=1,firstCol=3,nameCol=firstCol-1,ifnCol=0,dilCol=0,minRows=10){
   wb <- loadWorkbook(file)
   counter<-0
   ic50Curves<-lapply(getSheets(wb),function(sheet){
@@ -79,6 +91,7 @@ readIfns<-function(file,exclude=1,firstCol=3,nameCol=firstCol-1,ifnCol=0,minRows
     dat<-as.data.frame(apply(do.call(rbind,lapply(vals[firstRow:lastRow],function(zz)zz[firstCol+0:19])),2,function(xx){as.numeric(ifelse(xx==''|is.na(xx)|grepl('\\?\\?',xx),NA,sub('[><]','',xx)))}),stringsAsFactors=FALSE)
     dat$sample<-fillDown(sapply(vals[firstRow:lastRow],'[[',nameCol))
     dat$ifn<-if(ifnCol==0)NA else fillDown(sapply(vals[firstRow:lastRow],'[[',ifnCol),errorIfFirstEmpty=FALSE)
+    dat$dil<-if(dilCol==0)NA else fillDown(sapply(vals[firstRow:lastRow],'[[',dilCol),errorIfFirstEmpty=FALSE)
     return(dat)
   })
   names(ic50Curves)<-names(getSheets(wb))
@@ -91,13 +104,16 @@ readIfns<-function(file,exclude=1,firstCol=3,nameCol=firstCol-1,ifnCol=0,minRows
 #assuming 
 #bio#1-tech#1 bio#1-tech#2
 #bio#2-tech#1 bio#2-tech#2
-plotIfn<-function(concAlpha,p24s,main='',xlab='',ylims=range(p24s),log='xy',scaleMax=FALSE,findVresIc50Func=findVresIc50,showVres=TRUE,showMax=FALSE,showLegend=FALSE,showPercent=grepl('y',log)){
+plotIfn<-function(concAlpha,p24s,main='',xlab='',ylims=range(p24s),log='xy',scaleMax=FALSE,findVresIc50Func=findVresIc50,showVres=TRUE,showMax=FALSE,showLegend=FALSE,showPercent=grepl('y',log),ylab='p24 concentration (pg/ml)'){
   origConcs<-concs<-rep(concAlpha,each=ncol(p24s)/length(concAlpha)*nrow(p24s))
-  if(scaleMax)maxs<-unlist(p24s[,1:2])
-  else maxs<-1
+  if(scaleMax){
+    p24s<-p24s/unlist(p24s[,1:2])
+    maxs<-unlist(p24s[,1:2])
+  } else maxs<-1
   vresIc50<-findVresIc50Func(concAlpha,p24s)
   zeroOffset<-.01
-  concs[concs==0]<-min(concs[concs>0])*zeroOffset
+  fakeZero<-min(concs[concs>0])*zeroOffset
+  concs[concs==0]<-fakeZero
   if(nrow(p24s)*ncol(p24s)/length(concAlpha)==8){
     cols<-rainbow.lab(17)[c(1:2,6:7,11:12,16:17)]
     names(cols)<-c('Bio replicate 1\nTech replicate 1','Bio replicate 1\nTech replicate 2','Bio replicate 2\nTech replicate 1','Bio replicate 2\nTech replicate 2','Bio replicate 3\nTech replicate 1','Bio replicate 3\nTech replicate 2','Bio replicate 4\nTech replicate 1','Bio replicate 4\nTech replicate 2')
@@ -116,15 +132,20 @@ plotIfn<-function(concAlpha,p24s,main='',xlab='',ylims=range(p24s),log='xy',scal
     browser()
     stop('p24s not 2 or 4 rows')
   }
+  repMeans<-apply(p24s,1,function(xx)xx[seq(1,length(xx),2)]+xx[seq(2,length(xx),2)])/2
   p24s<-unlist(p24s)
   fit<-fitter(origConcs[!is.na(p24s)],p24s[!is.na(p24s)])
-  plot(concs,p24s/maxs,xlab=xlab,ylab='',log=log,las=1,xaxt='n',main=main,bg=cols,pch=21,mgp=c(2,1,0),ylim=ylims/mean(maxs),yaxt='n')
+  plot(concs,p24s,xlab=xlab,ylab='',log=log,las=1,xaxt='n',main=main,bg=cols,pch=21,mgp=c(2,1,0),ylim=ylims,yaxt='n')
   #fit2<-suppressWarnings(nlminb(c(max(p24s),1,1,min(p24s)),LS,x=concs[origConcs!=0],y=p24s[origConcs!=0],lower=c(0,-Inf,-Inf,0))$par)
-  fakeConc<-10^seq(-10,10,.001)
-  fitLine<-fitFunc(fit,fakeConc)
-  lines(fakeConc,fitLine/mean(maxs),col='#00000066',lwd=3)
+  if(scaleMax){
+    apply(repMeans,2,function(xx)lines(ifelse(concAlpha==0,fakeZero,concAlpha),xx,col='#00000066'))
+  }else{
+    fakeConc<-10^seq(-10,10,.001)
+    fitLine<-fitFunc(fit,fakeConc)
+    lines(fakeConc,fitLine/mean(maxs),col='#00000066',lwd=3)
+  }
   if(scaleMax)title(ylab='Proportion maximum p24',mgp=c(2,1,0))
-  else title(ylab='p24 concentration (pg/ml)',mgp=c(ifelse(grepl('y',log),2.25,2.9),1,0))
+  else title(ylab=ylab,mgp=c(ifelse(grepl('y',log),2.25,2.9),1,0))
   if(grepl('x',log))dnar::logAxis(1,axisMin=min(origConcs[origConcs>0]),mgp=c(2.5,.7,0))
   else axis(1,pretty(par('usr')[1:2]),mgp=c(2.5,.7,0))
   if(grepl('y',log))dnar::logAxis(2,las=1,mgp=c(2.5,.7,0))
@@ -169,17 +190,16 @@ plotIfn<-function(concAlpha,p24s,main='',xlab='',ylims=range(p24s),log='xy',scal
 condenseReps<-function(xx){
   do.call(cbind,lapply(seq(1,ncol(xx),2),function(ii)apply(xx[,ii+0:1,drop=FALSE],1,mean,na.rm=TRUE)))
 }
-plotIfns<-function(dilutes,concAlpha,xlab='',condenseTechs=TRUE,log='xy',multiple=1,showMain=TRUE,...){
+plotIfns<-function(dilutes,concAlpha,xlab='',condenseTechs=TRUE,log='xy',multiple=1,showMain=TRUE,ylims=range(dilutes[,1:nCol],na.rm=TRUE),...){
   nCol<-length(concAlpha)*2
-  ylims<-range(dilutes[,1:nCol],na.rm=TRUE)
   dilutes[,1:nCol]<-dilutes[,1:nCol]*multiple
   par(mar=c(3,3.8,1,3))
   fits<-list()
   for(thisSample in sort(unique(dilutes$sample))){
     xx<-dilutes[dilutes$sample==thisSample,1:nCol]
-    if(!grepl('y',log))ylims<-c(0,max(xx,na.rm=TRUE))
+    if(!grepl('y',log))ylims<-c(0,ylims[2])
     fits[[thisSample]]<-plotIfn(concAlpha,xx,main=ifelse(showMain,thisSample,''),xlab=xlab,ylims=ylims,log=log,...)
-    if(!grepl('y',log))ylims<-c(0,max(condenseReps(xx),na.rm=TRUE))
+    if(!grepl('y',log))ylims<-c(0,ylims[2])
     if(condenseTechs)plotIfn(concAlpha,condenseReps(xx),main=ifelse(showMain,thisSample,''),xlab=xlab,ylims=ylims,log=log,...)
   }
   invisible(fits)
@@ -276,7 +296,7 @@ plotIfnStacked<-function(conc,p24,bioRep=rep(1,length(p24)),techRep=rep(1,length
   return(c(fit[3],fifty))
 }
 
-read6ConcIfns<-function(file,exclude=1,firstCol=3,nameCol=firstCol-1,ifnCol=0,dilCol=0){
+read6ConcIfns<-function(file,exclude=1,firstCol=3,nameCol=firstCol-1,ifnCol=0,dilCol=0,minRows=8){
   wb <- loadWorkbook(file)
   counter<-0
   ic50Curves<-lapply(getSheets(wb),function(sheet){
@@ -294,7 +314,7 @@ read6ConcIfns<-function(file,exclude=1,firstCol=3,nameCol=firstCol-1,ifnCol=0,di
       out[names(tmp)[names(tmp)!='']]<-tmp[names(tmp)!='']
       return(out)
     })
-    if(any(sapply(vals[1:8],function(xx)is.null(xx[[3]])))){message('  Not found');return(NULL)}
+    if(any(sapply(vals[1:minRows],function(xx)is.null(xx[[3]])))){message('  Not found');return(NULL)}
     #assuming col 3, first row contains 1
     firstRow<-min(c(Inf,which(!is.na(sapply(vals[1:10],'[[',firstCol))&sapply(vals[1:10],'[[',firstCol)=='1')))+1
     if(firstRow==Inf){message('  Not found');return(NULL)}
@@ -346,7 +366,7 @@ readPlateViruses<-function(plateFile,virusFile){
   return(plateIds)
 }
 
-source('iuStan.R')
+#source('iuStan.R')
 runIuStan<-function(virus,tit){
   times<-sort(unique(tit$time))
   do.call(rbind,lapply(structure(times,.Names=times),function(time){
@@ -401,4 +421,30 @@ plotRawIce<-function(tit,viruses,ius,sds=NULL){
       title(main=sprintf('Ice half life: %s hr',ifelse(is.na(half),'>48',format(half,digits=3))))
     }
   }
+}
+
+plotStackedIfns<-function(dilutes,concAlpha,xlab='',cols=NULL,pch=NULL,...){
+  uniqSamples<-unique(dilutes$sample)
+  cols<-c(cols,structure(rep('black',sum(!uniqSamples %in% names(cols))),.Names=uniqSamples[!uniqSamples %in% names(cols)]))
+  pch<-c(pch,structure(rep(21,sum(!uniqSamples %in% names(pch))),.Names=uniqSamples[!uniqSamples %in% names(pch)]))
+  nCol<-length(concAlpha)*2 #assume two tech replicates
+  par(mar=c(3,3.8,.1,.1))
+  zeroOffset<-.1
+  concs<-concAlpha
+  fakeZero<-min(concs[concs>0])*zeroOffset
+  concs[concs==0]<-fakeZero
+  props<-do.call(rbind,by(dilutes[,1:nCol],dilutes$sample,function(xx){
+    bioRepMeans<-(xx[seq(1,length(xx),2)]+xx[seq(2,length(xx),2)])/2
+    bioRepProp<-bioRepMeans/bioRepMeans[,1]
+    apply(bioRepProp,2,mean)
+  }))
+  plot(rep(concs,each=nrow(props)),unlist(props),log='x',xaxt='n',las=1,mgp=c(2,1,0),xlab=xlab,ylab='',type='n')
+  title(ylab='Proportion of maximum p24',mgp=c(2.6,1,0))
+  for(ii in rownames(props)){
+    lines(concs,props[ii,],col=cols[ii],lwd=2)
+    points(concs,props[ii,],bg=cols[ii],pch=pch[ii])
+  }
+  dnar::logAxis(1)
+  abline(h=.5,lty=2)
+  legend('bottomleft',names(cols),inset=.01,lty=1,col=cols,lwd=2,pch=pch[names(cols)],pt.bg=cols,...)
 }
