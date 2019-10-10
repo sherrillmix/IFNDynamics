@@ -1,0 +1,143 @@
+
+miniIn<-read.csv('out/miniInputTitration.csv',row.names=1)
+miniIn$id<-rownames(miniIn)
+miniOut<-read.csv('out/miniOutputTitration.csv',row.names=1)
+miniOut$id<-sub(' retro','',rownames(miniOut))
+miniOut$retro<-grepl('retro',rownames(miniOut))
+
+combo<-merge(miniOut[miniOut$retro,c('id','No.Drug')],miniOut[!miniOut$retro,c('id','No.Drug')],by.y='id',by.x='id',all.x=TRUE,all.y=TRUE,suffixes=c('.retro',''))
+plot(combo$No.Drug,combo$No.Drug.retro);abline(0,1)
+combo<-merge(combo,miniIn[,c('No.Drug','id')],by.y='id',by.x='id',suffixes=c('','.in'),all.x=TRUE,all.y=TRUE)
+rt<-read.csv('data/Mini_expansion_RT.csv',row.names=1)
+rt<-rt[,!grepl('^Input',colnames(rt))]
+colnames(rt)<-sub('\\.+$','',sub('RT\\.ng\\.ml\\.\\.','',colnames(rt)))
+colnames(rt)[c(which(colnames(rt)=='Beads'),which(colnames(rt)=='Retron'))]<-c('Retron','Beads')
+rownames(rt)<-sub('^Rb','Rebound',rownames(rt))
+colnames(rt)<-sprintf('RT_%s',colnames(rt))
+#the two batches were switched in plate (photo of plate lid cleared up)
+if(any(!combo$id %in% c(rownames(rt),'SG3','YU2','SG3+WEAU','89.6','Media')))stop('Missing RT')
+combo<-cbind(combo,rt[combo$id,])
+combo$infectivity_Retro<-combo$No.Drug.retro/combo$RT_Retron/1000
+combo$infectivity_Bead<-combo$No.Drug/combo$RT_Beads/1000
+combo$infectivity_Old<-combo$No.Drug.in/combo$RT_Old/1000
+pdf('out/infectivityCompare.pdf')
+  par(mar=c(3,3.2,.1,.1))
+  lims<-dnar::withAs(xx=c(combo$infectivity_Old,combo$infectivity_Bead,combo$infectivity_Retro),range(xx[xx<Inf],na.rm=TRUE))
+  dnar::withAs(combo=combo[!is.na(combo$infectivity_Retro)&!is.na(combo$infectivity_Bead)&combo$infectivity_Retro+combo$infectivity_Bead<Inf,],plot(combo$infectivity_Retro,combo$infectivity_Bead,ylab='Bead isolate infectivity (IU/pg RT)',pch=21,bg='#00000033',cex=1.3,mgp=c(2.3,.8,0),las=1,xlab='',xlim=lims,ylim=lims))
+  title(xlab='Retronectin isolate infectivity (IU/pg RT)',mgp=c(1.9,1,0))
+  abline(0,1,lty=1)
+  dnar::withAs(combo=combo[!is.na(combo$infectivity_Old)&!is.na(combo$infectivity_Bead)&combo$infectivity_Old+combo$infectivity_Bead<Inf,],plot(combo$infectivity_Old,combo$infectivity_Bead,ylab='Bead isolate infectivity (IU/pg RT)',pch=21,bg='#00000033',cex=1.3,mgp=c(2.3,.8,0),las=1,xlab='',xlim=lims,ylim=lims))
+  title(xlab='Input isolate infectivity (IU/pg RT)',mgp=c(1.9,1,0))
+  abline(0,1,lty=1)
+  dnar::withAs(combo=combo[!is.na(combo$infectivity_Old)&!is.na(combo$infectivity_Retro)&combo$infectivity_Old+combo$infectivity_Retro<Inf,],plot(combo$infectivity_Old,combo$infectivity_Retro,ylab='Retro isolate infectivity (IU/pg RT)',pch=21,bg='#00000033',cex=1.3,mgp=c(2.3,.8,0),las=1,xlab='',xlim=lims,ylim=lims))
+  title(xlab='Input isolate infectivity (IU/pg RT)',mgp=c(1.9,1,0))
+  abline(0,1,lty=1)
+dev.off()
+newNames<-c('No.Drug.retro'='IU_Retro','No.Drug'='IU_Bead','No.Drug.in'='IU_Old','RT_Retron'='RT_Retro','RT_Beads'='RT_Bead')
+for(ii in names(newNames))colnames(combo)[colnames(combo)==ii]<-newNames[ii]
+write.csv(combo[!is.na(combo$RT_Old),],'out/miniInfectivity_20190820.csv',row.names=FALSE)
+
+rep<-read.csv("data/miniRepCap.csv",stringsAsFactors=FALSE,header=FALSE)
+firstExp<-read.csv('data/Marvin infectivity RT titers 07042019-1.csv',stringsAsFactors=FALSE)
+firstExp<-firstExp[firstExp$X!='CAM13 control',]
+firstExp$inf<-as.numeric(ifelse(grepl('DIV',firstExp$IU.ng.RT),NA,firstExp$IU.ng.RT))/1000
+rownames(firstExp)<-firstExp$X
+inFirst<-combo$id %in% firstExp$X
+firstExp[combo[inFirst,'id'],'inf']<-combo[inFirst,'infectivity_Bead']
+firstExp$class<-rep(c('Rebound','VOA','MM acute','TP chronic','MM chronic','TP acute'),c(48,33,8,6,8,8))
+pdf('out/infectivityByClass.pdf',width=8,height=4)
+  for(repCap in c(FALSE,TRUE)){
+    tmp<-firstExp[!is.na(firstExp$inf)&firstExp$inf<Inf&firstExp$inf>0,]
+    if(repCap)tmp<-tmp[tmp$X %in% rep$V2,]
+    uniqC<-unique(tmp$class)
+    pos<-structure(1:length(unique(tmp$class)),.Names=uniqC[order(!grepl('MM',uniqC),!grepl('TP',uniqC),grepl('Rebound|acute',uniqC))])
+    par(mar=c(3,3.5,.2,.2),lheight=.8)
+    plot(1,1,type='n',las=1,ylab='Infectivity (IU/pg RT)',xlim=c(1,length(unique(firstExp$class))+.2),ylim=range(tmp$inf),xaxt='n',log='y',yaxt='n',mgp=c(2.3,1,.3),xlab='')
+    dnar::logAxis(las=1)
+    axis(1,pos,sub(' ','\n',names(pos)),padj=1,mgp=c(1,.1,0))
+    offset<-ave(tmp$inf,tmp$class,FUN=function(xx)beeswarm::swarmx(0,xx,cex=1.2)[[1]])
+    points(pos[(tmp$class)]+offset,tmp$inf,cex=1.2,bg=ifelse(tmp$X %in% combo$id,'#0000FF','#FF0000'),pch=21)
+  }
+dev.off()
+
+newInfect<-read.csv('out/2019-09-19_miniInfect.csv',row.names=1)
+newInfectCont<-newInfect[!is.na(newInfect$NA.control),c('NA.control'),drop=FALSE]
+newInfect<-newInfect[rownames(newInfect)!='Media',c('X2_reb.bead','X1_reb.bead','X1_other.bead','X2_reb.retro')]
+newInfect<-newInfect[apply(!is.na(newInfect),1,sum)>0,]
+if(any(!is.na(newInfect$X1_other.bead)&!is.na(newInfect$X2_reb.retro)))stop('Overlapping values')
+if(any(!is.na(newInfect$X1_reb.bead)&!is.na(newInfect$X2_reb.retro)))stop('Overlapping values')
+if(any(!is.na(newInfect$X1_reb.bead)&!is.na(newInfect$X1_other.bead)))stop('Overlapping values')
+newInfect$redoBead<-newInfect$X2_reb.bead
+newInfect$redoRetro<-newInfect$X2_reb.retro
+newInfect$redoFirst<-ifelse(is.na(newInfect$X1_reb.bead),newInfect$X1_other.bead,newInfect$X1_reb.bead)
+
+combo$id %in% rownames(newInfect)
+rownames(newInfect)[!rownames(newInfect) %in% combo$id]
+newInfect$id<-rownames(newInfect)
+rt$id<-rownames(rt)
+firstExp$id<-rownames(firstExp)
+all<-merge(combo[,c('id','IU_Retro','IU_Bead','IU_Old','infectivity_Retro','infectivity_Bead','infectivity_Old','RT_Bead','RT_Retro','RT_Old')],newInfect[,c('id','redoBead','redoRetro','redoFirst')],all.x=TRUE,all.y=TRUE)
+all<-merge(firstExp[,c('id','ng.RT.uL','class')],all,all.y=TRUE)
+colnames(all)[colnames(all)=='ng.RT.uL']<-'RT_First'
+all$redoBeadInf<-all$redoBead/all$RT_Bead/1000
+all$redoFirstInf<-all$redoFirst/all$RT_First/1000
+all$inf<-ifelse(is.na(all$redoBeadInf),all$redoFirstInf,all$redoBeadInf)
+all$inf[all$inf==Inf]<-NA
+
+tmp<-merge(firstExp[,c('id','avg.IU.uL')],newInfect[,c('id','redoBead','redoRetro')])
+
+pdf('out/infectivityByClass_20190919.pdf',width=6,height=4)
+  for(repCap in c(FALSE,TRUE)){
+    tmp<-all[!is.na(all$inf)&!is.na(all$class),]
+    if(repCap)tmp<-tmp[tmp$id %in% rep$V2,]
+    uniqC<-unique(tmp$class)
+    pos<-structure(1:length(unique(tmp$class)),.Names=uniqC[order(!grepl('MM',uniqC),!grepl('TP',uniqC),grepl('Rebound|acute',uniqC))])
+    par(mar=c(3,3.5,.2,.2),lheight=.8)
+    plot(1,1,type='n',las=1,ylab='Infectivity (IU/pg RT)',xlim=c(1,length(unique(tmp$class))+.2)+c(-.3,.3),ylim=range(tmp$inf),xaxt='n',log='y',yaxt='n',mgp=c(2.3,1,.3),xlab='')
+    dnar::logAxis(las=1)
+    axis(1,pos,sub(' ','\n',names(pos)),padj=1,mgp=c(1,.1,0))
+    offset<-ave(tmp$inf,tmp$class,FUN=function(xx)beeswarm::swarmx(0,xx,cex=1.2)[[1]])
+    points(pos[(tmp$class)]+offset,tmp$inf,cex=1.2,pch=21,bg='#00000055')
+  }
+dev.off()
+
+
+redoInfect<-read.csv('out/2019-09-27_miniInfect.csv',row.names=1)
+redoInfectCont<-redoInfect[!is.na(redoInfect$NA.control),c('NA.control'),drop=FALSE]
+redoInfect<-redoInfect[rownames(redoInfect)!='Media',c('X2_reb.bead','X1_reb.bead','X1_other.bead','X2_reb.retro')]
+redoInfect<-redoInfect[apply(!is.na(redoInfect),1,sum)>0,]
+if(any(!is.na(redoInfect$X1_other.bead)&!is.na(redoInfect$X2_reb.retro)))stop('Overlapping values')
+if(any(!is.na(redoInfect$X1_reb.bead)&!is.na(redoInfect$X2_reb.retro)))stop('Overlapping values')
+if(any(!is.na(redoInfect$X1_reb.bead)&!is.na(redoInfect$X1_other.bead)))stop('Overlapping values')
+redoInfect$redoBead<-redoInfect$X2_reb.bead
+redoInfect$redoRetro<-redoInfect$X2_reb.retro
+redoInfect$redoFirst<-ifelse(is.na(redoInfect$X1_reb.bead),redoInfect$X1_other.bead,redoInfect$X1_reb.bead)
+rownames(redoInfect)[!rownames(redoInfect) %in% combo$id]
+redoInfect$id<-rownames(redoInfect)
+#
+rt$id<-rownames(rt)
+firstExp$id<-rownames(firstExp)
+all<-merge(combo[,c('id','IU_Retro','IU_Bead','IU_Old','infectivity_Retro','infectivity_Bead','infectivity_Old','RT_Bead','RT_Retro','RT_Old')],redoInfect[,c('id','redoBead','redoRetro','redoFirst')],all.x=TRUE,all.y=TRUE)
+all<-merge(firstExp[,c('id','ng.RT.uL','class')],all,all.y=TRUE)
+colnames(all)[colnames(all)=='ng.RT.uL']<-'RT_First'
+all$redoBeadInf<-all$redoBead/all$RT_Bead/1000
+all$redoFirstInf<-all$redoFirst/all$RT_First/1000
+all$inf<-ifelse(is.na(all$redoBeadInf),all$redoFirstInf,all$redoBeadInf)
+all$inf[all$inf==Inf]<-NA
+#
+pdf('out/infectivityByClass_20190927.pdf',width=6,height=4)
+  for(repCap in c(FALSE,TRUE)){
+    tmp<-all[!is.na(all$inf)&!is.na(all$class),]
+    if(repCap)tmp<-tmp[tmp$id %in% rep$V2,]
+    uniqC<-unique(tmp$class)
+    pos<-structure(1:length(unique(tmp$class)),.Names=uniqC[order(!grepl('MM',uniqC),!grepl('TP',uniqC),grepl('Rebound|acute',uniqC))])
+    par(mar=c(3,3.5,.2,.2),lheight=.8)
+    plot(1,1,type='n',las=1,ylab='Infectivity (IU/pg RT)',xlim=c(1,length(unique(tmp$class))+.2)+c(-.3,.3),ylim=range(tmp$inf),xaxt='n',log='y',yaxt='n',mgp=c(2.3,1,.3),xlab='')
+    dnar::logAxis(las=1)
+    axis(1,pos,sub(' ','\n',names(pos)),padj=1,mgp=c(1,.1,0))
+    offset<-ave(tmp$inf,tmp$class,FUN=function(xx)beeswarm::swarmx(0,xx,cex=1.2)[[1]])
+    points(pos[(tmp$class)]+offset,tmp$inf,cex=1.2,pch=21,bg='#00000055')
+  }
+dev.off()
+
+
