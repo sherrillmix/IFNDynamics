@@ -69,10 +69,15 @@ newRebound<-rbind(
   read.csv('../out/rebound_2019-01-30_Ic50.csv',row.names=1),
   read.csv('../out/voa_2019-01-10.csv',row.names=1)
 )
+tmp<-read.csv('../out/pendingCombined_20190815_ic50.csv',row.names=1)
+tmp<-tmp[!grepl('UK61|A08.21_P2F4',row.names(tmp)),!colnames(tmp) %in% c('source','id')]
+rownames(tmp)<-sub('alpha and beta','',rownames(tmp))
+rownames(tmp)<-sub('(QVOA|Rebound) (.*)','\\2 \\1',rownames(tmp))
+newRebound<-rbind(newRebound,tmp)
 newRebound<-newRebound[grepl('Beta|beta',rownames(newRebound))&!grepl('UK61|SG3|CH40|WEAU',rownames(newRebound)),]
-newRebound$virus<-sub(' \\([^)]+\\) - ?','-',sub(' \\(For Scott.*','',rownames(newRebound)))
+newRebound$virus<-sub(' \\([^)]+\\)$','',sub(' (Alpha|Beta)?$','',rownames(newRebound)))
 newRebound$class<-ifelse(grepl('Rebound|S-22|BEAT',newRebound$virus),'Rebound','QVOA')
-newRebound$type<-ifelse(grepl('Rebound|S-22|BEAT',newRebound$virus),'Rebound',ifelse(grepl('MM',newRebound$virus),'Outgrowth','Pre-ATI'))
+newRebound$type<-ifelse(grepl('Rebound|S-22|BEAT',newRebound$virus),'Rebound',ifelse(grepl('MM',newRebound$virus),'Outgrowth',ifelse(grepl('Post',newRebound$virus),'Post-ATI','Pre-ATI')))
 newRebound$pat<-sub('[ _.].*','',sub('QVOA ','',sub('Rebound ','',rownames(newRebound))))
 newRebound$label<-sprintf('%s %s',newRebound$type,newRebound$pat)
 newRebound$source<-'newRebound'
@@ -102,9 +107,9 @@ combo$speed<-ifelse(grepl(fastRegex,combo$virus),'Fast',ifelse(grepl(slowRegex,c
 
 
 
-write.csv(combo[!combo$source %in% c('marvin','shilpa'),c('virus','pat','type','class','study','source','beta')],'comboBeta.csv',row.names=FALSE)
+write.csv(combo[!combo$source %in% c('marvin','shilpa'),c('virus','pat','type','class','study','source','beta')],'out/comboBeta.csv',row.names=FALSE)
 
-ordering<-c('Rebound S-22','Rebound S-30','Pre-ATI A06','Post-ATI A06','Pre-ATI A09','Rebound A09','Post-ATI A09','Rebound A08','Rebound 601','Pre-ATI 9201','Rebound 9201','Rebound 9202','Pre-ATI 9203','Rebound 9203','Rebound 9207','Rebound BEAT-004','Rebound BEAT-030','Rebound BEAT-044','Lorenzi et al. B106','Lorenzi et al. B199','Outgrowth MM14','Outgrowth MM15','Outgrowth MM23','Outgrowth MM34','Outgrowth MM40','Outgrowth MM34','Acute','6 Month','Nadir','Last','Acute Recipient','Chronic Donor')
+ordering<-c('Rebound S-22','Rebound S-23','Rebound S-30','Pre-ATI A06','Post-ATI A06','Pre-ATI A08','Rebound A08','Post-ATI A08','Pre-ATI A09','Rebound A09','Post-ATI A09','Rebound A08','Rebound 601','Pre-ATI 9201','Rebound 9201','Pre-ATI 9202','Rebound 9202','Pre-ATI 9203','Rebound 9203','Pre-ATI 9207','Rebound 9207','Rebound BEAT-004','Rebound BEAT-030','Rebound BEAT-044','Lorenzi et al. B106','Lorenzi et al. B199','Outgrowth MM14','Outgrowth MM15','Outgrowth MM23','Outgrowth MM34','Outgrowth MM40','Outgrowth MM34','Acute','6 Month','Nadir','Last','Acute Recipient','Chronic Donor')
 pos<-structure(1:length(unique(combo$label)),.Names=unique(combo$label[orderIn(combo$label,ordering)]))
 posStudy<-sapply(names(pos),function(xx)combo[combo$label==xx,'study'][1])
 studySpace<-1.5
@@ -126,7 +131,7 @@ extraSpace<-1
 pos<-pos+cumsum(grepl('Acute|6 Month|Nadir|Last|Chronic',names(pos)))*extraSpace
 subsets<-rev(list('mm'=names(pos)[!grepl('ATI|Rebound|Lorenzi',names(pos))],'lorenzi'=names(pos)[!grepl('ATI|Rebound',names(pos))],'prePost'=names(pos)[!grepl('Rebound',names(pos))],'noMont'=names(pos)[!grepl('BEAT|S-[0-9]',names(pos))],'all'=names(pos)))
 
-pdf('beta_qvoa_compare.pdf',width=9,height=6)
+pdf('out/beta_qvoa_compare.pdf',width=9,height=6)
 ylim=range(combo$beta)
 spread<-offsetX(log10(combo$beta),combo$label,width=.25)
 for(ii in names(subsets)){
@@ -150,21 +155,21 @@ for(ii in names(subsets)){
 }
 dev.off()
 
-pdf('beta_qvoa_compare2.pdf',width=8,height=5.5)
+pdf('out/beta_qvoa_compare2.pdf',width=9,height=3.5)
 plotQvoa2(combo$beta,combo$label,pos,combo$class,combo$study,combo$speed,ylab='IFNb IC50 (pg/ml)')
 dev.off()
 
-pdf('studiesBeta.pdf',height=2.5,width=7)
+pdf('out/studiesBeta.pdf',height=2.5,width=7)
 plotStudies(combo$study,combo$label,combo$beta,combo$pat,combo$speed,combo$class,ylab='IFNb IC50 (pg/ml)')
 dev.off()
 
-pdf('A09beta.pdf',height=3,width=7)
+pdf('out/A09beta.pdf',height=3,width=7)
   selector<-grepl('A09',combo$label)
   plotStudies(combo$study[selector],combo$label[selector],combo$beta[selector],combo$pat[selector],combo$speed[selector],combo$class[selector],ylab='IFNb IC50 (pg/ml)')
 dev.off()
 
 
-pdf('beta_repCap_compare.pdf',width=8,height=5.5)
+pdf('out/beta_repCap_compare.pdf',width=8,height=5.5)
   withAs(combo=combo[!is.na(combo$repCap),],plotQvoa2(combo$repCap,combo$label,pos,combo$class,combo$study,combo$speed,ylab='Replication capacity'))
 dev.off()
 
