@@ -1135,4 +1135,41 @@ dev.off()
 
 
 tit<-readCounts('ice/out/2019-10-04_macaqueInHuman/counts.csv')
-tapply(tit$n,list(tit$row,tit$col,tit$plate)
+tapply(tit$n,list(tit$row,tit$col,tit$plate),c)
+
+tit<-readCounts('ice/out/2019-10-09_various/counts.csv')
+tit<-tit[!grepl('red',tit$plate),]
+tit[tit$plate=='isolation_flasks_2','plate']<-'flasks_2'
+withAs(tit=tit[grepl('isolation',tit$plate),],tapply(tit$n,list(tit$row,tit$col,tit$plate),c))
+withAs(tit=tit[grepl('flask',tit$plate),],tapply(tit$n,list(tit$row,tit$col,tit$plate),c))
+tit<-tit[grep('^ic50',tit$plate),]
+tit$plateDil<-as.numeric(sub('x','',sapply(strsplit(tit$plate,'_'),'[',2)))
+tit$plateDil[tit$row=='H']<-2^(tit$col[tit$row=='H']-1)
+tit$dil<-4*tit$plateDil
+tit$vir<-tit$well
+tit$vir[tit$row=='G']<-'Media'
+tit$vir[tit$row=='H']<-'SG3'
+iusStan<-unlist(cacheOperation('work/tzmbl_ic50_20191009.Rdat',parallel::mclapply,structure(unique(tit$vir),.Names=unique(tit$vir)),function(vir,tit,...){
+    thisDat<-tit[tit$vir==vir,c('n','dil'),drop=FALSE]
+    if(nrow(thisDat)<2)return(NA)
+    fit<-simpleCountIU(iuModSimple,thisDat$n,thisDat$dil,1)
+    return(mean(as.matrix(fit)[,'baseIU'])/100)
+},tit=tit,mc.cores=20))
+write.csv(data.frame('infect'=iusStan),'out/2019-10-09_tzmblIc50.csv')
+pdf('out/2019-10-09_tzmblIc50.pdf',width=10,height=8)
+for(virus in unique(tit$vir[order(tit$row,tit$col)])){
+    thisDat<-tit[tit$vir==virus,]
+    thisDat$logDil<--log(thisDat$dil)
+    withAs(zz=thisDat,plot(zz$dil,zz$n+1,xlab='Dilution',ylab='TZMBL count',las=1,log='yx',main=virus,ylim=range(tit$n+1),xlim=c(1,max(tit$dil,na.rm=TRUE)),pch=21,bg='blue',cex=2))
+    thisIu<-iusStan[virus]
+    fakeDils=1:50000
+    preds<-thisIu/fakeDils*100
+    lines(fakeDils,preds+1)
+    mtext(sprintf('%0.1f IU/ul',thisIu),3)
+}
+dev.off()
+round(tapply(iusStan,list(sub('^([A-Z])([0-9]+)$','\\1',names(iusStan)),as.numeric(ifelse(grepl('^([A-Z])([0-9]+)$',names(iusStan)),sub('^([A-Z])([0-9]+)$','\\2',names(iusStan)),1))),c))
+
+
+
+
