@@ -1,7 +1,8 @@
 if(!exists('mmLookup'))source('readNewData.R')
+bulk<-c('MM14','MM15','MM55','MM62','WEAU')
 
 hxb2<-dnar::read.fa('work/hxb2.fa')$seq
-cohortRegex<-paste(c(sub('EJ','UK',ejLookup),ejLookup,mmLookup),collapse='|')
+cohortRegex<-paste(c('WEAU',sub('EJ','UK',ejLookup),ejLookup,mmLookup),collapse='|')
 seqs<-dnar::readFaDir('seqs')
 corrections<-dnar::readFaDir('seqs/correct')
 corrections$name<-sub('_fixed','',corrections$name)
@@ -13,27 +14,29 @@ seqs[seqs$name %in% corrections$name,'seq']<-corrections[seqs$name[seqs$name %in
 deletions<-read.csv('seqs/correct/delete.csv',stringsAsFactors=FALSE)$delete
 if(any(!deletions %in% seqs$name))stop('Deletion not found')
 seqs<-seqs[!seqs$name %in% deletions,]
-sampleRegex<-'^.*(UK|MM)([0-9]+)[.-]([0-9]+).*$'
+patRegex<-'WEAU|EJ[0-9]+|UK[0-9]+|MM[0-9]+'
+sampleRegex<-sprintf('^.*(%s)[.-]([0-9]+).*$',patRegex)
+seqs$noAss<-sub('ass?emble.*','',seqs$name)
 if(any(!grepl(sampleRegex,seqs$name)))stop('UK/MM not found in all seqs')
-seqs$inCohort<-grepl(cohortRegex,seqs$name)
-seqs$sample<-sub(sampleRegex,'\\1\\2.\\3',seqs$name)
+seqs$inCohort<-grepl(cohortRegex,seqs$noAss)
+seqs$sample<-sub(sampleRegex,'\\1.\\2',seqs$noAss)
 seqs$pat<-sub('\\..*','',seqs$sample)
 seqs$visit<-sub('.*\\.','',seqs$sample)
-seqs$mm<-ifelse(grepl('MM',seqs$pat),seqs$pat,c(mmLookup,structure(mmLookup,.Names=sub('EJ','UK',names(mmLookup))))[seqs$pat])
-idRegex<-'^.*(UK|MM)[0-9]+[.-][0-9]+[._-]([0-9]*[A-Z][A-Z0-9]+).*$'
-seqs$hasId<-grepl(idRegex,seqs$name)
-seqs$id[seqs$hasId]<-sub(idRegex,'\\2',seqs$name[seqs$hasId])
-seqs$sga<-grepl('\\.SGS|sgs|sga|SGA|env\\.',seqs$name)
+seqs$mm<-ifelse(grepl('MM|WEAU',seqs$pat),seqs$pat,c(mmLookup,structure(mmLookup,.Names=sub('EJ','UK',names(mmLookup))))[seqs$pat])
+idRegex<-sprintf('^.*(%s)[.-][0-9]+[._-]([0-9]*[A-Z][A-Z0-9]+).*$',patRegex)
+seqs$hasId<-grepl(idRegex,seqs$noAss)
+seqs$id[seqs$hasId]<-sub(idRegex,'\\2',seqs$noAss[seqs$hasId])
+seqs$sga<-grepl('\\.SGS|sgs|sga|SGA|env\\.',seqs$noAss)
 #MM33.XX.XX.XX are sga
-seqs$sga<-seqs$sga|grepl('MM33\\.[0-9]+\\.[0-9]+\\.[0-9]+',seqs$name)
-seqs$pbmc<-grepl('\\.pbmc\\.',seqs$name)
-seqs$voa<-grepl('(VOA|voa)[._-]',seqs$name)
+seqs$sga<-seqs$sga|grepl('MM33\\.[0-9]+\\.[0-9]+\\.[0-9]+',seqs$noAss)
+seqs$pbmc<-grepl('\\.pbmc\\.',seqs$noAss)
+seqs$voa<-grepl('(VOA|voa)[._-]',seqs$noAss)
 
 inCohort<-seqs[seqs$inCohort,]
 inCohort$time<-apply(inCohort[,c('mm','visit')],1,function(xx)compiledMeta[compiledMeta$mm==xx[1]&suppressWarnings(as.numeric(compiledMeta$visit))==as.numeric(xx[2])&!is.na(suppressWarnings(as.numeric(compiledMeta$visit))),'time'])
 inCohort$internal[inCohort$hasId]<-dnar::withAs(xx=inCohort[inCohort$hasId,],paste(xx$mm,sprintf('%02d',as.numeric(xx$visit)),sub('^P','',xx$id),sep='.'))
 inCohort$isolate[inCohort$hasId]<-sapply(inCohort$internal[inCohort$hasId],function(xx){
-  hits<-grepl(xx,dat$id)&!grepl('bulk|BULK',dat$id)
+  hits<-grepl(xx,dat$id)&(!grepl('bulk|BULK',dat$id)|dat$pat %in% bulk)
   if(sum(hits)>1){
     warning(sprintf('Ambiguous id match: %s',xx))
     return(NA)
@@ -105,12 +108,23 @@ combine$newName<-sprintf('%s.%03d.01',combine$baseName,combine$id)
 if(any(table(combine$newName)>1))stop('Multiple sequences with same name')
 table(combine$mm,combine$desc)
 
-bulk<-c('MM14','MM15','MM55','MM62','WEAU')
 write.csv(table(sprintf('%s.%05d (%s)',combine$mm,combine$time,combine$visit),combine$desc),'out/countByTime.csv')
 
 write.csv(combine[,c('name','isolate','newName','seq')],'out/newNames.csv',row.names=FALSE)
 dnar::withAs(combine=combine[!combine$mm %in% bulk,],write.fa(combine$newName,combine$seq,'out/mmLongitudinalSequences_noBulk.fa'))
+dnar::withAs(combine=combine[combine$mm %in% bulk,],write.fa(combine$newName,combine$seq,'out/mmLongitudinalSequences_bulk.fa'))
+dnar::withAs(combine=combine,write.fa(combine$newName,combine$seq,'out/mmLongitudinalSequences.fa.gz'))
 
 for(ii in unique(combine$mm)){
   dnar::withAs(combine=combine[combine$mm==ii,],write.fa(combine$newName,combine$seq,sprintf('out/seqSplit/%s.fa.gz',ii)))
 }
+#align<-read.fa('')
+#pdf('out/allSeqs.pdf')
+#dev.off()
+
+xx<-read.fa('out/mmLongitudinalSequences_20190702.fa.gz')
+xx$mm<-sapply(strsplit(xx$name,'\\.'),'[',1)
+xx$source<-sapply(strsplit(xx$name,'\\.'),'[',2)
+xx$type<-sapply(strsplit(xx$name,'\\.'),'[',3)
+xx$time<-(sapply(strsplit(xx$name,'\\.'),'[',4))
+write.csv('out/mmDayCount.csv',table(paste(xx$mm,xx$time),paste(xx$source,xx$type)))
