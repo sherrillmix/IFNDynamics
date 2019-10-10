@@ -3,7 +3,9 @@ library(dnar)
 rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
 
-if(!exists('dat'))source('readNewData.R')
+#if(!exists('dat'))source('readNewData.R')
+dat<-read.csv('out/allLongitudinal.csv',stringsAsFactors=FALSE)
+
 
 ic50CodeSample<-'
   data {
@@ -91,6 +93,7 @@ ic50CodeSample<-'
     sampleSD~gamma(1,.1);
   }
 '
+
 ic50Code<-'
   data {
     int<lower=0> nVirus;
@@ -174,9 +177,175 @@ ic50Code<-'
   }
 '
 
+
+ic50CodeWithFast<-'
+  data {
+    int<lower=0> nVirus;
+    int<lower=0> nPatient;
+    int<lower=0> nArt;
+    real ic50[nVirus];
+    int<lower=0,upper=nPatient> patients[nVirus];
+    vector<lower=0,upper=1>[nPatient] isFast;
+    int<lower=0> artIds[nVirus];
+    real<lower=0> days[nVirus];
+    real daysBeforeArt[nVirus];
+    real artStart[nArt];
+    real<lower=0> hasArt[nVirus];
+    int<lower=0> nSample;
+    int<lower=0,upper=nSample> sample[nVirus];
+  }
+  parameters {
+    vector[nPatient] acuteRaw;
+    vector[nPatient] nadirTimeRaw;
+    vector[nPatient] nadirChangeRaw;
+    //DEFSSUB
+    //vector[nArt] riseTimeRaw;
+    vector[nArt] riseChangeRaw;
+    real<lower=0> sigma;
+    real nadirTimeMean;
+    real<lower=0> nadirTimeSD;
+    real riseTimeMean;
+    real<lower=0> riseTimeSD;
+    real acuteMean;
+    real<lower=0> acuteSD;
+    real riseChangeMean;
+    real<lower=0> riseChangeSD;
+    real nadirChangeMean;
+    real<lower=0> nadirChangeSD;
+    real fastChangeMean;
+  }
+  transformed parameters{
+    vector[nPatient] acute;
+    real expectedIC50[nVirus];
+    vector[nPatient] nadirTime;
+    vector[nPatient] nadirChange;
+    vector[nArt] riseChange;
+    vector[nArt] riseTime;
+    acute=acuteMean+acuteRaw*acuteSD;
+    nadirChange=fastChangeMean*isFast+nadirChangeMean+nadirChangeRaw*nadirChangeSD;
+    nadirTime=nadirTimeMean+nadirTimeRaw*nadirTimeSD;
+    //TRANSSUB
+    //riseTime=riseTimeMean+riseTimeRaw*riseTimeSD;
+    riseChange=riseChangeMean+riseChangeRaw*riseChangeSD;
+    for(ii in 1:nVirus){
+      expectedIC50[ii]=acute[patients[ii]];
+      if(days[ii]<exp(nadirTime[patients[ii]]))expectedIC50[ii]=expectedIC50[ii]+nadirChange[patients[ii]]*days[ii]/exp(nadirTime[patients[ii]]);
+      else{
+        expectedIC50[ii]=expectedIC50[ii]+nadirChange[patients[ii]];
+      }
+      if(hasArt[ii]){
+        if(daysBeforeArt[ii]<0){
+          expectedIC50[ii]=expectedIC50[ii]+riseChange[artIds[ii]];
+        }else{
+          if(daysBeforeArt[ii]<exp(riseTime[artIds[ii]]))expectedIC50[ii]=expectedIC50[ii]+riseChange[artIds[ii]]*(1-daysBeforeArt[ii]/exp(riseTime[artIds[ii]]));
+        }
+      }
+    }
+  }
+  model {
+    //MODELSUB
+    //riseTimeRaw~normal(0,1);
+    ic50~normal(expectedIC50,sigma);
+    sigma~gamma(1,.1);
+    nadirTimeSD~gamma(1,.1);
+    nadirTimeRaw~normal(0,1);
+    riseTimeSD~gamma(1,.1);
+    acuteSD~gamma(1,.1);
+    acuteRaw~normal(0,1);
+    nadirChangeSD~gamma(1,.1);
+    nadirChangeRaw~normal(0,1);
+    riseChangeSD~gamma(1,.1);
+    riseChangeRaw~normal(0,1);
+    riseChangeMean~normal(0,10);
+    nadirChangeMean~normal(0,10);
+    nadirTimeMean~normal(0,10);
+    riseTimeMean~normal(0,10);
+  }
+'
+
+ic50CodeRiseAfter<-'
+  data {
+    int<lower=0> nVirus;
+    int<lower=0> nPatient;
+    int<lower=0> nArt;
+    real ic50[nVirus];
+    int<lower=0,upper=nPatient> patients[nVirus];
+    int<lower=0> artIds[nVirus];
+    real<lower=0> days[nVirus];
+    real daysBeforeArt[nVirus];
+    real artStart[nArt];
+    real<lower=0> hasArt[nVirus];
+    int<lower=0> nSample;
+    int<lower=0,upper=nSample> sample[nVirus];
+  }
+  parameters {
+    vector[nPatient] acuteRaw;
+    vector[nPatient] nadirTimeRaw;
+    vector[nPatient] nadirChangeRaw;
+    //DEFSSUB
+    //vector[nArt] riseTimeRaw;
+    vector[nArt] riseChangeRaw;
+    real<lower=0> sigma;
+    real nadirTimeMean;
+    real<lower=0> nadirTimeSD;
+    real riseTimeMean;
+    real<lower=0> riseTimeSD;
+    real acuteMean;
+    real<lower=0> acuteSD;
+    real riseChangeMean;
+    real<lower=0> riseChangeSD;
+    real nadirChangeMean;
+    real<lower=0> nadirChangeSD;
+  }
+  transformed parameters{
+    vector[nPatient] acute;
+    real expectedIC50[nVirus];
+    vector[nPatient] nadirTime;
+    vector[nPatient] nadirChange;
+    vector[nArt] riseChange;
+    vector[nArt] riseTime;
+    acute=acuteMean+acuteRaw*acuteSD;
+    nadirChange=nadirChangeMean+nadirChangeRaw*nadirChangeSD;
+    nadirTime=nadirTimeMean+nadirTimeRaw*nadirTimeSD;
+    //TRANSSUB
+    //riseTime=riseTimeMean+riseTimeRaw*riseTimeSD;
+    riseChange=riseChangeMean+riseChangeRaw*riseChangeSD;
+    for(ii in 1:nVirus){
+      expectedIC50[ii]=acute[patients[ii]];
+      if(days[ii]<exp(nadirTime[patients[ii]]))expectedIC50[ii]=expectedIC50[ii]+nadirChange[patients[ii]]*days[ii]/exp(nadirTime[patients[ii]]);
+      else{
+        expectedIC50[ii]=expectedIC50[ii]+nadirChange[patients[ii]];
+      }
+      if(hasArt[ii]){
+        if(daysBeforeArt[ii]<exp(riseTime[artIds[ii]]))expectedIC50[ii]=expectedIC50[ii]+riseChange[artIds[ii]]*(1-daysBeforeArt[ii]/exp(riseTime[artIds[ii]]));
+      }
+    }
+  }
+  model {
+    //MODELSUB
+    //riseTimeRaw~normal(0,1);
+    ic50~normal(expectedIC50,sigma);
+    sigma~gamma(1,.1);
+    nadirTimeSD~gamma(1,.1);
+    nadirTimeRaw~normal(0,1);
+    riseTimeSD~gamma(1,.1);
+    acuteSD~gamma(1,.1);
+    acuteRaw~normal(0,1);
+    nadirChangeSD~gamma(1,.1);
+    nadirChangeRaw~normal(0,1);
+    riseChangeSD~gamma(1,.1);
+    riseChangeRaw~normal(0,1);
+    riseChangeMean~normal(0,10);
+    nadirChangeMean~normal(0,10);
+    nadirTimeMean~normal(0,10);
+    riseTimeMean~normal(0,10);
+  }
+'
+
+
 #ic50Mod <- stan_model(model_code = ic50Code)
 
-bayesIC50<-function(mod,ic50,time,timePreArt,patient,chains=50,...){
+bayesIC50<-function(mod,ic50,time,timePreArt,patient,chains=50,fastProgressors=c(),ic50Code,...){
   patientId<-structure(1:length(unique(patient)),.Names=sort(unique(patient)))
   artId<-structure(1:length(unique(patient[!is.na(timePreArt)])),.Names=sort(unique(patient[!is.na(timePreArt)])))
   artStart<-tapply(time+timePreArt,patient,unique)
@@ -194,24 +363,30 @@ bayesIC50<-function(mod,ic50,time,timePreArt,patient,chains=50,...){
     ic50=log(ic50),
     patients=patientId[patient],
     artIds=ifelse(is.na(artId[patient]),9999,artId[patient]),
-    days=time,
+    days=ifelse(time<0,0,time),
     artStart=artStart[names(artId)],
     nSample=max(sampleId),
     sample=sampleId[sample],
     daysBeforeArt=ifelse(is.na(timePreArt),9999,timePreArt),
-    hasArt=!is.na(timePreArt)
+    hasArt=!is.na(timePreArt),
+    isFast=names(patientId) %in% fastProgressors
   )
   fit <- sampling(ic50Mod, data = dat, iter=4000, chains=chains,thin=2,control=list(adapt_delta=.99,max_treedepth=15),...)
   return(list('fit'=fit,pats=patientId,arts=artId,code=filledCode,artStart=artStart,sample=sampleId))
 }
+fit<-withAs(xx=dat[!is.na(dat$ic50)&!dat$qvoa,],bayesIC50(ic50Mod,xx$ic50,xx$time,xx$timeBeforeArt,xx$pat,ic50Code=ic50CodeWithFast,fastProgressors=c('MM15','WEAU')))
+
+pdf('test.pdf',width=4,height=8)
+noQvoa<-dat[!dat$qvoa,]
+plotCondenseIfn(noQvoa,noQvoa$ic50,ylab='IFNa2 IC50 (pg/ml)',sims=sims)
+dev.off()
 
 
-
-calcSims<-function(fit,dat){
+calcSims<-function(fit,dat,riseAfter=FALSE){
   mat<-as.matrix(fit[['fit']])
   pats<-fit$pats
   arts<-fit$arts
-  maxTimes<-tapply(dat$time,dat$pat,max)
+  maxTimes<-tapply(dat$time[!dat$qvoa],dat$pat[!dat$qvoa],max)
   artStart<-fit$artStart
   sims<-lapply(names(pats),function(pat){
     fakeTimes<-1:max(c(maxTimes[[pat]],artStart[[pat]]),na.rm=TRUE)
@@ -228,7 +403,7 @@ calcSims<-function(fit,dat){
       timeBeforeArt<-artStart[pat]-fakeTimes
       riseProp<-1-matrix(timeBeforeArt,nrow=length(riseTime),ncol=length(timeBeforeArt),byrow=TRUE)/riseTime
       riseProp[riseProp<0]<-0
-      riseProp[riseProp>1]<-1
+      if(!riseAfter)riseProp[riseProp>1]<-1
       nadTimes<-matrix(nadirTime,nrow=length(riseTime),ncol=length(fakeTimes))
       timeMat<-matrix(fakeTimes,nrow=length(riseTime),ncol=length(fakeTimes),byrow=TRUE)
       predIc50<-predIc50 + riseChange * riseProp
@@ -245,20 +420,68 @@ calcSims<-function(fit,dat){
   names(sims)<-names(pats)
   return(sims)
 }
+browser()
+fitFast<-withAs(xx=dat[!is.na(dat$ic50)&!dat$qvoa,],bayesIC50(ic50Mod,xx$ic50,xx$time,xx$timeBeforeArt,xx$pat,ic50Code=ic50Code))
+fit<-withAs(xx=dat[!is.na(dat$ic50)&!dat$qvoa,],bayesIC50(ic50Mod,xx$ic50,xx$time,xx$timeBeforeArt,xx$pat,ic50Code=ic50Code))
+fitB<-withAs(xx=dat[!is.na(dat$beta)&!dat$qvoa,],bayesIC50(ic50Mod,xx$beta,xx$time,xx$timeBeforeArt,xx$pat,ic50Code=ic50Code))
+fitRep<-withAs(xx=dat[!is.na(dat$replication)&!dat$qvoa,],bayesIC50(ic50Mod,xx$replication,xx$time,xx$timeBeforeArt,xx$pat,ic50Code=ic50Code))
+fitInf<-withAs(xx=dat[!is.na(dat$infectivityDextran)&!dat$qvoa,],bayesIC50(ic50Mod,xx$infectivityDextran,xx$time,xx$timeBeforeArt,xx$pat,ic50Code=ic50Code))
+fitInf2<-withAs(xx=dat[!is.na(dat$infectivityMedia)&!dat$qvoa,],bayesIC50(ic50Mod,xx$infectivityMedia,xx$time,xx$timeBeforeArt,xx$pat,ic50Code=ic50Code))
 
-fit<-withAs(xx=dat[!is.na(dat$ic50)&!dat$qvoa,],bayesIC50(ic50Mod,xx$ic50,xx$time,xx$timeBeforArt,xx$pat))
-fitB<-withAs(xx=dat[!is.na(dat$beta)&!dat$qvoa,],bayesIC50(ic50Mod,xx$beta,xx$time,xx$timeBeforArt,xx$pat))
-
-save(fit,fitB,file='work/bayesIC50.Rdat')
+save(fit,fitB,fitRep,fitInf,fitInf2,file='work/bayesIC50.Rdat')
 sims<-calcSims(fit,dat)
 simsB<-calcSims(fitB,dat)
+simsR<-calcSims(fitRep,dat)
+simsInf<-calcSims(fitInf,dat)
+simsInf2<-calcSims(fitInf2,dat)
 
-plotFit<-function(sims,dat,var='ic50',ylab='IC50'){
-  artStart<-fit$artStart
-  ylim<-range(sapply(sims,function(sim)range(exp(sim[-1,]))))
+artStart<-fit$artStart
+plotPointsLine<-function(dat,ic50,ii,ylab,addTitle=TRUE,sims=NULL,addFit=TRUE,filterAfter=TRUE){
+  plot(dat$time/7,ic50,yaxt='n',log='y',bg=patCols[dat$pat],pch=21,type='n',xlab='',ylab=ylab,xaxt='n',cex=1.4)
+  if(addTitle)title(ii,line=-1)
+  thisDat<-dat[dat$pat==ii&!dat$qvoa,]
+  thisIc50<-ic50[dat$pat==ii&!dat$qvoa]
+  if(sum(!is.na(thisIc50))==0)return()
+  if(addFit){
+    if(is.null(sims)){
+      thisFit<-lm(I(log(thisIc50))~time+time2,dat=thisDat)
+      fakeDays<-(min(thisDat$time)):(max(thisDat$time)+50)
+      fakeDf<-data.frame('time'=fakeDays,'time2'=fakeDays^2,'logTime'=log(fakeDays),'logTime2'=log(fakeDays)^2,'logTime3'=log(fakeDays)^3,'logTime4'=log(fakeDays)^4)
+      predIc50<-predict(thisFit,fakeDf,interval='confidence')
+      lines(fakeDays/7,exp(predIc50[,'fit']),col=patCols[ii])
+      polygon(c(fakeDays/7,rev(fakeDays)/7),c(exp(predIc50[,'lwr']),rev(exp(predIc50[,'upr']))),col=patCols2[ii],border=NA)
+      predIc50<-predict(thisFit,fakeDf,interval='prediction')
+      polygon(c(fakeDays/7,rev(fakeDays)/7),c(exp(predIc50[,'lwr']),rev(exp(predIc50[,'upr']))),col=patCols3[ii],border=NA)
+    }else{
+      sim<-sims[[ii]][,sims[[ii]]['time',]<ifelse(is.na(artStart[ii])||!filterAfter,Inf,artStart[ii])]
+      polygon(c(sim['time',],rev(sim['time',]))/7,exp(c(sim['lowCI',],rev(sim['highCI',]))),border=NA,col=patCols2[ii])
+      polygon(c(sim['time',],rev(sim['time',]))/7,exp(c(sim['lowPred',],rev(sim['highPred',]))),border=NA,col=patCols3[ii])
+      lines(sim['time',]/7,exp(sim['mean',]),col=patCols[ii])
+      if(ii!='WEAU'||!filterAfter)abline(v=artStart[ii]/7,lty=2) #MAGIC NUMBER. SUPPRESSING WEAU VERTICAL LINE SINCE DIFFERS FROM OTHERS
+    }
+  }
+  points(thisDat$time/7,thisIc50,pch=21+thisDat$bulk,bg=patCols[ii])
+}
+plotCondenseIfn<-function(dat,ic50,ylab,showLegend=TRUE,sims=NULL,addFit=TRUE,filterAfter=TRUE){
+  par(mar=c(0,0,0,0))
+  layout(lay2,width=c(.5,rep(1,2),.5),height=c(.01,c(1,1,1,.2,1,.2,1),.35))
+  counter<-1
+  for(ii in patOrder){
+    plotPointsLine(dat,ic50,ii,ylab,sims=sims,addFit=addFit,filterAfter=filterAfter)
+    if(counter>8)axis(1,(0:3)*100,cex.axis=1.2,mgp=c(2.75,.7,0))
+    if(counter>8)axis(1,(0:2)*100+50,rep('',3),cex.axis=1.2,mgp=c(2.75,.7,0))
+    if(counter%%2==1)logAxis(2,las=1,cex.axis=1.1,mgp=c(3,.7,0))
+    if(counter==5)text(par('usr')[1]-.27*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),ylab,srt=90,xpd=NA,cex=2)
+    if(counter==9)text(max(par('usr')[1:2]),10^(par('usr')[3]-.27*diff(par('usr')[3:4])),'Weeks after onset of symptoms',xpd=NA,cex=2)
+    if(counter==9&showLegend)legend(par('usr')[1]-diff(par('usr')[1:2])*.3,10^(par('usr')[3]-diff(par('usr')[3:4])*.35),c(ifelse(is.null(sims),'Quadratic regression','Bayesian model'),ifelse(is.null(sims),'95% confidence interval','95% credible interval'),'95% prediction interval','Limiting dilution isolate','Bulk isolate'),col=c(patCols[1],NA,NA,'black','black'),pt.bg=c(NA,patCols2[1],patCols3[1],patCols[1],patCols[1]),lty=c(1,NA,NA,NA,NA),pch=c(NA,22,22,21,22),border=NA,pt.cex=c(3.2,3.2,3.2,1.4,1.4),cex=1.1,xjust=0,yjust=1,xpd=NA)
+    counter<-counter+1
+  }
+}
+plotFit<-function(sims,dat,var='ic50',ylab='IC50',filterAfter=TRUE){
+  ylim<-range(dat[,var],na.rm=TRUE)
   xlim<-c(1,max(sapply(sims,function(sim)max(sim[1,]))))
   for(ii in names(sims)){
-    sim<-sims[[ii]][,sims[[ii]]['time',]<ifelse(is.na(artStart[ii]),Inf,artStart[ii])]
+    if(filterAfter)sim<-sims[[ii]][,sims[[ii]]['time',]<ifelse(is.na(artStart[ii]),Inf,artStart[ii])]
     plot(sim['time',]/7,exp(sim['mean',]),type='l',ylim=ylim,log='y',ylab=ylab,xlab='Days after onset of symptoms',yaxt='n',main=ii,xlim=xlim/7,mgp=c(2.25,1,0))
     dnar::logAxis(las=1,mgp=c(1,.6,0))
     polygon(c(sim['time',],rev(sim['time',]))/7,exp(c(sim['lowCI',],rev(sim['highCI',]))),border=NA,col='#00000022')
@@ -267,10 +490,10 @@ plotFit<-function(sims,dat,var='ic50',ylab='IC50'){
     abline(v=artStart[ii]/7,lty=2)
   }
 }
-plotSummaries<-function(fit){
+plotSummaries<-function(fit,var='IFN IC50'){
   mat<-as.matrix(fit$fit)
   artStart<-fit$artStart
-  vars<-c('nadirTime'='Nadir time (weeks after onset of infection)','nadirChange'='Nadir fold change in IC50 from acute','riseTime'='Rise time (weeks before ART initiation)','riseChange'='Rise fold change from nadir')
+  vars<-c('nadirTime'='Nadir time\n(weeks after onset of infection)','nadirChange'=sprintf('Nadir fold change in\n %s from acute',var),'riseTime'='Rise time\n(weeks before ART initiation)','riseChange'=sprintf('Rise fold change in\n %s from nadir',var))
   for(ii in names(vars)){
     nadirTimes<-c(colnames(mat)[grep(sprintf('%s\\[',ii),colnames(mat))],sprintf('%sMean',ii))
     nadMeans<-apply(mat[,nadirTimes],2,mean)
@@ -283,24 +506,52 @@ plotSummaries<-function(fit){
     } else{
       scale<-7
       xlim<-exp(range(nadRanges))/scale
+      xlim[2]<-min(1000,xlim[2])
     }
     plot(1,1,type='n',xlim=xlim,ylim=c(1,length(nadirTimes)),xlab=vars[ii],yaxt='n',ylab='',log=ifelse(grepl('Change',ii),'x',''),xaxt=ifelse(grepl('Change',ii),'n','s'))
     if(grepl('Change',ii))logAxis(1)
     axis(2,c(pats,length(pats)+1),c(names(pats),'Overall'),las=1)
-    points(exp(nadMeans)/scale,1:length(nadirTimes))
-    segments(exp(nadRanges[1,])/scale,1:length(nadirTimes),exp(nadRanges[2,])/scale,1:length(nadirTimes))
+    segments(exp(nadRanges[1,])/scale,1:length(nadirTimes),exp(nadRanges[2,])/scale,1:length(nadirTimes),col=c('Overall'='black',patCols)[c(if(grepl('nadir',ii))names(fit$pat) else names(fit$arts),'Overall')])
+    points(exp(nadMeans)/scale,1:length(nadirTimes),pch=21,bg=c('Overall'='black',patCols)[c(if(grepl('nadir',ii))names(fit$pat) else names(fit$arts),'Overall')])
     if(grepl('Change',ii))abline(v=1,lty=2)
   }
 }
-pdf('out/bayesSummary.pdf',width=8,height=12)
-plotSummaries(fit)
-plotSummaries(fitB)
+
+pdf('out/bayesSummary.pdf',width=4,height=8)
+par(mar=c(4.1,4.5,.1,.1))
+plotSummaries(fit,var='IFNa2 IC50')
+plotSummaries(fitB,var='IFNb IC50')
+plotSummaries(fitRep,var='replicative capacity')
+plotSummaries(fitInf,var='infectivity (with dextran)')
+#plotSummaries(fitInf2,var='infectivity (without dextran)')
 dev.off()
-pdf('out/bayesFit.pdf',width=8,height=12)
-par(mfrow=c(5,2),mar=c(4,4,1,.1))
-plotFit(sims,dat,ylab='IFNa2 IC50')
-plotFit(simsB,dat,'beta',ylab='IFNb IC50')
+
+fit350<-withAs(xx=dat[!is.na(dat$ic50)&!dat$qvoa,],bayesIC50(ic50CodeRiseAfter,xx$ic50,xx$time,xx$timeBefore350,xx$pat))
+sims350<-calcSims(fit350,dat,riseAfter=TRUE)
+artStart<-fit350$artStart
+pdf('out/bayes350.pdf',width=4,height=8)
+plotSummaries(fit350,var='IFNa2 IC50')
+noQvoa<-dat[!dat$qvoa,]
+plotCondenseIfn(noQvoa,noQvoa$ic50,ylab='IFNa2 IC50 (pg/ml)',sims=sims350,filterAfter=FALSE)
 dev.off()
+
+pdf('out/bayesFit.pdf',width=4,height=8)
+noQvoa<-dat[!dat$qvoa,]
+plotCondenseIfn(noQvoa,noQvoa$ic50,ylab='IFNa2 IC50 (pg/ml)',sims=sims)
+plotCondenseIfn(noQvoa,noQvoa$beta,ylab='IFNb IC50 (pg/ml)',sims=simsB)
+plotCondenseIfn(noQvoa,noQvoa$replication,ylab='Replicative capacity (day 7 p24 ng/ml)',sims=simsR)
+plotCondenseIfn(noQvoa,noQvoa$infectivityDextran,ylab='Infectivity (IU/ng RT with dextran)',sims=simsInf)
+plotCondenseIfn(noQvoa,noQvoa$infectivityMedia,ylab='Infectivity (IU/ng RT without dextran)',sims=simsInf2)
+dev.off()
+pdf('out/bayesFitNoPred.pdf',width=4,height=8)
+noQvoa<-dat[!dat$qvoa,]
+plotCondenseIfn(noQvoa,noQvoa$ic50,ylab='IFNa2 IC50',sims=sims,addFit=FALSE)
+plotCondenseIfn(noQvoa,noQvoa$beta,ylab='IFNb IC50',sims=simsB,addFit=FALSE)
+plotCondenseIfn(noQvoa,noQvoa$replication,ylab='Replicative capacity (day 7 p24 ng/ml)',sims=simsR,addFit=FALSE)
+plotCondenseIfn(noQvoa,noQvoa$infectivityDextran,ylab='Infectivity (IU/ng RT with dextran)',sims=simsInf,addFit=FALSE)
+plotCondenseIfn(noQvoa,noQvoa$infectivityMedia,ylab='Infectivity (IU/ng RT without dextran)',sims=simsInf2,addFit=FALSE)
+dev.off()
+
 
 mat<-as.matrix(fit$fit)
 cbind(exp(apply(mat[,grepl('riseTime\\[',colnames(mat))],2,mean)),c(artDfosx,'WEAU'=391))
