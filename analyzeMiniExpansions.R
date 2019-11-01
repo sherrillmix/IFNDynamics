@@ -23,13 +23,14 @@ combo$infectivity_Old<-combo$No.Drug.in/combo$RT_Old/1000
 pdf('out/infectivityCompare.pdf')
   par(mar=c(3,3.2,.1,.1))
   lims<-dnar::withAs(xx=c(combo$infectivity_Old,combo$infectivity_Bead,combo$infectivity_Retro),range(xx[xx<Inf],na.rm=TRUE))
-  dnar::withAs(combo=combo[!is.na(combo$infectivity_Retro)&!is.na(combo$infectivity_Bead)&combo$infectivity_Retro+combo$infectivity_Bead<Inf,],plot(combo$infectivity_Retro,combo$infectivity_Bead,ylab='Bead isolate infectivity (IU/pg RT)',pch=21,bg='#00000033',cex=1.3,mgp=c(2.3,.8,0),las=1,xlab='',xlim=lims,ylim=lims))
+  lims<-NULL
+  dnar::withAs(combo=combo[!is.na(combo$infectivity_Retro)&!is.na(combo$infectivity_Bead)&combo$infectivity_Retro+combo$infectivity_Bead<Inf,],plot(combo$infectivity_Retro,combo$infectivity_Bead,ylab='Bead isolate infectivity (IU/pg RT)',pch=21,bg='#00000033',cex=1.3,mgp=c(2.3,.8,0),las=1,xlab='',xlim=lims,ylim=lims,log='xy'))
   title(xlab='Retronectin isolate infectivity (IU/pg RT)',mgp=c(1.9,1,0))
   abline(0,1,lty=1)
   dnar::withAs(combo=combo[!is.na(combo$infectivity_Old)&!is.na(combo$infectivity_Bead)&combo$infectivity_Old+combo$infectivity_Bead<Inf,],plot(combo$infectivity_Old,combo$infectivity_Bead,ylab='Bead isolate infectivity (IU/pg RT)',pch=21,bg='#00000033',cex=1.3,mgp=c(2.3,.8,0),las=1,xlab='',xlim=lims,ylim=lims))
   title(xlab='Input isolate infectivity (IU/pg RT)',mgp=c(1.9,1,0))
   abline(0,1,lty=1)
-  dnar::withAs(combo=combo[!is.na(combo$infectivity_Old)&!is.na(combo$infectivity_Retro)&combo$infectivity_Old+combo$infectivity_Retro<Inf,],plot(combo$infectivity_Old,combo$infectivity_Retro,ylab='Retro isolate infectivity (IU/pg RT)',pch=21,bg='#00000033',cex=1.3,mgp=c(2.3,.8,0),las=1,xlab='',xlim=lims,ylim=lims))
+  dnar::withAs(combo=combo[!is.na(combo$infectivity_Old)&!is.na(combo$infectivity_Retro)&combo$infectivity_Old+combo$infectivity_Retro<Inf,],plot(combo$infectivity_Old,combo$infectivity_Retro,ylab='Retro isolate infectivity (IU/pg RT)',pch=21,bg='#00000033',cex=1.3,mgp=c(2.3,.8,0),las=1,xlab='',xlim=lims,ylim=lims,log='xy'))
   title(xlab='Input isolate infectivity (IU/pg RT)',mgp=c(1.9,1,0))
   abline(0,1,lty=1)
 dev.off()
@@ -140,4 +141,43 @@ pdf('out/infectivityByClass_20190927.pdf',width=6,height=4)
   }
 dev.off()
 
+
+repCap<-read.csv('data/Data Master 2019 _repCap.csv',stringsAsFactors=FALSE)
+sapply(sapply(repCap$ID,grep,all$id),length)
+infRow<-sapply(sub('  .*','',sub('Rebound |QVOA ','',trimws(repCap$ID))),function(xx){out<-grep(xx,all$id,fixed=TRUE);if(length(out)!=1)NA else out})
+repCap$infectivity<-all[infRow,'inf']
+tmp<-all[! 1:nrow(all) %in% infRow&!all$id %in% c('SG3','SG3+WEAU','YU2')&!is.na(all$inf),c('id','inf')]
+colnames(tmp)<-c('ID','infectivity')
+tmp[,colnames(repCap)[!colnames(repCap) %in% colnames(tmp)]]<-NA
+out<-rbind(repCap,tmp)
+write.csv(out,'out/mini_repInf.csv',row.names=FALSE)
+inTrop<-read.csv('out/miniInputTitration.csv',row.names=1)
+inTropProp<-inTrop[,colnames(inTrop)!='No.Drug']/inTrop$No.Drug*100
+#outTrop<-read.csv('out/miniOutputTitration.csv',row.names=1)
+#outTropProp<-outTrop[,colnames(outTrop)!='No.Drug']/outTrop$No.Drug
+colnames(inTropProp)[colnames(inTropProp)=='AMD.Mar']<-'AMD-Mar'
+inTropProp<-inTropProp[!rownames(inTropProp) %in% c('YU2','Media','SG3','89.6','SG3+WEAU'),]
+out[,colnames(inTropProp)]<-inTropProp[out$ID,]
+leftovers<-inTropProp[!rownames(inTropProp) %in% out$ID,]
+leftovers$ID<-rownames(leftovers)
+leftovers[,colnames(out)[!colnames(out) %in% colnames(leftovers)]]<-NA
+out<-rbind(out,leftovers[,colnames(out)])
+xx<-read.csv('rebound/out/rebQvoaMaster.csv',stringsAsFactors=FALSE)
+rownames(xx)<-xx$ID
+out[is.na(out[,1]),1]<-xx[out[is.na(out[,1]),"ID"],'Type']
+write.csv(out,'out/mini_repInfTrop.csv',row.names=FALSE)
+
+
+
+check<-all[,c('id','class','redoBead','RT_Bead','redoFirst','RT_First','inf')]
+check$iu<-ifelse(is.na(check$redoFirst),check$redoBead,check$redoFirst)
+check$rt<-ifelse(is.na(check$redoFirst),check$RT_Bead,check$RT_First)
+check[!is.na(check$inf),c('id','rt','iu','inf')]
+write.csv(check[!is.na(check$inf),c('id','rt','iu','inf')],'out/infectivity_check.csv',row.names=FALSE)
+pdf('out/infectivity_reboundVoa.pdf',width=4,height=4)
+par(mar=c(3.1,3.1,.1,.1))
+withAs(xx=check[!is.na(check$inf)&check$class %in% c("VOA","Rebound"),],plot(xx$rt,xx$iu,log='xy',xlab='RT (ng/ul)',ylab='IU/ul',pch=21,bg=ifelse(xx$class=='VOA','blue','red'),xaxt='n',yaxt='n',mgp=c(2.1,1,0)))
+dnar::logAxis(las=1)
+dnar::logAxis(1)
+dev.off()
 
