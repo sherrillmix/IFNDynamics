@@ -1,7 +1,7 @@
 speedPch<-c('Fast'=8,'Slow'=21,'Standard'=21,'Other'=21)
 speedCex<-c('Fast'=1,'Slow'=2,'Standard'=2,'Other'=2)
 
-plotQvoa2<-function(ic50,label,pos,class,study,speed,ylab='IFNa2 IC50 (pg/ml)',mar=c(6.9,4,.1,3.9)){
+plotQvoa2<-function(ic50,label,pos,class,study,speed,ylab='IFNa2 IC50 (pg/ml)',mar=c(6.9,4,.1,3.9),cex.axis=1.25,startDown=FALSE){
   spread<-offsetX(log10(ic50),label,width=.25)
   ylim=range(ic50)
   spread<-offsetX(log10(ic50),label,width=.25)
@@ -9,10 +9,14 @@ plotQvoa2<-function(ic50,label,pos,class,study,speed,ylab='IFNa2 IC50 (pg/ml)',m
   marSpace<-0
   selector<-label %in% subsets[[ii]]
   par(mar=mar)
-  plot(pos[label[selector]]+spread[selector],ic50[selector],log='y',yaxt='n',ylab=ylab,xlab='',xaxt='n',type='n',cex.lab=1.2,ylim=ylim)
+  plot(pos[label[selector]]+spread[selector],ic50[selector],log='y',yaxt='n',ylab=ylab,xlab='',xaxt='n',type='n',cex.lab=1.2,ylim=ylim,mgp=c(2.5,1,0),xlim=range(pos)+c(-1,1),xaxs='i')
   if(ii=='all')marSpaces<-sapply(subsets,function(xx)diff(convertUserToLine(1:0,2))*sum(!names(pos) %in% xx))
-  slantAxis(1,pos[!grepl('Outgrowth',names(pos)) &names(pos) %in% subsets[['mm']]],newNames[!grepl('Outgrowth',names(pos)) &names(pos) %in% subsets[['mm']]],srt=-45,cex=1.275,location=1)
-  logAxis(las=1)
+  slantSelect<-!grepl('Outgrowth',names(pos)) &names(pos) %in% subsets[['mm']]
+  textOffsets<-c('Acute'=-.3,'6 Month'=-.15,'Nadir'=.15,'Last'=.3,'Acute Recipients'=-.3,'Chronic Donors'=.3)[newNames[slantSelect]]
+  textOffsets[is.na(textOffsets)]<-0
+  slantAxis(1,pos[slantSelect],newNames[slantSelect],srt=-45,cex=cex.axis,location=.8,xpd=NA,textOffsets=textOffsets)
+  logAxis(las=1,mgp=c(3,.7,0))
+  abline(v=pos,col='#00000055',lty=3)
   points(pos[label[selector]]+spread[selector],ic50[selector],pch=speedPch[speed[selector]],bg=classCols[class[selector]],col=ifelse(speedPch[speed[selector]]>20,ifelse(class[selector] %in% deemphasize,'#00000066','#000000CC'),classCols[class[selector]]),lwd=ifelse(class[selector]=='Rebound',1.75,1.5),cex=ifelse(class[selector]=='QVOA',max(speedCex),speedCex[speed[selector]]))
   abline(v=pos['Acute Recipient']-(pos['Acute Recipient']-pos[which(names(pos)=='Acute Recipient')-1])/2,lty=2,col='#00000099')
   abline(v=pos['Outgrowth MM14']-(pos['Outgrowth MM14']-pos[which(names(pos)=='Outgrowth MM14')-1])/2,lty=1,col='#00000099')
@@ -31,7 +35,7 @@ plotQvoa2<-function(ic50,label,pos,class,study,speed,ylab='IFNa2 IC50 (pg/ml)',m
       }
       #rect(minPos-.5,10^par('usr')[3],maxPos+.5,10^par('usr')[4],col=cols[counter%%2+1],border=NA)
       counter<-counter+1
-      axis(1,mean(c(minPos,maxPos)),sub('MM','Outgrowth',sub('ATI','Interrupt',sub('BEAT','IFNa2',sub('/','/\n',ii)))),padj=1,mgp=c(3,.2+2*counter%%2,0),tcl=-.7+-2*counter%%2,cex.axis=1.3)
+      axis(1,mean(c(minPos,maxPos)),sub('MM','Outgrowth',sub('ATI','Interrupt',sub('BEAT','IFNa2',sub('/','/\n',ii)))),padj=1,mgp=c(3,.2+2*(startDown+counter)%%2,0),tcl=-.7+-2*(startDown+counter)%%2,cex.axis=cex.axis)
     }
   return(list(ylim=ylim))
 }

@@ -19,6 +19,7 @@ dat$repCap<-NA
 dat$source<-'stephanie'
 repCap<-read.csv('stephanieRepCap.csv',stringsAsFactors=FALSE,row.names=1)
 dat$repCap<-repCap[dat$virus,'Rep.Cap.']
+dat$vres<-NA
 
 #Add Shilpa acute vs chronic, add Marvin nadir/first, add Marvin QVOA
 mm<-read.csv('firstNadir.csv',stringsAsFactors=FALSE)
@@ -34,7 +35,7 @@ mm$virus<-mm[,1]
 mm$source<-'marvin'
 
 
-#write.csv(hiv[hiv$select=='UT'&hiv$fluid=='PL',c('sample','donor','IFNa2.Pooled.Donor.cells.IC50..pg..ml','IFNbeta.Pooled.Donor.cells.IC50..pg.ml','Replicative.capacity.Pooled.Donor.cells.p24.d7')],'out/donorRecipient.csv')
+#write.csv(hiv[hiv$select=='UT'&hiv$fluid=='PL',c('Renamed','sample','donor','IFNa2.Pooled.Donor.cells.IC50..pg..ml','IFNbeta.Pooled.Donor.cells.IC50..pg.ml','Replicative.capacity.Pooled.Donor.cells.p24.d7')],'out/donorRecipient.csv')
 pair<-read.csv('donorRecipient.csv',stringsAsFactors=FALSE)
 pair$class<-ifelse(pair$donor,'Donor','Recipient')
 pair$type<-'CHAVI cohort'
@@ -45,6 +46,7 @@ pair[pair$class=='Recipient','class']<-'Acute'
 pair$pat<-pair$sample
 pair$repCap<-pair$Replicative.capacity.Pooled.Donor.cells.p24.d7
 pair[,colnames(dat)[!colnames(dat) %in% colnames(pair)]]<-NA
+pair$virus<-pair$Renamed
 pair$source<-'shilpa'
 
 mont<-read.csv('../out/montaner_ic50.csv',row.names=1)
@@ -82,12 +84,13 @@ combo<-combo[combo$class!='Control',]
 combo$study<-ifelse(grepl('^A[0-9]+$',combo$pat),'VRC01',
   ifelse(grepl('^B[0-9]+$',combo$pat),'Reservoir',
     ifelse(grepl('^BEAT-',combo$pat),'BEAT',
-      ifelse(grepl('^92[0-9][0-9]|60[0-9]',combo$pat),'3BNC117/10-1074',
-        ifelse(grepl('^MM[0-9]+|WEAU',combo$pat),'MM',
-          ifelse(grepl('^S-[0-9]+',combo$pat),'ATI',
-            ifelse(grepl('^Donor|Recipient',combo$pat),'Transmission',
-                'UNKNOWN'
-)))))))
+      ifelse(grepl('^92[0-9][0-9]',combo$pat),'3BNC117/10-1074',
+        ifelse(grepl('^60[0-9]',combo$pat),'3BNC117',
+          ifelse(grepl('^MM[0-9]+|WEAU',combo$pat),'MM',
+            ifelse(grepl('^S-[0-9]+',combo$pat),'ATI',
+              ifelse(grepl('^Donor|Recipient',combo$pat),'Transmission',
+                  'UNKNOWN'
+))))))))
 if(any(combo$study=='UNKNOWN'))stop('Unknown study')
 
 
@@ -116,7 +119,7 @@ rangeClass<-sapply(rownames(ranges),function(xx)combo[combo$label==xx,'class'][1
 
 subs<-c('A06'='Patient A06','A09'='Patient A09','B106'='Patient B106','B199'='Patient B199','Recipient'='Recipients','Donor'='Donors','Lorenzi et al.'='Outgrowth','S-30'='Patient S-30','BEAT-044'='Patient BEAT-044','BEAT-030'='Patient BEAT-030','MM23'='Patient MM23','MM34'='Patient MM34','ATI'='ATI Outgrowth')
 newNames<-sapply(names(pos),function(xx){for(ii in names(subs))xx<-sub(ii,subs[ii],xx);xx})
-acuteSpace<-.5
+acuteSpace<-.25
 pos<-pos+cumsum(names(pos)=='Acute')*acuteSpace+cumsum(names(pos)=='Acute Recipient')*acuteSpace #+cumsum(names(pos)=='Lorenzi et al. B106')*.5+cumsum(names(pos)=='Outgrowth MM23')*.5
 extraSpace<-1
 pos<-pos+cumsum(grepl('Acute|6 Month|Nadir|Last|Chronic',names(pos)))*extraSpace
@@ -147,7 +150,7 @@ for(ii in names(subsets)){
 }
 dev.off()
 
-pdf('out/qvoa_compare2.pdf',width=8,height=3.5)
+pdf('out/qvoa_compare2.pdf',width=9,height=3.5)
 plotQvoa2(combo$ic50,combo$label,pos,combo$class,combo$study,combo$speed,ylab='IFNa2 IC50 (pg/ml)')
 dev.off()
 
@@ -213,5 +216,4 @@ dev.off()
 t.test(log10(acuteRebound[acuteRebound$class=='Acute','ic50']),log10(acuteRebound[acuteRebound$class=='Rebound','ic50']))
 means<-tapply(log10(acuteRebound$ic50),list(acuteRebound$class,acuteRebound$pat),mean)
 t.test(means['Acute',],means['Rebound',])
-
 
