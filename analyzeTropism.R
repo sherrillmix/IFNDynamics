@@ -1173,3 +1173,54 @@ round(tapply(iusStan,list(sub('^([A-Z])([0-9]+)$','\\1',names(iusStan)),as.numer
 
 
 
+tit<-readCounts('ice/out/2019-10-18_isolation/counts.csv')
+withAs(tit=tit[!grepl('red',tit$plate)&grepl('isolation',tit$plate),],tapply(tit$n,list(tit$row,tit$col,tit$plate),c))
+tit<-tit[grep('^ic50',tit$plate),]
+tit$plateDil<-as.numeric(sub('x','',sapply(strsplit(tit$plate,'_'),'[',2)))
+tit$plateDil[tit$row %in% c('G','H')]<-2^(tit$col[tit$row %in% c('G','H')]-1)*tit$plateDil[tit$row %in% c('G','H')]/10
+tit$dil<-2*tit$plateDil
+tit$vir<-tit$well
+tit$vir[tit$row=='H']<-'Media'
+tit$vir[tit$row=='G']<-'YU2'
+iusStan<-unlist(cacheOperation('work/tzmbl_ic50_20191018.Rdat',parallel::mclapply,structure(unique(tit$vir),.Names=unique(tit$vir)),function(vir,tit,...){
+    thisDat<-tit[tit$vir==vir,c('n','dil'),drop=FALSE]
+    if(nrow(thisDat)<2)return(NA)
+    fit<-simpleCountIU(iuModSimple,thisDat$n,thisDat$dil,1)
+    return(mean(as.matrix(fit)[,'baseIU'])/100)
+},tit=tit,mc.cores=20))
+write.csv(data.frame('infect'=iusStan),'out/2019-10-18_tzmblIc50.csv')
+pdf('out/2019-10-18_tzmblIc50.pdf',width=10,height=8)
+for(virus in unique(tit$vir[order(tit$row,tit$col)])){
+    thisDat<-tit[tit$vir==virus,]
+    thisDat$logDil<--log(thisDat$dil)
+    withAs(zz=thisDat,plot(zz$dil,zz$n+1,xlab='Dilution',ylab='TZMBL count',las=1,log='yx',main=virus,ylim=range(tit$n+1),xlim=c(1,max(tit$dil,na.rm=TRUE)),pch=21,bg='blue',cex=2,xaxt='n'))
+    logAxis(1)
+    thisIu<-iusStan[virus]
+    fakeDils=1:50000
+    preds<-thisIu/fakeDils*100
+    lines(fakeDils,preds+1)
+    mtext(sprintf('%0.1f IU/ul',thisIu),3)
+}
+dev.off()
+icTable<-tapply(iusStan,list(sub('^([A-Z])([0-9]+)$','\\1',names(iusStan)),as.numeric(ifelse(grepl('^([A-Z])([0-9]+)$',names(iusStan)),sub('^([A-Z])([0-9]+)$','\\2',names(iusStan)),1))),c)
+pdf('out/2019-10-19_ic50.pdf',height=10,width=4)
+par(mfrow=c(6,2),mar=c(5,4,1,1))
+for(ii in 1:6){
+  ns<-icTable[ii,]
+  doses<-c(concBeta6,concBeta6)
+  zeroFill<-doses[2]/100
+  plot(ifelse(doses==0,zeroFill,doses),ns,log='xy',ylab='IU/ul',xlab='IFNb dose',xaxt='n',yaxt='n',main=rownames(icTable)[ii],mgp=c(2.5,.7,0))
+  logAxis(las=1)
+  logAxis(1,axisMin=min(concBeta6[-1]))
+  axis(1,zeroFill,0)
+  plot(ifelse(doses==0,zeroFill,doses),ns/exp(mean(log(ns[c(1,7)]))),log='xy',ylab='Proportion max IU',xlab='IFNb dose',xaxt='n',yaxt='n',main=rownames(icTable)[ii],mgp=c(2.5,.7,0))
+  logAxis(las=1,mgp=c(3,.8,0))
+  logAxis(1,axisMin=min(concBeta6[-1]))
+  abline(h=.5,lty=2)
+  axis(1,zeroFill,0)
+}
+dev.off()
+
+
+tit<-readCounts('ice/out/2019-10-25_isolation/counts.csv')
+withAs(tit=tit[!grepl('red',tit$plate)&grepl('isolation',tit$plate),],tapply(tit$n,list(tit$row,tit$col,tit$plate),c))
