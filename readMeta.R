@@ -340,10 +340,10 @@ compiledMeta$visit<-ifelse(grepl('^[0-9]+$',compiledMeta$visit),sprintf('%02d',s
 compiledMeta$sample<-ifelse(compiledMeta$visit==''|is.na(compiledMeta$id),sprintf('XX%s',1:nrow(compiledMeta)),paste(compiledMeta$mm,compiledMeta$visit,sep='.'))
 rownames(compiledMeta)<-compiledMeta$sample
 
-#WEAU no ART but calling first record of low CD4 as when would have initiated
-meta$artDay<-c(artDfosx,'WEAU'=391)[meta$mm]
+#WEAU no ART but calling first record of low CD4 as when would have initiated (day 391 original, day 371 after adjustment for symptoms)
+meta$artDay<-c(artDfosx,'WEAU'=371)[meta$mm]
 meta$daysBeforeArt<-meta$artDay-as.numeric(meta$DFOSx)
-compiledMeta$artDay<-c(artDfosx,'WEAU'=391)[compiledMeta$mm]
+compiledMeta$artDay<-c(artDfosx,'WEAU'=371)[compiledMeta$mm]
 compiledMeta$daysBeforeArt<-compiledMeta$artDay-as.numeric(compiledMeta$DFOSx)
 
 founders<-read.csv('founder.csv',stringsAsFactors=FALSE,row.names=1)
