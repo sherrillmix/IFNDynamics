@@ -134,3 +134,256 @@ lines(apply(sims[['trueBeta']],2,quantile,.95),col='blue')
 lines(apply(sims[['trueBeta']],2,quantile,.05),col='blue')
 abline(v=input$totalStarts,col='red')
 dev.off()
+
+
+ic50CodeSample<-'
+  data {
+    int<lower=0> nVirus;
+    int<lower=0> nPatient;
+    int<lower=0> nArt;
+    real ic50[nVirus];
+    int<lower=0,upper=nPatient> patients[nVirus];
+    int<lower=0> artIds[nVirus];
+    real<lower=0> days[nVirus];
+    real daysBeforeArt[nVirus];
+    real artStart[nArt];
+    real<lower=0> hasArt[nVirus];
+    int<lower=0> nSample;
+    int<lower=0,upper=nSample> sample[nVirus];
+  }
+  parameters {
+    vector[nPatient] acuteRaw;
+    vector[nPatient] nadirTimeRaw;
+    vector[nPatient] nadirChangeRaw;
+    //DEFSSUB
+    //vector[nArt] riseTimeRaw;
+    vector[nArt] riseChangeRaw;
+    real<lower=0> sigma;
+    real nadirTimeMean;
+    real<lower=0> nadirTimeSD;
+    real riseTimeMean;
+    real<lower=0> riseTimeSD;
+    real acuteMean;
+    real<lower=0> acuteSD;
+    real riseChangeMean;
+    real<lower=0> riseChangeSD;
+    real nadirChangeMean;
+    real<lower=0> nadirChangeSD;
+    real sampleNoiseRaw[nSample];
+    real<lower=0> sampleSD;
+  }
+  transformed parameters{
+    vector[nPatient] acute;
+    real expectedIC50[nVirus];
+    vector[nPatient] nadirTime;
+    vector[nPatient] nadirChange;
+    vector[nArt] riseChange;
+    vector[nArt] riseTime;
+    acute=acuteMean+acuteRaw*acuteSD;
+    nadirChange=nadirChangeMean+nadirChangeRaw*nadirChangeSD;
+    nadirTime=nadirTimeMean+nadirTimeRaw*nadirTimeSD;
+    //TRANSSUB
+    //riseTime=riseTimeMean+riseTimeRaw*riseTimeSD;
+    riseChange=riseChangeMean+riseChangeRaw*riseChangeSD;
+    for(ii in 1:nVirus){
+      expectedIC50[ii]=acute[patients[ii]]+sampleNoiseRaw[sample[ii]]*sampleSD;
+      if(days[ii]<exp(nadirTime[patients[ii]]))expectedIC50[ii]=expectedIC50[ii]+nadirChange[patients[ii]]*days[ii]/exp(nadirTime[patients[ii]]);
+      else{
+        expectedIC50[ii]=expectedIC50[ii]+nadirChange[patients[ii]];
+      }
+      if(hasArt[ii]){
+        if(daysBeforeArt[ii]<0){
+          expectedIC50[ii]=expectedIC50[ii]+riseChange[artIds[ii]];
+        }else{
+          if(daysBeforeArt[ii]<exp(riseTime[artIds[ii]]))expectedIC50[ii]=expectedIC50[ii]+riseChange[artIds[ii]]*(1-daysBeforeArt[ii]/exp(riseTime[artIds[ii]]));
+        }
+      }
+    }
+  }
+  model {
+    //MODELSUB
+    //riseTimeRaw~normal(0,1);
+    ic50~normal(expectedIC50,sigma);
+    sigma~gamma(1,.1);
+    nadirTimeSD~gamma(1,.1);
+    nadirTimeRaw~normal(0,1);
+    riseTimeSD~gamma(1,.1);
+    acuteSD~gamma(1,.1);
+    acuteRaw~normal(0,1);
+    nadirChangeSD~gamma(1,.1);
+    nadirChangeRaw~normal(0,1);
+    riseChangeSD~gamma(1,.1);
+    riseChangeRaw~normal(0,1);
+    riseChangeMean~normal(0,10);
+    nadirChangeMean~normal(0,10);
+    nadirTimeMean~normal(0,10);
+    riseTimeMean~normal(0,10);
+    sampleNoiseRaw~normal(0,1);
+    sampleSD~gamma(1,.1);
+  }
+'
+
+ic50Code<-'
+  data {
+    int<lower=0> nVirus;
+    int<lower=0> nPatient;
+    int<lower=0> nArt;
+    real ic50[nVirus];
+    int<lower=0,upper=nPatient> patients[nVirus];
+    int<lower=0> artIds[nVirus];
+    real<lower=0> days[nVirus];
+    real daysBeforeArt[nVirus];
+    real artStart[nArt];
+    real<lower=0> hasArt[nVirus];
+    int<lower=0> nSample;
+    int<lower=0,upper=nSample> sample[nVirus];
+  }
+  parameters {
+    vector[nPatient] acuteRaw;
+    vector[nPatient] nadirTimeRaw;
+    vector[nPatient] nadirChangeRaw;
+    //DEFSSUB
+    //vector[nArt] riseTimeRaw;
+    vector[nArt] riseChangeRaw;
+    real<lower=0> sigma;
+    real nadirTimeMean;
+    real<lower=0> nadirTimeSD;
+    real riseTimeMean;
+    real<lower=0> riseTimeSD;
+    real acuteMean;
+    real<lower=0> acuteSD;
+    real riseChangeMean;
+    real<lower=0> riseChangeSD;
+    real nadirChangeMean;
+    real<lower=0> nadirChangeSD;
+  }
+  transformed parameters{
+    vector[nPatient] acute;
+    real expectedIC50[nVirus];
+    vector[nPatient] nadirTime;
+    vector[nPatient] nadirChange;
+    vector[nArt] riseChange;
+    vector[nArt] riseTime;
+    acute=acuteMean+acuteRaw*acuteSD;
+    nadirChange=nadirChangeMean+nadirChangeRaw*nadirChangeSD;
+    nadirTime=nadirTimeMean+nadirTimeRaw*nadirTimeSD;
+    //TRANSSUB
+    //riseTime=riseTimeMean+riseTimeRaw*riseTimeSD;
+    riseChange=riseChangeMean+riseChangeRaw*riseChangeSD;
+    for(ii in 1:nVirus){
+      expectedIC50[ii]=acute[patients[ii]];
+      if(days[ii]<exp(nadirTime[patients[ii]]))expectedIC50[ii]=expectedIC50[ii]+nadirChange[patients[ii]]*days[ii]/exp(nadirTime[patients[ii]]);
+      else{
+        expectedIC50[ii]=expectedIC50[ii]+nadirChange[patients[ii]];
+      }
+      if(hasArt[ii]){
+        if(daysBeforeArt[ii]<0){
+          expectedIC50[ii]=expectedIC50[ii]+riseChange[artIds[ii]];
+        }else{
+          if(daysBeforeArt[ii]<exp(riseTime[artIds[ii]]))expectedIC50[ii]=expectedIC50[ii]+riseChange[artIds[ii]]*(1-daysBeforeArt[ii]/exp(riseTime[artIds[ii]]));
+        }
+      }
+    }
+  }
+  model {
+    //MODELSUB
+    //riseTimeRaw~normal(0,1);
+    ic50~normal(expectedIC50,sigma);
+    sigma~gamma(1,.1);
+    nadirTimeSD~gamma(1,.1);
+    nadirTimeRaw~normal(0,1);
+    riseTimeSD~gamma(1,.1);
+    acuteSD~gamma(1,.1);
+    acuteRaw~normal(0,1);
+    nadirChangeSD~gamma(1,.1);
+    nadirChangeRaw~normal(0,1);
+    riseChangeSD~gamma(1,.1);
+    riseChangeRaw~normal(0,1);
+    riseChangeMean~normal(0,10);
+    nadirChangeMean~normal(0,10);
+    nadirTimeMean~normal(0,10);
+    riseTimeMean~normal(0,10);
+  }
+'
+
+
+ic50CodeRiseAfter<-'
+  data {
+    int<lower=0> nVirus;
+    int<lower=0> nPatient;
+    int<lower=0> nArt;
+    real ic50[nVirus];
+    int<lower=0,upper=nPatient> patients[nVirus];
+    int<lower=0> artIds[nVirus];
+    real<lower=0> days[nVirus];
+    real daysBeforeArt[nVirus];
+    real artStart[nArt];
+    real<lower=0> hasArt[nVirus];
+    int<lower=0> nSample;
+    int<lower=0,upper=nSample> sample[nVirus];
+  }
+  parameters {
+    vector[nPatient] acuteRaw;
+    vector[nPatient] nadirTimeRaw;
+    vector[nPatient] nadirChangeRaw;
+    //DEFSSUB
+    //vector[nArt] riseTimeRaw;
+    vector[nArt] riseChangeRaw;
+    real<lower=0> sigma;
+    real nadirTimeMean;
+    real<lower=0> nadirTimeSD;
+    real riseTimeMean;
+    real<lower=0> riseTimeSD;
+    real acuteMean;
+    real<lower=0> acuteSD;
+    real riseChangeMean;
+    real<lower=0> riseChangeSD;
+    real nadirChangeMean;
+    real<lower=0> nadirChangeSD;
+  }
+  transformed parameters{
+    vector[nPatient] acute;
+    real expectedIC50[nVirus];
+    vector[nPatient] nadirTime;
+    vector[nPatient] nadirChange;
+    vector[nArt] riseChange;
+    vector[nArt] riseTime;
+    acute=acuteMean+acuteRaw*acuteSD;
+    nadirChange=nadirChangeMean+nadirChangeRaw*nadirChangeSD;
+    nadirTime=nadirTimeMean+nadirTimeRaw*nadirTimeSD;
+    //TRANSSUB
+    //riseTime=riseTimeMean+riseTimeRaw*riseTimeSD;
+    riseChange=riseChangeMean+riseChangeRaw*riseChangeSD;
+    for(ii in 1:nVirus){
+      expectedIC50[ii]=acute[patients[ii]];
+      if(days[ii]<exp(nadirTime[patients[ii]]))expectedIC50[ii]=expectedIC50[ii]+nadirChange[patients[ii]]*days[ii]/exp(nadirTime[patients[ii]]);
+      else{
+        expectedIC50[ii]=expectedIC50[ii]+nadirChange[patients[ii]];
+      }
+      if(hasArt[ii]){
+        if(daysBeforeArt[ii]<exp(riseTime[artIds[ii]]))expectedIC50[ii]=expectedIC50[ii]+riseChange[artIds[ii]]*(1-daysBeforeArt[ii]/exp(riseTime[artIds[ii]]));
+      }
+    }
+  }
+  model {
+    //MODELSUB
+    //riseTimeRaw~normal(0,1);
+    ic50~normal(expectedIC50,sigma);
+    sigma~gamma(1,.1);
+    nadirTimeSD~gamma(1,.1);
+    nadirTimeRaw~normal(0,1);
+    riseTimeSD~gamma(1,.1);
+    acuteSD~gamma(1,.1);
+    acuteRaw~normal(0,1);
+    nadirChangeSD~gamma(1,.1);
+    nadirChangeRaw~normal(0,1);
+    riseChangeSD~gamma(1,.1);
+    riseChangeRaw~normal(0,1);
+    riseChangeMean~normal(0,10);
+    nadirChangeMean~normal(0,10);
+    nadirTimeMean~normal(0,10);
+    riseTimeMean~normal(0,10);
+  }
+'
+
+
