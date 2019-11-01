@@ -289,3 +289,5 @@ for(ii in list.files('trees/10trees','\\.txt$',full.name=TRUE)){
   print(out)
 }
 dev.off()
+system('pdftk out/lindsey_trees2.pdf cat 1 4 7 13 19 output tmp.pdf')
+system('pdfjam tmp.pdf --nup 5x1 --landscape --outfile out/voaStackedTrees.pdf')
