@@ -1,4 +1,4 @@
-library(xlsx)
+#library(xlsx)
 library(dnar)
 #concAlpha<-c(0, 0.001, 0.003, 0.008, 0.023, 0.068, 0.204, 0.611, 1.833, 5.5)
 concAlpha<-c(0,5.55*3^(-8:0))
@@ -8,6 +8,21 @@ lowerLimit<-50
 
 concAlpha6<-concAlpha[c(1,seq(2,length(concAlpha),2))]
 concBeta6<-concBeta[c(1,seq(2,length(concBeta),2))]
+
+
+patCols<-c('MM23'='#e41a1c','MM33'='#4daf4a','MM34'='#984ea3','MM39'='#377eb8','MM40'='#FF7f00','MM14'='#FFD700','MM15'='#f781bf','MM55'='#a65628','MM62'='#00CED1')
+patCols<-c(patCols,'WEAU'='#708090')
+patCols2<-sprintf('%s33',patCols)
+patCols3<-sprintf('%s11',patCols)
+names(patCols2)<-names(patCols3)<-names(patCols)
+lay<-matrix(0,nrow=7,ncol=4)
+lay[2:6,2:3]<-matrix(1:10,nrow=5,byrow=TRUE)
+
+lay2<-matrix(0,nrow=7+2,ncol=4)
+lay2[c(2,3,4,6,8),2:3]<-matrix(1:10,nrow=5,byrow=TRUE)
+lowerP24Limit<-60
+patOrder<-c("MM14","MM23","MM33","MM34","MM39","MM40","MM55","MM62","MM15","WEAU")
+
 
 
 #https://www.myassays.com/four-parameter-logistic-regression.html
@@ -447,4 +462,39 @@ plotStackedIfns<-function(dilutes,concAlpha,xlab='',cols=NULL,pch=NULL,...){
   dnar::logAxis(1)
   abline(h=.5,lty=2)
   legend('bottomleft',names(cols),inset=.01,lty=1,col=cols,lwd=2,pch=pch[names(cols)],pt.bg=cols,...)
+}
+
+plotPointsLine<-function(dat,ic50,ii,ylab,addTitle=TRUE,log='y'){
+  plot(dat$time/7,ic50,yaxt='n',log=log,bg=patCols[dat$pat],pch=21,type='n',xlab='',ylab=ylab,xaxt='n',cex=1.4)
+  if(addTitle)title(ii,line=-1)
+  thisDat<-dat[dat$pat==ii&!dat$qvoa,]
+  thisIc50<-ic50[dat$pat==ii&!dat$qvoa]
+  if(sum(!is.na(thisIc50))==0)return()
+  thisFit<-lm(I(log(thisIc50))~time+time2,dat=thisDat)
+  fakeDays<-(min(thisDat$time)):(max(thisDat$time)+50)
+  fakeDf<-data.frame('time'=fakeDays,'time2'=fakeDays^2,'logTime'=log(fakeDays),'logTime2'=log(fakeDays)^2,'logTime3'=log(fakeDays)^3,'logTime4'=log(fakeDays)^4)
+  predIc50<-predict(thisFit,fakeDf,interval='confidence')
+  points(thisDat$time/7,thisIc50,pch=21+thisDat$bulk,bg=patCols[ii])
+  lines(fakeDays/7,exp(predIc50[,'fit']),col=patCols[ii])
+  polygon(c(fakeDays/7,rev(fakeDays)/7),c(exp(predIc50[,'lwr']),rev(exp(predIc50[,'upr']))),col=patCols2[ii],border=NA)
+  predIc50<-predict(thisFit,fakeDf,interval='prediction')
+  polygon(c(fakeDays/7,rev(fakeDays)/7),c(exp(predIc50[,'lwr']),rev(exp(predIc50[,'upr']))),col=patCols3[ii],border=NA)
+}
+plotCondenseIfn<-function(dat,ic50,ylab,showLegend=TRUE,logY=TRUE){
+  par(mar=c(0,0,0,0))
+  layout(lay,width=c(.34,rep(1,2),.01),height=c(.01,rep(1,5),1.04))
+  counter<-1
+  for(ii in patOrder){
+    plotPointsLine(dat,ic50,ii,ylab,log=ifelse(logY,'y',''))
+    if(counter>8)axis(1,(0:3)*100,cex.axis=1.2,mgp=c(2.75,.7,0))
+    if(counter>8)axis(1,(0:2)*100+50,rep('',3),cex.axis=1.2,mgp=c(2.75,.7,0))
+    if(counter%%2==1){
+      if(logY)logAxis(2,las=1,cex.axis=1.1,mgp=c(3,.7,0))
+      else axis(2,pretty(ic50))
+    }
+    if(counter==5)text(par('usr')[1]-.27*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),ylab,srt=90,xpd=NA,cex=2)
+    if(counter==9)text(max(par('usr')[1:2]),10^(par('usr')[3]-.27*diff(par('usr')[3:4])),'Weeks after onset of symptoms',xpd=NA,cex=2)
+    if(counter==9&showLegend)legend(par('usr')[1]-diff(par('usr')[1:2])*.3,10^(par('usr')[3]-diff(par('usr')[3:4])*.35),c('Quadratic regression','95% confidence interval','95% prediction interval','Limiting dilution isolate','Bulk isolate'),col=c(patCols[1],NA,NA,'black','black'),pt.bg=c(NA,patCols2[1],patCols3[1],patCols[1],patCols[1]),lty=c(1,NA,NA,NA,NA),pch=c(NA,22,22,21,22),border=NA,pt.cex=c(3.2,3.2,3.2,1.4,1.4),cex=1.1,xjust=0,yjust=1,xpd=NA)
+    counter<-counter+1
+  }
 }

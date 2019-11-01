@@ -1,5 +1,6 @@
 library(vipor)
 if(!exists('dat'))source('readNewData.R')
+source('functions.R')
 
 condenseArrows<-function(dat,ic50Name,clinicalName,xlab,ylab,xlog=FALSE){
   par(mar=c(0,0,0,0))
@@ -34,40 +35,7 @@ simpleFitsBeta<-withAs(dat=dat[!dat$qvoa,],lapply(unique(dat$pat),function(xx)lm
 simpleFitsRep<-withAs(dat=dat[!dat$qvoa,],lapply(unique(dat$pat),function(xx)lm(I(log(replication))~time+time2,dat=dat[dat$pat==xx&!is.na(dat$replication),])))
 names(simpleFits)<-names(simpleFitsBeta)<-unique(dat$pat)
 
-plotPointsLine<-function(dat,ic50,ii,ylab,addTitle=TRUE,log='y'){
-  plot(dat$time/7,ic50,yaxt='n',log=log,bg=patCols[dat$pat],pch=21,type='n',xlab='',ylab=ylab,xaxt='n',cex=1.4)
-  if(addTitle)title(ii,line=-1)
-  thisDat<-dat[dat$pat==ii&!dat$qvoa,]
-  thisIc50<-ic50[dat$pat==ii&!dat$qvoa]
-  if(sum(!is.na(thisIc50))==0)return()
-  thisFit<-lm(I(log(thisIc50))~time+time2,dat=thisDat)
-  fakeDays<-(min(thisDat$time)):(max(thisDat$time)+50)
-  fakeDf<-data.frame('time'=fakeDays,'time2'=fakeDays^2,'logTime'=log(fakeDays),'logTime2'=log(fakeDays)^2,'logTime3'=log(fakeDays)^3,'logTime4'=log(fakeDays)^4)
-  predIc50<-predict(thisFit,fakeDf,interval='confidence')
-  points(thisDat$time/7,thisIc50,pch=21+thisDat$bulk,bg=patCols[ii])
-  lines(fakeDays/7,exp(predIc50[,'fit']),col=patCols[ii])
-  polygon(c(fakeDays/7,rev(fakeDays)/7),c(exp(predIc50[,'lwr']),rev(exp(predIc50[,'upr']))),col=patCols2[ii],border=NA)
-  predIc50<-predict(thisFit,fakeDf,interval='prediction')
-  polygon(c(fakeDays/7,rev(fakeDays)/7),c(exp(predIc50[,'lwr']),rev(exp(predIc50[,'upr']))),col=patCols3[ii],border=NA)
-}
-plotCondenseIfn<-function(dat,ic50,ylab,showLegend=TRUE,logY=TRUE){
-  par(mar=c(0,0,0,0))
-  layout(lay,width=c(.34,rep(1,2),.01),height=c(.01,rep(1,5),1.04))
-  counter<-1
-  for(ii in patOrder){
-    plotPointsLine(dat,ic50,ii,ylab,log=ifelse(logY,'y',''))
-    if(counter>8)axis(1,(0:3)*100,cex.axis=1.2,mgp=c(2.75,.7,0))
-    if(counter>8)axis(1,(0:2)*100+50,rep('',3),cex.axis=1.2,mgp=c(2.75,.7,0))
-    if(counter%%2==1){
-      if(logY)logAxis(2,las=1,cex.axis=1.1,mgp=c(3,.7,0))
-      else axis(2,pretty(ic50))
-    }
-    if(counter==5)text(par('usr')[1]-.27*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),ylab,srt=90,xpd=NA,cex=2)
-    if(counter==9)text(max(par('usr')[1:2]),10^(par('usr')[3]-.27*diff(par('usr')[3:4])),'Weeks after onset of symptoms',xpd=NA,cex=2)
-    if(counter==9&showLegend)legend(par('usr')[1]-diff(par('usr')[1:2])*.3,10^(par('usr')[3]-diff(par('usr')[3:4])*.35),c('Quadratic regression','95% confidence interval','95% prediction interval','Limiting dilution isolate','Bulk isolate'),col=c(patCols[1],NA,NA,'black','black'),pt.bg=c(NA,patCols2[1],patCols3[1],patCols[1],patCols[1]),lty=c(1,NA,NA,NA,NA),pch=c(NA,22,22,21,22),border=NA,pt.cex=c(3.2,3.2,3.2,1.4,1.4),cex=1.1,xjust=0,yjust=1,xpd=NA)
-    counter<-counter+1
-  }
-}
+
 
 pdf('out/indivPredict_alpha_condense.pdf',width=4,height=8,useDingbats=FALSE)
   plotCondenseIfn(dat[!dat$qvoa,],dat$ic50[!dat$qvoa],ylab='Interferon alpha 2 IC50 (pg/ml)')
@@ -134,7 +102,8 @@ dev.off()
 
 pdf('out/subjects_condense_new.pdf',width=4,height=8)
   par(mar=c(0,0,0,0))
-  layout(lay,width=c(.5,rep(1,2),.5),height=c(.01,rep(1,5),.35))
+  layout(lay2,width=c(.5,rep(1,2),.3),height=c(.01,c(1,1,1,.2,1,.2,1),1.3))
+  #layout(lay,width=c(.5,rep(1,2),.5),height=c(.01,rep(1,5),.35))
   counter<-1
   xlim<-range(c(dat$time/7,lastDfosx/7))
   for(ii in patOrder){
@@ -142,7 +111,7 @@ pdf('out/subjects_condense_new.pdf',width=4,height=8)
     #title(sprintf('%s %s',ii,ifelse(ii %in% rownames(founders),sprintf(' (%s)',founders[ii,'tf']),'')),line=-1)
     if(counter==6)text(par('usr')[2]+.4*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),'CD4 count (cells/mm3)',srt=-90,xpd=NA,col='blue',cex=2)
     if(counter==5)text(par('usr')[1]-.38*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),'Viral load (copies/ml)',srt=90,xpd=NA,col='red',cex=2)
-    if(counter==9)text(max(par('usr')[1:2]),10^(par('usr')[3]-.3*diff(par('usr')[3:4])),'Weeks after onset of symptoms',xpd=NA,cex=2)
+    if(counter==9)text(max(par('usr')[1:2]),10^(par('usr')[3]-.35*diff(par('usr')[3:4])),'Weeks after onset of symptoms',xpd=NA,cex=2)
     counter<-counter+1
     #thisLast<-lastDfosx[ii]
     thisLast<-max(compiledMeta[compiledMeta$mm==ii&(!is.na(compiledMeta$cd4)|!is.na(compiledMeta$vl)),'time'])
