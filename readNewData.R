@@ -4,26 +4,13 @@ library(lubridate)
 if(!exists('compiledMeta'))source('readMeta.R')
 
 
-patCols<-c('MM23'='#e41a1c','MM33'='#4daf4a','MM34'='#984ea3','MM39'='#377eb8','MM40'='#FF7f00','MM14'='#FFD700','MM15'='#f781bf','MM55'='#a65628','MM62'='#00CED1')
-patCols<-c(patCols,'WEAU'='#708090')
-patCols2<-sprintf('%s33',patCols)
-patCols3<-sprintf('%s11',patCols)
-names(patCols2)<-names(patCols3)<-names(patCols)
-lay<-matrix(0,nrow=7,ncol=4)
-lay[2:6,2:3]<-matrix(1:10,nrow=5,byrow=TRUE)
-
-lay2<-matrix(0,nrow=7+2,ncol=4)
-lay2[c(2,3,4,6,8),2:3]<-matrix(1:10,nrow=5,byrow=TRUE)
-lowerP24Limit<-60
-patOrder<-c("MM14","MM23","MM33","MM34","MM39","MM40","MM55","MM62","MM15","WEAU")
-
-
 #dat<-read.csv('data/Data Master MG, Sept_2.csv')
 #dat<-read.csv('data/MM cohort cata master 11.29.2017.csv')
 #allDats<-lapply(c('data/for Scott_2017_12_13.csv','data/For Scott - All bulk isol. alpha and beta.csv'),read.csv,stringsAsFactors=FALSE)
 #allDats<-lapply(c('data/for Scott_Data Marster.csv'),read.csv,stringsAsFactors=FALSE)
 #allDats<-lapply(c('data/For Scott Jan.2019.csv'),read.csv,stringsAsFactors=FALSE)
-allDats<-lapply(c('data/Data Master Marvin_2019-04-10.csv'),read.csv,stringsAsFactors=FALSE)
+#allDats<-lapply(c('data/Data Master Marvin_2019-04-10.csv'),read.csv,stringsAsFactors=FALSE)
+allDats<-lapply(c('data/Data Master 2019 .csv'),read.csv,stringsAsFactors=FALSE)
 idCol<-'ID.for.statistical.analysis.....Scott.March..2018.'
 allDats<-lapply(allDats,function(dat)dat[!is.na(dat[,idCol])&dat[,idCol]!='',])
 allCols<-unique(unlist(lapply(allDats,colnames)))
@@ -76,9 +63,9 @@ ifna2_ic50<-colnames(dat)[grep('IFNa2.*IC50',colnames(dat))]
 ifna2_vres<-colnames(dat)[grep('IFNa2.*Vres',colnames(dat))]
 ifnb_ic50<-colnames(dat)[grep('IFNb.*IC50',colnames(dat))]
 ifnb_vres<-colnames(dat)[grep('IFNb.*Vres',colnames(dat))]
-dat$ic50<-apply(dat[,ifna2_ic50],1,mean,na.rm=TRUE)
+dat$ic50<-apply(dat[,ifna2_ic50],1,function(xx)exp(mean(log(xx),na.rm=TRUE)))
 dat$vres<-apply(dat[,ifna2_vres],1,mean,na.rm=TRUE)
-dat$beta<-apply(dat[,ifnb_ic50],1,mean,na.rm=TRUE)
+dat$beta<-apply(dat[,ifnb_ic50],1,function(xx)exp(mean(log(xx),na.rm=TRUE)))
 #dat$IFNbeta..Pooled.Donor.cells.IC50..pg.ml.
 dat$betaVres<-apply(dat[,ifnb_vres],1,mean,na.rm=TRUE)
 if(any(dat$betaVres==0)){
@@ -142,12 +129,13 @@ dat[ice$id[inDat],'iceHalf']<-ice$half[inDat]
 
 message('Time after infection')
 print(mean(withAs(dat=dat[!dat$qvoa,],tapply(dat$time,dat$pat,FUN=max))/7))
-zz<-withAs(dat=dat[!dat$qvoa,],tapply(dat$beta,list(dat$pat,dat$time),mean,na.rm=TRUE))
+zz<-withAs(dat=dat[!dat$qvoa,],tapply(dat$ic50,list(dat$pat,dat$time),mean,na.rm=TRUE))
 message('Fold range of ic50')
 print(mean(apply(zz,1,function(xx)max(xx,na.rm=TRUE)/min(xx,na.rm=TRUE))))
 if(any(as.numeric(colnames(zz))!=sort(as.numeric(colnames(zz)))))stop('need sorted cols')
 message('Fold increase from nadir increase of ic50')
 print(mean(apply(zz,1,function(xx)tail(xx[!is.na(xx)],1)/min(xx,na.rm=TRUE))))
+print(mean(apply(zz[!rownames(zz) %in% c('MM55','MM62','MM15','WEAU'),],1,function(xx)tail(xx[!is.na(xx)],1)/min(xx,na.rm=TRUE))))
 message('Weeks after nadir')
 print(mean(sapply(rownames(zz),function(xx){tmp<-zz[xx,!is.na(zz[xx,])];diff(as.numeric(names(tmp))[c(which.min(tmp),length(tmp))])}))/7)
 message('Median CD4 at last time point')
