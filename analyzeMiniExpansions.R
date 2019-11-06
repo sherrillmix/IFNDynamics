@@ -11,6 +11,7 @@ combo<-merge(combo,miniIn[,c('No.Drug','id')],by.y='id',by.x='id',suffixes=c('',
 rt<-read.csv('data/Mini_expansion_RT.csv',row.names=1)
 rt<-rt[,!grepl('^Input',colnames(rt))]
 colnames(rt)<-sub('\\.+$','',sub('RT\\.ng\\.ml\\.\\.','',colnames(rt)))
+#beads and retronectin were flipped on plate
 colnames(rt)[c(which(colnames(rt)=='Beads'),which(colnames(rt)=='Retron'))]<-c('Retron','Beads')
 rownames(rt)<-sub('^Rb','Rebound',rownames(rt))
 colnames(rt)<-sprintf('RT_%s',colnames(rt))
@@ -180,4 +181,101 @@ withAs(xx=check[!is.na(check$inf)&check$class %in% c("VOA","Rebound"),],plot(xx$
 dnar::logAxis(las=1)
 dnar::logAxis(1)
 dev.off()
+
+redoInfect2<-read.csv('out/2019-11-04_miniInfectT12.csv',row.names=1)
+colnames(redoInfect2)<-sub('\\.$','',colnames(redoInfect2))
+#redoInfect2<-redoInfect2[grepl('T12',colnames(redoInfect2)),]
+#colnames(redoInfect2)<-sub('\\..T12$','',colnames(redoInfect2))
+redoInfect2<-redoInfect2[rownames(redoInfect2)!='Media',c('X2_reb.bead','X1_reb.bead','X1_other.bead','X2_reb.retro','X2_reb.bead..T12','X1_reb.bead..T12','X1_other.bead..T12','X2_reb.retro..T12')]
+redoInfect2<-redoInfect2[apply(!is.na(redoInfect2),1,sum)>0,]
+if(any(!is.na(redoInfect2$X1_other.bead)&!is.na(redoInfect2$X2_reb.retro)))stop('Overlapping values')
+if(any(!is.na(redoInfect2$X1_reb.bead)&!is.na(redoInfect2$X2_reb.retro)))stop('Overlapping values')
+if(any(!is.na(redoInfect2$X1_reb.bead)&!is.na(redoInfect2$X1_other.bead)))stop('Overlapping values')
+redoInfect2$redoBead<-redoInfect2$X2_reb.bead
+redoInfect2$redoRetro<-redoInfect2$X2_reb.retro
+redoInfect2$redoFirst<-ifelse(is.na(redoInfect2$X1_reb.bead),redoInfect2$X1_other.bead,redoInfect2$X1_reb.bead)
+redoInfect2$redoBeadT12<-redoInfect2$X2_reb.bead..T12
+redoInfect2$redoRetroT12<-redoInfect2$X2_reb.retro..T12
+redoInfect2$redoFirstT12<-ifelse(is.na(redoInfect2$X1_reb.bead..T12),redoInfect2$X1_other.bead..T12,redoInfect2$X1_reb.bead..T12)
+rownames(redoInfect2)[!rownames(redoInfect2) %in% combo$id]
+redoInfect2$id<-rownames(redoInfect2)
+#
+rt$id<-rownames(rt)
+firstExp$id<-rownames(firstExp)
+all<-merge(combo[,c('id','IU_Retro','IU_Bead','IU_Old','infectivity_Retro','infectivity_Bead','infectivity_Old','RT_Bead','RT_Retro','RT_Old')],redoInfect2[,c('id','redoBead','redoRetro','redoFirst','redoBeadT12','redoRetroT12','redoFirstT12')],all.x=TRUE,all.y=TRUE)
+all<-merge(firstExp[,c('id','ng.RT.uL','class')],all,all.y=TRUE)
+colnames(all)[colnames(all)=='ng.RT.uL']<-'RT_First'
+all$redoBeadInf<-all$redoBead/all$RT_Bead/1000
+all$redoFirstInf<-all$redoFirst/all$RT_First/1000
+all$inf<-ifelse(is.na(all$redoBeadInf),all$redoFirstInf,all$redoBeadInf)
+all$inf[all$inf==Inf]<-NA
+all$redoBeadInfT12<-all$redoBeadT12/all$RT_Bead/1000
+all$redoFirstInfT12<-all$redoFirstT12/all$RT_First/1000
+all$infT12<-ifelse(is.na(all$redoBeadInfT12),all$redoFirstInfT12,all$redoBeadInfT12)
+all$infT12[all$infT12==Inf]<-NA
+#
+pdf('out/infectivityByClass_20191104.pdf',width=6,height=4)
+  for(t12 in c(FALSE,TRUE)){
+    col<-ifelse(t12,'infT12','inf')
+    tmp<-all[!is.na(all[,col])&!is.na(all$class),]
+    if(repCap)tmp<-tmp[tmp$id %in% rep$V2,]
+    uniqC<-unique(tmp$class)
+    pos<-structure(1:length(unique(tmp$class)),.Names=uniqC[order(!grepl('MM',uniqC),!grepl('TP',uniqC),grepl('Rebound|acute',uniqC))])
+    par(mar=c(3,3.5,1.2,.2),lheight=.8)
+    plot(1,1,type='n',las=1,ylab='Infectivity (IU/pg RT)',xlim=c(1,length(unique(tmp$class))+.2)+c(-.3,.3),ylim=range(tmp[,col]),xaxt='n',log='y',yaxt='n',mgp=c(2.3,1,.3),xlab='',main=sprintf('%s T12',ifelse(t12,'With','Without')))
+    dnar::logAxis(las=1)
+    axis(1,pos,sub(' ','\n',names(pos)),padj=1,mgp=c(1,.1,0))
+    offset<-ave(tmp[,col],tmp$class,FUN=function(xx)beeswarm::swarmx(0,xx,cex=1.2)[[1]])
+    points(pos[(tmp$class)]+offset,tmp[,col],cex=1.2,pch=21,bg='#00000055')
+  }
+dev.off()
+
+rawRT<-read.csv('data/Mini expansion RT math-19.31.10.csv',stringsAsFactors=FALSE)
+rawIds<-read.csv('data/Mini expansion IDs-19.31.10.csv',stringsAsFactors=FALSE)
+rawIds<-rawIds[rawIds[,2]!='H',]
+rawIds[c(7,12:14),3:14]<-paste(unlist(rawIds[c(7,12:14),3:14]),'retro')
+newRt<-data.frame('id'=unlist(rawIds[,3:14]),'rawRT'=unlist(rawRT[,4:15]),stringsAsFactors=FALSE)
+#adjust for 40x standard dil and 25x sample dil
+newRt$rt<-as.numeric(sub('[<>]','',newRt$rawRT))/40*25
+newRt$isRetro<-grepl(' retro$',newRt$id)
+newRt$id<-sub(' retro$','',newRt$id)
+newRt<-newRt[!grepl('SG3 \\+ WEAU',newRt$id)&newRt$id!='',]
+all$redoRTBead<-sapply(all$id,function(xx)if(any(selector<-newRt$id==xx&!newRt$isRetro))newRt[selector,'rt'] else NA)
+all$redoRTRetro<-sapply(all$id,function(xx)if(any(selector<-newRt$id==xx&newRt$isRetro))newRt[selector,'rt'] else NA)
+
+all$inf2<-ifelse(is.na(all$redoBead),all$redoFirst/all$redoRTBead,all$redoBead/all$redoRTBead)/1000
+all$inf2[all$inf2==Inf]<-NA
+all$infT122<-ifelse(is.na(all$redoBead),all$redoFirstT12/all$redoRTBead,all$redoBeadT12/all$redoRTBead)/1000
+all$infT122[all$infT122==Inf]<-NA
+
+pdf('out/infectivityByClass_20191104_newRT.pdf',width=6,height=4)
+  for(t12 in c(FALSE,TRUE)){
+    col<-ifelse(t12,'infT122','inf2')
+    tmp<-all[!is.na(all[,col])&!is.na(all$class),]
+    if(repCap)tmp<-tmp[tmp$id %in% rep$V2,]
+    uniqC<-unique(tmp$class)
+    pos<-structure(1:length(unique(tmp$class)),.Names=uniqC[order(!grepl('MM',uniqC),!grepl('TP',uniqC),grepl('Rebound|acute',uniqC))])
+    par(mar=c(3,3.5,1.2,.2),lheight=.8)
+    plot(1,1,type='n',las=1,ylab='Infectivity (IU/pg RT)',xlim=c(1,length(unique(tmp$class))+.2)+c(-.3,.3),ylim=range(tmp[,col]),xaxt='n',log='y',yaxt='n',mgp=c(2.3,1,.3),xlab='',main=sprintf('%s T12',ifelse(t12,'With','Without')))
+    dnar::logAxis(las=1)
+    axis(1,pos,sub(' ','\n',names(pos)),padj=1,mgp=c(1,.1,0))
+    offset<-ave(tmp[,col],tmp$class,FUN=function(xx)beeswarm::swarmx(0,xx,cex=1.2)[[1]])
+    points(pos[(tmp$class)]+offset,tmp[,col],cex=1.2,pch=21,bg='#00000055')
+  }
+dev.off()
+
+tmp<-all[!is.na(all$redoRTBead),]
+tmp$oldRt<-ifelse(is.na(tmp$RT_Bead),tmp$RT_Old,tmp$RT_Bead)
+tmp$newRt<-tmp$redoRTBead
+tmp[,c('oldRt','newRt')]
+pdf('out/rtCompare.pdf')
+plot(tmp$oldRt+.0001,tmp$newRt+.0001,xlab='Old RT measurement',ylab='New RT measurement',log='xy',xaxt='n',yaxt='n')
+logAxis(las=1)
+logAxis(1)
+abline(0,1)
+dev.off()
+
+
+
+
 
