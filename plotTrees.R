@@ -219,14 +219,27 @@ for(ii in list.files('lindsey/rooted/','MM[0-9]+.bs100.rooted.nex$',full.name=TR
 }
 dev.off()
 
+censorLength<-.2
 recomb<-data.frame('Sequence'=NULL)
 reroot<-c('MM14'='MM14.PLAS.ISO.00040.001.01','MM15'='MM15.PLAS.SGS.00027.001.01')
 #rotate<-list('MM39'=c(99,76))
+maxDepth<-apply(do.call(rbind,lapply(list.files('trees/10trees','\\.txt$',full.name=TRUE),function(xx){
+    tree<-read.tree(xx)
+    out<-rep(NA,2)
+    out[1]<-max(node.depth.edgelength(tree))
+    tree$edge.length[tree$edge.length>censorLength]<-censorLength
+    out[2]<-max(node.depth.edgelength(tree))
+    return(out)
+}
+)),2,max)
+print(maxDepth)
 pdf('out/lindsey_trees2.pdf',width=2.,height=6)
 for(ii in list.files('trees/10trees','\\.txt$',full.name=TRUE)){
   message(ii)
   tree<-read.tree(ii)
-  if(grepl('MM34',ii))tree<-drop.tip(tree,which(node.depth.edgelength(tree)>.5))
+  #if(grepl('MM34',ii))tree<-drop.tip(tree,which(node.depth.edgelength(tree)>.5))
+  #which(node.depth.edgelength(tree)>.5)
+  #which(tree$edge.length>.5)
   tree$tip.label<-gsub("'",'',tree$tip.label)
   days<-as.numeric(sapply(strsplit(tree$tip.label,'\\.'),'[[',4))
   ids<-sapply(strsplit(tree$tip.label,'\\.'),function(xx)paste(xx[2:3],collapse='.'))
@@ -251,6 +264,10 @@ for(ii in list.files('trees/10trees','\\.txt$',full.name=TRUE)){
   #  tree<-reorder(ladderize(tree,FALSE))
   #  tree<-rotate(tree,rotate[[subject]])
   #}
+  edge<-data.frame(tree$edge,edge_num=1:nrow(tree$edge))
+  colnames(edge)<-c('parent','node','edge_num')
+  lengthBak<-tree$edge.length
+  tree$edge.length[tree$edge.length>censorLength]<-censorLength
   out<-ggtree(tree)+#,ladderize=FALSE)+ 
     #geom_tippoint(color=timeCols[times],show.legend=TRUE,size=5/log(length(days)))+
     geom_tiplab(color=timeCols[times],size=7.5,label='-',vjust=.35)+
@@ -258,9 +275,21 @@ for(ii in list.files('trees/10trees','\\.txt$',full.name=TRUE)){
     geom_tiplab(color=timeCols[times],size=3,label=ifelse(tree$tip.label %in% recomb$Sequence,'         r',NA))+
     ggtitle(unique(subject))+
     theme(plot.title = element_text(hjust = .5,size=12,margin=margin(b=-10,unit='pt')),plot.margin=margin(2,0,20,0))+
-    geom_treescale(offset=-length(days)/90,fontsize=2.5,x=.01,y=0)+
-    scale_x_continuous(limits = c(0,max(node.depth.edgelength(tree))*1.2))
+    geom_treescale(offset=-length(days)/90,fontsize=2.5,x=.01,y=0,width=.05)+
+    scale_x_continuous(limits = c(0,maxDepth[2]*1.2))
+  censoredEdges<-out$data[out$data$branch.length==censorLength,]
+  if(nrow(censoredEdges)>0){
+    message('CENSORING')
+    left<-censoredEdges$x-censorLength/20-censorLength/2
+    right<-censoredEdges$x+censorLength/20-censorLength/2
+    out<-out+
+      annotate('rect',xmin=left,xmax=right,ymin=censoredEdges$y-.6,ymax=censoredEdges$y+.6,fill='white')+
+      annotate('segment',x=c(left,right),xend=c(left,right),y=rep(censoredEdges$y,each=2)-.6,yend=rep(censoredEdges$y,each=2)+.6)
+  }
+  #out<-out %<+% edge + geom_point(aes(x=branch,y=edge_num))
+    #scale_x_continuous(limits = c(0,max(node.depth.edgelength(tree))*1.2))
     #scale_color_manual('',breaks=names(timeCols),values=timeCols)
+  #out$data[out$data$branch.length>censorLength,'x']<-out$data[out$data$branch.length>censorLength,'x']-out$data[out$data$branch.length>censorLength,'branch.length']+censorLength
   vp<-viewport()
   par(mar=c(0,0,0,0))
   plot(1,1,type='n',xaxt='n',yaxt='n',xlab='',ylab='',bty='n')
@@ -268,6 +297,7 @@ for(ii in list.files('trees/10trees','\\.txt$',full.name=TRUE)){
   ticks<-pretty(fakeDays,n=3)
   par(lheight=.75)
   insetScale(c(fakeDays-.5,tail(fakeDays,1)+.5),cols,main='Days after onset\nof symptoms',insetPos = c(0.025, 0.1, 0.04, 0.9),at=ticks[ticks<max(fakeDays)],cex=.7)
+  tree$edge.length<-lengthBak
   out<-ggtree(tree)+
     #geom_tippoint(color=timeCols[times],show.legend=TRUE,size=5/log(length(days)))+
     geom_tiplab(color=timeCols[times],size=1,vjust=.35)+
