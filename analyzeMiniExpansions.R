@@ -1,4 +1,4 @@
-
+library(dnar)
 miniIn<-read.csv('out/miniInputTitration.csv',row.names=1)
 miniIn$id<-rownames(miniIn)
 miniOut<-read.csv('out/miniOutputTitration.csv',row.names=1)
@@ -8,14 +8,11 @@ miniOut$retro<-grepl('retro',rownames(miniOut))
 combo<-merge(miniOut[miniOut$retro,c('id','No.Drug')],miniOut[!miniOut$retro,c('id','No.Drug')],by.y='id',by.x='id',all.x=TRUE,all.y=TRUE,suffixes=c('.retro',''))
 plot(combo$No.Drug,combo$No.Drug.retro);abline(0,1)
 combo<-merge(combo,miniIn[,c('No.Drug','id')],by.y='id',by.x='id',suffixes=c('','.in'),all.x=TRUE,all.y=TRUE)
-rt<-read.csv('data/Mini_expansion_RT.csv',row.names=1)
+rt<-read.csv('data/Mini_expansion_RT_20191106.csv',row.names=1)
 rt<-rt[,!grepl('^Input',colnames(rt))]
 colnames(rt)<-sub('\\.+$','',sub('RT\\.ng\\.ml\\.\\.','',colnames(rt)))
-#beads and retronectin were flipped on plate
-colnames(rt)[c(which(colnames(rt)=='Beads'),which(colnames(rt)=='Retron'))]<-c('Retron','Beads')
 rownames(rt)<-sub('^Rb','Rebound',rownames(rt))
 colnames(rt)<-sprintf('RT_%s',colnames(rt))
-#the two batches were switched in plate (photo of plate lid cleared up)
 if(any(!combo$id %in% c(rownames(rt),'SG3','YU2','SG3+WEAU','89.6','Media')))stop('Missing RT')
 combo<-cbind(combo,rt[combo$id,])
 combo$infectivity_Retro<-combo$No.Drug.retro/combo$RT_Retron/1000
@@ -152,12 +149,21 @@ colnames(tmp)<-c('ID','infectivity')
 tmp[,colnames(repCap)[!colnames(repCap) %in% colnames(tmp)]]<-NA
 out<-rbind(repCap,tmp)
 write.csv(out,'out/mini_repInf.csv',row.names=FALSE)
+otherTrop<-read.csv('out/tropism_20191031.csv',row.names=1)
+colnames(otherTrop)[colnames(otherTrop)=='No.drug']<-'No.Drug'
+vir<-read.csv('data/tropsimIds.csv',stringsAsFactors=FALSE) #from Tropisms and Infect. IDs email
+otherTrop$isIsolate<-!rownames(otherTrop) %in% vir[grepl('[FGH]',vir$Wells),'IDs']
 inTrop<-read.csv('out/miniInputTitration.csv',row.names=1)
+inTrop$isIsolate<-TRUE
+inTrop<-rbind(inTrop,otherTrop[,colnames(inTrop)])
+inTrop<-inTrop[!rownames(inTrop) %in% c('YU2','Media','Media1','SG3','89.6','SG3+WEAU'),]
+inTropAll<-inTrop
+inTrop<-inTrop[inTrop$No.Drug>2,]
 inTropProp<-inTrop[,colnames(inTrop)!='No.Drug']/inTrop$No.Drug*100
 #outTrop<-read.csv('out/miniOutputTitration.csv',row.names=1)
 #outTropProp<-outTrop[,colnames(outTrop)!='No.Drug']/outTrop$No.Drug
 colnames(inTropProp)[colnames(inTropProp)=='AMD.Mar']<-'AMD-Mar'
-inTropProp<-inTropProp[!rownames(inTropProp) %in% c('YU2','Media','SG3','89.6','SG3+WEAU'),]
+#inTropProp<-inTropProp[!rownames(inTropProp) %in% c('YU2','Media','Media1','SG3','89.6','SG3+WEAU'),]
 out[,colnames(inTropProp)]<-inTropProp[out$ID,]
 leftovers<-inTropProp[!rownames(inTropProp) %in% out$ID,]
 leftovers$ID<-rownames(leftovers)
@@ -166,8 +172,16 @@ out<-rbind(out,leftovers[,colnames(out)])
 xx<-read.csv('rebound/out/rebQvoaMaster.csv',stringsAsFactors=FALSE)
 rownames(xx)<-xx$ID
 out[is.na(out[,1]),1]<-xx[out[is.na(out[,1]),"ID"],'Type']
+tmp<-out[out$ID %in% xx$ID,]
+tmp<-tmp[order(tmp$ID),]
 write.csv(out,'out/mini_repInfTrop.csv',row.names=FALSE)
-
+pdf('test.pdf',height=20)
+par(mar=c(2,14,1,1))
+image(1:3,1:nrow(tmp),t(as.matrix(tmp[,c('AMD','Mar','AMD-Mar')])),col=rev(heat.colors(100)),xaxt='n',xlab='',yaxt='n',ylab='')
+axis(1,1:3,c('AMD','Mar','AMD-Mar'))
+axis(2,1:nrow(tmp),tmp$ID,las=1,cex=.1)
+box()
+dev.off()
 
 
 check<-all[,c('id','class','redoBead','RT_Bead','redoFirst','RT_First','inf')]
@@ -218,7 +232,6 @@ pdf('out/infectivityByClass_20191104.pdf',width=6,height=4)
   for(t12 in c(FALSE,TRUE)){
     col<-ifelse(t12,'infT12','inf')
     tmp<-all[!is.na(all[,col])&!is.na(all$class),]
-    if(repCap)tmp<-tmp[tmp$id %in% rep$V2,]
     uniqC<-unique(tmp$class)
     pos<-structure(1:length(unique(tmp$class)),.Names=uniqC[order(!grepl('MM',uniqC),!grepl('TP',uniqC),grepl('Rebound|acute',uniqC))])
     par(mar=c(3,3.5,1.2,.2),lheight=.8)
@@ -252,7 +265,6 @@ pdf('out/infectivityByClass_20191104_newRT.pdf',width=6,height=4)
   for(t12 in c(FALSE,TRUE)){
     col<-ifelse(t12,'infT122','inf2')
     tmp<-all[!is.na(all[,col])&!is.na(all$class),]
-    if(repCap)tmp<-tmp[tmp$id %in% rep$V2,]
     uniqC<-unique(tmp$class)
     pos<-structure(1:length(unique(tmp$class)),.Names=uniqC[order(!grepl('MM',uniqC),!grepl('TP',uniqC),grepl('Rebound|acute',uniqC))])
     par(mar=c(3,3.5,1.2,.2),lheight=.8)
@@ -279,3 +291,152 @@ dev.off()
 
 
 
+xx<-read.csv('data/Data Master 2019 _ReboundAndQVOA_20191219.csv',stringsAsFactors=FALSE)
+rownames(inTropAll)[!rownames(inTropAll) %in% xx$ID]
+xx[!xx$ID %in% rownames(inTropAll),'ID']
+out2<-cbind(xx,inTropAll[xx$ID,])
+out2$id<-sub('^Rebound P','Rebound A09 P',out2$ID)
+rownames(out2)<-NULL
+write.csv(out2,'out/ReboundAndQVOA_20191219.csv')
+bigTrop<-read.csv('out/20191223_tropism.csv',stringsAsFactors=FALSE,row.names=1)
+bigTrop<-bigTrop[!grepl('Media|IMC',rownames(bigTrop))&!grepl('^RM',rownames(bigTrop)),]
+rownames(bigTrop)<-sub('Reb. ','',sub('Rebound 50','A09',rownames(bigTrop)))
+rownames(bigTrop)<-sub(' D-14 | W12 ',' ',rownames(bigTrop))
+matches<-lapply(structure(rownames(bigTrop),.Names=rownames(bigTrop)),function(xx){
+  regex<-sprintf('%s[ _-]',gsub('[ -]+','[ ._-].*',trimws(sub('\\([^)]+\\)','',xx))))
+  hits<-out2$ID[grep(regex,sprintf('%s ',out2$id))]
+  hits
+})
+if(any(sapply(matches,length)>1))stop('Multiple ID matches')
+rownames(bigTrop)[(sapply(matches,length)==0)&!grepl('- (UT|BE) -',rownames(bigTrop))]
+message('Missing IDs:')
+dummy<-sapply(out2[!out2$ID %in% unlist(matches),'ID'],message)
+rownames(bigTrop)[sapply(matches,length)==1]<-unlist(matches)
+colnames(bigTrop)<-sprintf('%s_1218',colnames(bigTrop))
+out2<-cbind(out2,bigTrop[out2$ID,])
+virus<-read.csv('ice/2019-12-18_tropism.csv',stringsAsFactors=FALSE)
+virus[,3:10]<-sub('Reb. ','',sub('Rebound 50','A09',unlist(virus[,3:10])))
+virus[,3:10]<-sub(' D-14 | W12 ',' ',unlist(virus[,3:10]))
+p1<-unlist(virus[virus$Plate==1&virus$Row %in% 1:12,3:10])
+p2_10<-unlist(virus[virus$Plate==2&virus$Row %in% 9:9,3:10])
+cols<-ifelse(out2$ID %in% unlist(matches)[names(unlist(matches)) %in% p1],'red',
+  ifelse(out2$ID %in% unlist(matches)[names(unlist(matches)) %in% p2_10],'blue','black'))
+cols<-ifelse(out2$ID %in% rownames(otherTrop),'red','black')
+pdf('test.pdf');plot(out2$No.Drug+1,out2$No.Drug_1218+1,log='xy',col=out2$isIsolate+1);abline(0,1);dev.off()
+non31<-out2[out2$Type!='Rebound','ID'][!out2[out2$Type!='Rebound','ID'] %in% rownames(otherTrop)]
+plot(out2$AMD+1,out2$AMD_1218+1,log='xy',col=cols,cex=1+(out2$ID %in% non31));abline(0,1)
+
+odd<-out2[out2$No.Drug_1218/out2$No.Drug>10&!is.na(out2$No.Drug+out2$No.Drug_1218),'ID']
+tmpName<-names(unlist(matches))[unlist(matches) %in% odd]
+write.csv(tmpName,'tmp.csv')
+
+out2$inf_1218<-out2$No.Drug_1218/out2$RT/1000
+
+
+
+
+# collect all tzmbl into one file. Need: master file, RT isolate, ND, A, M, AM isolate, RT_MiniBead, ND... MiniBead, RT_MiniRetro, ND... MiniRetro
+xx<-read.csv('data/Data Master 2019 _ReboundAndQVOA_20191219.csv',stringsAsFactors=FALSE)
+yy<-read.csv("data/RT for Fred's Isolates_20200109.csv",stringsAsFactors=FALSE)
+colnames(yy)<-c('ID','RT')
+yy[,colnames(xx)[!colnames(xx) %in% colnames(yy)]]<-NA
+collect<-rbind(xx,yy[,colnames(xx)])
+colnames(collect)[colnames(collect)=='RT']<-'RT_Isolate'
+#include large tropism run of original isolates
+bigTrop2<-bigTrop
+#fix order on "- BE -" virus and remove QVOA_
+rownames(bigTrop2)<-sub('^QVOA_','',sub('(.*) - ([A-Z]+) - (.*)','\\1 \\3 \\2',rownames(bigTrop2)))
+matches<-lapply(structure(rownames(bigTrop2),.Names=rownames(bigTrop2)),function(xx){
+  regex<-sprintf('%s[ _-]',gsub('[ -]+','[ ._-].*',trimws(sub('\\([^)]+\\)','',xx))))
+  collect$ID[grep(regex,sprintf('%s ',collect$ID))]
+})
+if(any(sapply(matches,length)>1))stop('Duplicate ID found')
+tmp<-collect[1,]
+tmp[,]<-NA
+tmp<-tmp[rep(1,sum(sapply(matches,length)==0)),]
+tmp$ID<-names(matches)[sapply(matches,length)==0]
+
+collect<-rbind(collect,tmp)
+matches<-lapply(structure(rownames(bigTrop2),.Names=rownames(bigTrop2)),function(xx){
+  regex<-sprintf('%s[ _-]',gsub('[ -]+','[ ._-].*',trimws(sub('\\([^)]+\\)','',xx))))
+  collect$ID[grep(regex,sprintf('%s ',collect$ID))]
+})
+if(any(sapply(matches,length)!=1))stop('Problem matching big tropism')
+if(any(table(unlist(matches))!=1))stop('Collision in big tropism')
+rownames(bigTrop2)<-unlist(matches)
+colnames(bigTrop2)<-sub('_.*','_Isolate',colnames(bigTrop2))
+collect<-cbind(collect,bigTrop2[collect$ID,])
+#include additional tropism from "all" collected
+tmp<-all[all$id %in% collect$ID,]
+tmp$RT_Bead_Combine<-apply(tmp[,c(ifelse(is.na(tmp$RT_Bead),'RT_First','RT_Bead'),'redoRTBead')],1,function(xx)mean(xx,na.rm=TRUE))
+tmp$RT_Retro_Combine<-apply(tmp[,c('RT_Retro','redoRTRetro')],1,function(xx)mean(xx,na.rm=TRUE))
+tmp$IU_Bead_Combine<-apply(tmp[,c('IU_Bead',ifelse(is.na(tmp$RT_Bead),'redoFirst','redoBead'))],1,function(xx)mean(xx,na.rm=TRUE))
+tmp$isFirstBead<-is.na(tmp$RT_Bead)
+tmp$IU_Retro_Combine<-apply(tmp[,c('IU_Retro','redoRetro')],1,function(xx)mean(xx,na.rm=TRUE))
+tmp$IU_Retro_T122<-tmp$redoRetroT12
+tmp$IU_Bead_T122<-ifelse(is.na(tmp$RT_Bead),tmp$redoFirstT12,tmp$redoBeadT12)
+tmp$IU_Isolate_old<-tmp[,'IU_Old']
+rownames(tmp)<-tmp$id
+tmp2<-tmp[,c('RT_Bead_Combine','RT_Retro_Combine','IU_Bead_Combine','IU_Retro_Combine','IU_Retro_T122','IU_Bead_T122','IU_Isolate_old','isFirstBead')]
+colnames(tmp2)<-sub('_Combine','',colnames(tmp2))
+collect<-cbind(collect,tmp2[collect$ID,])
+collect$IU_Isolate<-collect$No.Drug_Isolate
+#note these are not all isolates (!isIsolate = first miniExpansion)
+tmpIn<-inTropAll[,1:5]
+colnames(tmpIn)<-sprintf('%s_old',colnames(tmpIn))
+collect<-cbind(collect,tmpIn[collect$ID,])
+collect$Type[is.na(collect$Type)&grepl('Reb\\.',collect$ID)]<-'Rebound'
+collect$Type[is.na(collect$Type)&grepl('QVOA\\.post',collect$ID)]<-'VOA - Post ATI'
+collect$Type[is.na(collect$Type)&grepl('voa.*\\(pre\\)',collect$ID)]<-'VOA - Pre ATI'
+collect$Type[is.na(collect$Type)&grepl('A08.*\\(pre\\)',collect$ID)]<-'VOA - Pre ATI'
+collect$Type[is.na(collect$Type)&grepl('A08.*\\(post\\)',collect$ID)]<-'VOA - Post ATI'
+collect$Type[is.na(collect$Type)&grepl('818B.*\\(pre\\)',collect$ID)]<-'VOA - Pre ATI'
+reboundIsolates<-c("PIP-017 (IFN-a2b) - 8F", "S-22 7D4", "BEAT-030 (IFN-a2b) - 5E", "PIP-008 (IFN-a2b) - 2A", "PIP-017 (IFN-a2b) - 8B", "BEAT-030 (IFN-a2b) - 7E", "S-07 (R-3) - 2A")
+collect$Type[is.na(collect$Type)&collect$ID %in% reboundIsolates]<-'Rebound'
+collect$Type[collect$ID=='9201 12F3']<-'VOA - Pre ATI'
+collect$ID[is.na(collect$Type)]
+collect$Patient[is.na(collect$Patient)&grepl('A08[. -]',collect$ID)]<-'A08'
+collect$Patient[is.na(collect$Patient)&grepl('A01[. -]',collect$ID)]<-'A01'
+collect$Patient[is.na(collect$Patient)&grepl('A09[. -]',collect$ID)]<-'A09'
+collect$Patient[is.na(collect$Patient)&grepl('601[r. -]',collect$ID)]<-'601'
+collect$Patient[is.na(collect$Patient)&grepl('9201[. _-]',collect$ID)]<-'9201'
+collect$Patient[is.na(collect$Patient)&grepl('818B[. _-]',collect$ID)]<-'A09'
+collect$Patient[is.na(collect$Patient)]<-sub('[_ ].*','',collect$ID[is.na(collect$Patient)])
+collect$Study<-trimws(collect$Study)
+collect$Study[is.na(collect$Study)&grepl('^A0[189]$',collect$Patient)]<-'VRC01'
+collect$Study[is.na(collect$Study)&collect$Patient=='9201']<-'3BNC117 / 10-1074'
+collect$Study[is.na(collect$Study)&collect$Patient=='601']<-'3BNC117'
+collect$Study[is.na(collect$Study)&grepl('^S-[0-9]+$',collect$Patient)]<-'INTERRUPT'
+collect$Study[is.na(collect$Study)&grepl('^BEAT-[0-9]+$',collect$Patient)]<-'BEAT'
+collect$Study[is.na(collect$Study)&grepl('^PIP-[0-9]+$',collect$Patient)]<-'PIP'
+collect$ID[is.na(collect$Study)]
+collect<-collect[!grepl('293T',collect$ID),]
+write.csv(collect[,!colnames(collect) %in% c('simple','id')],'out/qvoaReboundCollected_2020110.csv',row.names=FALSE)
+write.csv(collect[,c('Study','Type','Patient','ID','RT_Isolate','IU_Isolate')],'out/qvoaReboundIU_2020110.csv',row.names=FALSE)
+
+#inTropAll and miniOut have additional tropism if needed
+
+pdf('test.pdf')
+suppressWarnings(withAs(collect=collect[!is.na(collect$Type)&!is.na(collect$RT_Isolate)&!is.na(collect$IU_Isolate),],vipor::vpPlot(sub(' .*','',collect$Type),collect$IU_Isolate/collect$RT_Isolate,log='y')))
+suppressWarnings(withAs(collect=collect[!is.na(collect$Type)&!is.na(collect$RT_Bead)&!is.na(collect$IU_Bead),],vipor::vpPlot(sub(' .*','',collect$Type),collect$IU_Bead/collect$RT_Bead,log='y')))
+suppressWarnings(withAs(collect=collect[!is.na(collect$Type)&!is.na(collect$RT_Retro)&!is.na(collect$IU_Retro),],vipor::vpPlot(sub(' .*','',collect$Type),collect$IU_Retro/collect$RT_Retro,log='y')))
+dev.off()
+
+pdf('out/IU_problem.pdf')
+plot(collect$No.Drug_old,collect$IU_Isolate,log='xy',col=(!collect$isIsolate_old)+1,ylab='12-24 Isolate IU/ul',xlab='Previous "isolate" IU/ul');abline(0,1)
+legend('bottomright',inset=.01,c('Rows FGH','Other'),col=c('red','black'),pch=1)
+plot(collect$No.Drug_old,ifelse(collect$isIsolate_old,collect$IU_Isolate,collect$IU_Bead),log='xy',ylab='12-24 Isolate (or previously measured miniexpansion measurement) IU/ul',xlab='Previous "isolate" (or miniexpansion) IU/ul',col=(!collect$isIsolate_old)+1);abline(0,1)
+legend('bottomright',inset=.01,c('Compared to bead mini','Compared to isolate'),col=c('red','black'),pch=1)
+#calculate infectivity for the miniexpansion and isolates here
+plot(collect$IU_Isolate,collect$IU_Bead,log='xy',ylab='Miniexpansion IU/ul',xlab='Original isolate IU/ul',col=ifelse(collect$isFirstBead,'blue','black'));abline(0,1)
+points(collect$IU_Isolate,collect$IU_Retro,col='red')
+legend('topleft',inset=.01,c('Bead first','Bead second','Retro'),col=c('blue','black','red'),pch=1)
+plot(collect$IU_Isolate/collect$RT_Isolate/1000,collect$IU_Bead/collect$RT_Bead/1000,log='xy',ylab='Miniexpansion infectivity',xlab='Original isolate infectivity',col=ifelse(collect$isFirstBead,'blue','black'));abline(0,1)
+points(collect$IU_Isolate/collect$RT_Isolate/1000,collect$IU_Retro/collect$RT_Retro/1000,col='red')
+legend('topleft',inset=.01,c('Bead first','Bead second','Retro'),col=c('blue','black','red'),pch=1)
+dev.off()
+
+pdf('test.pdf');plot(collect$IU_Isolate,collect$IU_Bead,log='xy');abline(0,1);dev.off()
+pdf('test.pdf');plot(collect$No.Drug_Isolate,collect$IU_Isolate_old);abline(0,1);dev.off()
+pdf('test.pdf');plot(tmp$redoRetro,tmp$IU_Retro);abline(0,1);dev.off()
+pdf('test.pdf');plot(tmp$redoBead,tmp$IU_Bead);abline(0,1);dev.off()
