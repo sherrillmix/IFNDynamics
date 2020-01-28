@@ -233,7 +233,7 @@ maxDepth<-apply(do.call(rbind,lapply(list.files('trees/10trees','\\.txt$',full.n
 }
 )),2,max)
 print(maxDepth)
-pdf('out/lindsey_trees2.pdf',width=2.,height=6)
+pdf('out/lindsey_trees2.pdf',width=4.,height=6)
 for(ii in list.files('trees/10trees','\\.txt$',full.name=TRUE)){
   message(ii)
   tree<-read.tree(ii)
@@ -296,7 +296,8 @@ for(ii in list.files('trees/10trees','\\.txt$',full.name=TRUE)){
   print(out,vp=vp)
   ticks<-pretty(fakeDays,n=3)
   par(lheight=.75)
-  insetScale(c(fakeDays-.5,tail(fakeDays,1)+.5),cols,main='Days after onset\nof symptoms',insetPos = c(0.025, 0.1, 0.04, 0.9),at=ticks[ticks<max(fakeDays)],cex=.7)
+  insetScale(c(fakeDays-.5,tail(fakeDays,1)+.5),cols,main='Days after onset\nof symptoms',insetPos = c(0.025, 0.1, 0.04, 0.7),at=ticks[ticks<max(fakeDays)],cex=.7)
+  legend(grconvertX(.72,'npc','user'),grconvertY(mean(c(.025,.04)),'npc','user'),c('ART VOA isolate','PBMC sequence'),fill=c('purple','grey'),cex=.65,yjust=.4,bty='n',title='Post-ART')
   tree$edge.length<-lengthBak
   out<-ggtree(tree)+
     #geom_tippoint(color=timeCols[times],show.legend=TRUE,size=5/log(length(days)))+
