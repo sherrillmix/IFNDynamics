@@ -102,16 +102,32 @@ dev.off()
 
 pdf('out/subjects_condense_new.pdf',width=4,height=8)
   par(mar=c(0,0,0,0))
-  layout(lay2,width=c(.5,rep(1,2),.3),height=c(.01,c(1,1,1,.2,1,.2,1),1.3))
+  layout(lay2,width=c(.5,rep(1,2),.57),height=c(.01,c(1,1,1,.2,1,.2,1),.8))
   #layout(lay,width=c(.5,rep(1,2),.5),height=c(.01,rep(1,5),.35))
   counter<-1
   xlim<-range(c(dat$time/7,lastDfosx/7))
   for(ii in patOrder){
     plotVlCd4(compiledMeta[compiledMeta$mm==ii,],ii,xlim,range(compiledMeta$cd4,na.rm=TRUE),range(compiledMeta$vl,na.rm=TRUE),counter>8,counter%%2==1,counter%%2==0)
     #title(sprintf('%s %s',ii,ifelse(ii %in% rownames(founders),sprintf(' (%s)',founders[ii,'tf']),'')),line=-1)
-    if(counter==6)text(par('usr')[2]+.4*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),'CD4 count (cells/mm3)',srt=-90,xpd=NA,col='blue',cex=2)
+    if(counter==6)text(par('usr')[2]+.45*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),expression(paste('CD4 count (cells/mm'^3,')')),srt=-90,xpd=NA,col='blue',cex=2)
     if(counter==5)text(par('usr')[1]-.38*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),'Viral load (copies/ml)',srt=90,xpd=NA,col='red',cex=2)
-    if(counter==9)text(max(par('usr')[1:2]),10^(par('usr')[3]-.35*diff(par('usr')[3:4])),'Weeks after onset of symptoms',xpd=NA,cex=2)
+    par(lheight=.7)
+    if(counter==9)text(max(par('usr')[1:2]),10^(par('usr')[3]-.35*diff(par('usr')[3:4])),'Weeks after onset\nof symptoms',xpd=NA,cex=2)
+    if(counter==10){
+      xRight<-grconvertX(.785,'ndc','user')
+      annotWidth<-grconvertX(.99,'ndc','user')-grconvertX(.96,'ndc','user')
+      annotYPos<-rev(grconvertY(seq(.012,.082,length.out=6),'ndc','user'))
+      yStep<-abs(diff(log10(annotYPos[2:3])))
+      segments(xRight-annotWidth,annotYPos[1:2],xRight,annotYPos[1:2],xpd=NA,col=c('red','blue'))
+      #VOA
+      segments(rep(xRight-annotWidth/2,3),rep(annotYPos[3],3)/10^(yStep*.4),rep(xRight-annotWidth/2,3)+c(-6,0,6),rep(annotYPos[3],3)*c(1.7,10^(yStep*.8),1.7)/10^(yStep*.4),lwd=1.2,col='purple',xpd=NA)
+      #Super
+      segments(rep(xRight-annotWidth/2,3)+c(-9,0,9),rep(annotYPos[4],3)*10^c(yStep*.7,0,yStep*.7)/10^(yStep*.35),rep(xRight-annotWidth/2,3)+c(0,9,-9),rep(annotYPos[4],3)*10^c(0,yStep*.7,yStep*.7)/10^(yStep*.35),lwd=1.2,xpd=NA)
+      #ARTs
+      rect(xRight-annotWidth,annotYPos[c(5:6,6)]/10^(yStep*.3),xRight,c(annotYPos[5:6],annotYPos[6]/10^(yStep*.3))*10^(yStep*.3),xpd=NA,border=NA,col=c('#00000022','#00000011'))
+      text(xRight+annotWidth/5,annotYPos,c('Viral load','CD4 count','VOA isolation','Superinfection','cART treatment','AZT treatment'),xpd=NA,adj=0)
+      rect(xRight-annotWidth-24,min(annotYPos)/10^(yStep*.7),grconvertX(.995,'ndc','user'),max(annotYPos)*10^(yStep*.7),xpd=NA,border='#00000099')
+    }
     counter<-counter+1
     #thisLast<-lastDfosx[ii]
     thisLast<-max(compiledMeta[compiledMeta$mm==ii&(!is.na(compiledMeta$cd4)|!is.na(compiledMeta$vl)),'time'])
@@ -129,6 +145,14 @@ pdf('out/subjects_condense_new.pdf',width=4,height=8)
       for(jj in 1:nrow(thisVoa)){
         segments(rep(thisVoa$time[jj]/7,3),rep(baseY,3),rep(thisVoa$time[jj]/7,3)+c(-7,0,7),rep(baseY,3)*c(2,6,2),lwd=1.2,col='purple')
       }
+    }
+    if(ii %in% names(aztDfosx)){
+      thisAzt<-aztDfosx[[ii]]
+      #abline(v=thisAzt[1]/7,lty=2)
+      nRects<-31
+      vertBreaks<-seq(par('usr')[3],par('usr')[4],length.out=nRects+1)
+      rect(thisAzt[1]/7,10^vertBreaks[seq(1,nRects,2)],thisAzt[2]/7,10^vertBreaks[seq(2,nRects+1,2)],col='#00000011',border=NA)
+      rect(thisAzt[1]/7,10^vertBreaks[1],thisAzt[2]/7,10^vertBreaks[nRects+1],col='#00000011',border=NA)
     }
     abline(v=thisLast/7,lty=2)
   }
