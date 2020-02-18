@@ -74,7 +74,7 @@ plotVlCd4<-function(thisMeta,main,xlim,cd4Lim,vlLim,xAxis=TRUE,vlAxis=TRUE,cd4Ax
   #connects two <50 or big gap to <50
   isDashed<-(reduceDat$vl[-nrow(reduceDat)]<=lowerP24Limit&reduceDat$vl[-1]<=lowerP24Limit)|(reduceDat$vl[-1]<=lowerP24Limit&reduceDat$time[-1]-reduceDat$time[-nrow(reduceDat)]>120)
   segments(reduceDat$time[-nrow(reduceDat)]/7,reduceDat$vl[-nrow(reduceDat)],reduceDat$time[-1]/7,reduceDat$vl[-1],col='red',lwd=ifelse(isDashed,1.5,2),lty=ifelse(isDashed,3,1))
-  if(xAxis)axis(1,pretty(xlim),cex.axis=1.2)
+  if(xAxis)axis(1,pretty(xlim),cex.axis=1.2,tcl=-.3,mgp=c(3,.5,0))
   if(vlAxis)logAxis(2,mgp=c(3,1,0),las=1,col.axis='red',cex.axis=1.3)
 }
 
@@ -103,19 +103,19 @@ dev.off()
 for(showLegend in c(TRUE,FALSE)){
 pdf(sprintf('out/subjects_condense_new%s.pdf',ifelse(showLegend,'_legend','')),width=4,height=8)
   par(mar=c(0,0,0,0))
-  layout(lay2,width=c(.5,rep(1,2),.57),height=c(.15,c(1,1,1,.2,1,.2,1),ifelse(showLegend,.8,.5)))
+  layout(lay2,width=c(.47,rep(1,2),.55),height=c(.15,c(1,1,1,.2,1,.2,1),ifelse(showLegend,.8,.48)))
   #layout(lay,width=c(.5,rep(1,2),.5),height=c(.01,rep(1,5),.35))
   counter<-1
   xlim<-range(c(dat$time/7,lastDfosx/7))
   for(ii in patOrder){
-    plotVlCd4(compiledMeta[compiledMeta$mm==ii,],ii,xlim,range(compiledMeta$cd4,na.rm=TRUE),range(compiledMeta$vl,na.rm=TRUE),counter>8,counter%%2==1,counter%%2==0)
-    if(counter>=5&counter<9)axis(1,pretty(xlim),rep('',length(pretty(xlim))))
+    plotVlCd4(compiledMeta[compiledMeta$mm==ii,],ii,xlim,range(compiledMeta$cd4,na.rm=TRUE),range(compiledMeta$vl,na.rm=TRUE),counter>4,counter%%2==1,counter%%2==0)
+    #if(counter>=5&counter<9)axis(1,pretty(xlim),rep('',length(pretty(xlim))))
     #title(sprintf('%s %s',ii,ifelse(ii %in% rownames(founders),sprintf(' (%s)',founders[ii,'tf']),'')),line=-1)
-    labCex<-1.75
+    labCex<-1.7
     if(counter==6)text(par('usr')[2]+.45*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),expression(paste('CD4 count (cells/mm'^3,')')),srt=-90,xpd=NA,col='blue',cex=labCex)
     if(counter==5)text(par('usr')[1]-.38*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),'Viral load (copies/ml)',srt=90,xpd=NA,col='red',cex=labCex)
     par(lheight=.7)
-    if(counter==9)text(max(par('usr')[1:2]),10^(par('usr')[3]-.35*diff(par('usr')[3:4])),'Weeks after onset\nof symptoms',xpd=NA,cex=labCex)
+    if(counter==9)text(max(par('usr')[1:2]),10^(par('usr')[3]-.33*diff(par('usr')[3:4])),'Weeks after onset\nof symptoms',xpd=NA,cex=labCex)
     if(counter==10&showLegend){
       xRight<-grconvertX(.785,'ndc','user')
       annotWidth<-grconvertX(.99,'ndc','user')-grconvertX(.96,'ndc','user')
