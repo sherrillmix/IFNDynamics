@@ -443,6 +443,8 @@ pdf('out/bigTropismSummary.pdf',width=20)
   }
 dev.off()
 
+
+
 drugColors<-structure(rainbow.lab(length(moreDrugs)),.Names=moreDrugs)
 mods<-list()
 allDrugs<-list()
@@ -483,6 +485,37 @@ dev.off()
 
 out<-round(do.call(rbind,allDrugs)*100,2)
 colnames(out)<-sub('^drug','',colnames(out))
+
+pdf('out/bigTropismSummary2.pdf',height=12,width=4)
+par(mar=c(2.5,6.5,.1,4))
+cols<-rev(heat.colors(100))
+breaks<-seq(0,100,1)
+thisMat<-estimates[,c('est.drugAMD','est.drugTak','est.drugAMD+Tak')]*100
+thisMat[thisMat>100]<-100
+image(1:3,1:nrow(thisMat),t(thisMat),xaxt='n',yaxt='n',xlab='',ylab='',col=cols,breaks=)
+axisCex<-.8
+axis(2,1:nrow(thisMat),rownames(thisMat),las=1,cex.axis=axisCex,mgp=c(3,.4,0),tcl=-.3)
+axis(1,1:3,c('AMD','Tak','AMD+Tak'),mgp=c(3,.4,0),tcl=-.3,las=1)
+trop<-apply(thisMat,1,function(xx)c('1'='R5','2'='X4','3'='Dual','4'='Problem','5'='Problem','6'='Problem','7'='Problem','8'='Problem','9'='Problem','10'='Problem','0'='Problem')[as.character(sum(which(xx>20)))])
+axis(4,1:nrow(thisMat),trop,las=1,mgp=c(3,.8,0),cex.axis=axisCex)
+#axis(4,1:nrow(s3out),s3out$tropism,las=1,cex.axis=.5,mgp=c(3,.4,0),tcl=-.3)
+box()
+par(lheight=.7)
+dnar::insetScale(breaks=breaks,col=cols,at=c(0,50,100),labels=c(0,50,'>100'),insetPos=c(.008,.035,.015,.25),main='Percent of untreated\ninfectivity',cex=.7)
+thisMat<-100-out[rownames(out)!='No virus',c('AMD','HiMar','HiMar+AMD')]
+thisMat[thisMat>100]<-100
+image(1:3,1:nrow(thisMat),t(thisMat),xaxt='n',yaxt='n',xlab='',ylab='',col=cols,breaks=)
+axis(2,1:nrow(thisMat),rownames(thisMat),las=1,cex.axis=axisCex,mgp=c(3,.4,0),tcl=-.3)
+axis(1,1:3,c('AMD','Mar','AMD+Mar'),mgp=c(3,.4,0),tcl=-.3)
+#axis(4,1:nrow(s3out),s3out$tropism,las=1,cex.axis=.5,mgp=c(3,.4,0),tcl=-.3)
+box()
+par(lheight=.7)
+dnar::insetScale(breaks=breaks,col=cols,at=c(0,50,100),labels=c(0,50,'>100'),insetPos=c(.008,.035,.015,.25),main='Percent of untreated\ninfectivity',cex=.7)
+trop<-apply(thisMat,1,function(xx)c('1'='R5','2'='X4','3'='Dual','4'='Problem','5'='Problem','6'='Problem','7'='Problem','8'='Problem','9'='Problem','10'='Problem')[as.character(sum(which(xx>20)))])
+axis(4,1:nrow(thisMat),trop,las=1,mgp=c(3,.8,0),cex.axis=axisCex)
+dev.off()
+
+
 
 nrCompare<-cbind(trop3[order(trop3$plate,trop3$col,trop3$row),c('plate','col','row','n')],nr3[order(nr3$plate,nr3$col,nr3$row),c('plate','col','row','n')])
 colnames(nrCompare)<-paste(rep(c('no','NR'),each=4),c('plate','col','row','n'),sep='_')
@@ -1828,6 +1861,56 @@ for(ii in sort(unique(tit$virus))){
     lines(fakeDils,preds+1)
     mtext(sprintf('%0.1f IU/ul',thisIu),3)
 }
+}
+dev.off()
+
+
+lucPlates<-c('P1_D7','Control','P1_D5','P2_D7','P2_D6','P2_D5','P1_D6','P2_D3','P1_D2','P1_D3_messup1','P1_D3_messup2','P1_D3_messup3','P2_D2','P1_D4','P2_D1','P1_D1')
+luc<-read.csv('ice/luciferase_20200214.csv',stringsAsFactors=FALSE,skip=2)
+colnames(luc)[1]<-'row'
+luc<-luc[!is.na(luc$row)&luc$row!='',]
+luc$plate<-rep(lucPlates,each=8)
+lucStack<-data.frame('luc'=unlist(luc[,sprintf('X%d',1:12)]),'col'=rep(1:12,each=nrow(luc)),'row'=rep(luc$row,12),'plate'=rep(luc$plate,12))
+lucStack$p<-sub('_.*','',lucStack$plate)
+lucMax<-tapply(lucStack$luc,list(lucStack$row,lucStack$col,lucStack$p),max,na.rm=TRUE)
+pdf('out/shilpa_luciferase.pdf')
+for(ii in 1:3){
+  image(1:12,1:8,t(lucMax[8:1,,ii]),zlim=range(lucMax),col=rev(heat.colors(100)),main=dimnames(lucMax)[[3]][ii],xlab='Column',ylab='Row',yaxt='n')
+  axis(2,8:1,LETTERS[1:8],las=1)
+  box()
+}
+dev.off()
+
+tit<-readCounts('ice/out/2020-02-20_20200217_macIsoInfectivity/counts.csv')
+tit<-tit[!grepl('25k_',tit$plate),]
+control<-c('MM33.TF IMC 1/24','SL92b 10/21','A09r-1A2 10/21','CH236 6mo 4/30','CH236 TF 4/30','SG3 7/25','YU2 7/25','Media')
+virus<-c(1:8,9:15,17,18:25,26:33,34:41,42:48,'Media',49,73:79,control,control)
+virus<-c(virus,virus[1:24])
+names(virus)<-sprintf('%s%d',rep(LETTERS[1:8],12),rep(1:12,each=8))
+tit$virus<-virus[tit$well]
+tit$dil<-4*as.numeric(sub('x.*','',tit$plate))
+tit[tit$col>8,'dil']<-tit[tit$col>8,'dil']*10
+tit[tit$well=='H7','dil']<-tit[tit$well=='H7','dil']*50/95 #added 45 extra while pipetting media for control
+
+iusStan<-unlist(cacheOperation('work/macIsoInf_20200220.Rdat',parallel::mclapply,structure(unique(tit$virus),.Names=unique(tit$virus)),function(virus,tit,...){
+    thisDat<-tit[!is.na(tit$virus)&tit$virus==virus,c('n','dil')]
+    if(nrow(thisDat)==0)return(NA)
+    fit<-simpleCountIU(iuModSimple,thisDat$n,thisDat$dil,1,disperse=.1)
+    return(mean(as.matrix(fit)[,'baseIU'])/100)
+},tit,mc.cores=20))
+write.csv(data.frame('flaskId'=names(iusStan),'iu/ul'=iusStan),'out/macIsoInf_20200220.csv')
+
+pdf('out/macIsoInf_20200220.pdf')
+for(ii in unique(virus)){
+    thisDat<-tit[tit$virus==ii,]
+    thisDat$logDil<--log(thisDat$dil)
+    withAs(zz=thisDat,plot(zz$dil,zz$n+1,xlab='Dilution',ylab='TZMBL count',las=1,log='yx',main=paste(ii),ylim=range(tit$n+1),xlim=c(1,max(tit$dil,na.rm=TRUE)),pch=21,bg='blue',cex=2,xaxt='n'))
+    logAxis(1)
+    thisIu<-iusStan[ii]
+    fakeDils=1:50000
+    preds<-thisIu/fakeDils*100
+    lines(fakeDils,preds+1)
+    mtext(sprintf('%0.1f IU/ul',thisIu),3)
 }
 dev.off()
 
