@@ -1,3 +1,4 @@
+source('functions.R')
 
 plateLookup<-read.csv('ice/2020-02-01_plateIds.csv',stringsAsFactors=FALSE)
 plateLookup$type<-ifelse(grepl('[A-Z]',plateLookup$plate),'plasma','PBMC')
@@ -15,7 +16,6 @@ out$animal<-apply(out[,c('plate48','row')],1,function(xx){out<-plateLookup[plate
 out$day<-apply(out[,c('plate48','row')],1,function(xx){out<-plateLookup[plateLookup$plate==xx[1]&grepl(xx[2],plateLookup$row),'day'];ifelse(length(out)==1,out,NA)})
 out$type<-apply(out[,c('plate48','row')],1,function(xx){out<-plateLookup[plateLookup$plate==xx[1]&grepl(xx[2],plateLookup$row),'type'];ifelse(length(out)==1,out,NA)})
 write.csv(out,'out/2020-01-31_positiveSpotsLabeled.csv')
-bak<-comboSpots
 
 spots2<-read.csv('ice/2020-02-03_positiveSpots.csv',stringsAsFactors=FALSE)
 convert2<-convert96To48(spots2$Well)
@@ -98,12 +98,37 @@ comboSpots$name<-sprintf('%s.d%s.%s.%s',comboSpots$animal,comboSpots$day,ifelse(
 comboSpots[comboSpots$name=='RM10N011.d942.PLAS.E5'&comboSpots$plate48=='D','name']<-'RM10N011.d942.PLAS.1E5'
 comboSpots[comboSpots$date=='2020/02/17','flaskId']<-100:(100+sum(comboSpots$date=='2020/02/17')-1)
 if(any(table(comboSpots$name)>1))stop('Duplicated name')
-write.csv(comboSpots[c('flaskId','name','date','animal','day','type','virus','Note','plate48','well48','plate96','well96')],'out/combinedMacaqueIds.csv',row.names=FALSE)
-rt<-read.csv('ice/RT list for macaque isolates_20200218.csv',skip=1)[,-1]
+#rt<-read.csv('ice/RT list for macaque isolates_20200218.csv',skip=1)[,-1]
+rt<-read.csv('ice/RT list for macaque isolates_20200224.csv',stringsAsFactors=FALSE)
+rt<-rt[rt$RT.ng.ul!='#DIV/0!',]
+rt$RT.ng.ul<-as.numeric(as.character(rt$RT.ng.ul))
 rt$corrected<-sub('6563.d1085','6563.d1065',sub('VOA','PBMC',sub('^.*_','',rt$Isolates.ID)))
 rownames(rt)<-rt$corrected
 if(any(!rt$corrected %in% comboSpots$name))stop('Name mismatch')
 comboSpots$rt<-rt[comboSpots$name,'RT.ng.ul']
+iu<-read.csv('out/macIsoInf_20200220.csv',stringsAsFactors=FALSE)
+rownames(iu)<-iu$flaskId
+comboSpots$iu<-iu[as.character(comboSpots$flaskId),'iu.ul']
+iu2<-read.csv('out/macIsoInf_20200210.csv',stringsAsFactors=FALSE)
+rownames(iu2)<-sub('\\.VOA\\.','.PBMC.',sub('^.*_','',iu2$flaskId))
+comboSpots[comboSpots$name %in% rownames(iu2),'iu']<-iu2[comboSpots[comboSpots$name %in% rownames(iu2),'name'],'iu.ul']
+write.csv(comboSpots[c('flaskId','name','date','animal','day','type','virus','Note','plate48','well48','plate96','well96','rt','iu')],'out/combinedMacaqueIds.csv',row.names=FALSE)
+
+
+tmp<-comboSpots[comboSpots$rt>0&!is.na(comboSpots$rt),c('name','animal','day','type','rt','iu','flaskId')]
+tmp[order(tmp$animal,tmp$type,tmp$day),]
+tmp$perWell<-round(2.5/tmp$rt)
+tmp$totalVirus<-round(tmp$perWell*13)
+tmp$media<-round(2600-tmp$totalVirus)
+firstBatch<-unique(c('RM10N011.d56.PLAS.C7','RM10N011.d942.PLAS.F4','RM10N011.d942.PLAS.E5','RM10N011.d942.PBMC.B6','RM10N011.d942.PBMC.B8','RM6563.d1456.PBMC.C7','RM6563.d1065.PBMC.D7','RM6563.d112.PBMC.C7'))
+tmp$first<-tmp$name %in% firstBatch
+tmp[!tmp$first,]
+secondBatch<-c(firstBatch,'RM6563.d1065.PBMC.E7','RM6563.d1456.PBMC.B7','RM6563.d1456.PBMC.C3','RM6728.d10/17/2016.PLAS.B5','RM10N011.d56.PLAS.C3','RM10N011.d942.PLAS.F7','RMT919.d49.PBMC.C5','RM6563.d1065.PBMC.F2','RM10N011.d942.PBMC.C1','RM6563.d112.PBMC.B2','RM10N011.d942.PLAS.1E5')
+tmp2<-tmp[tmp$name %in% secondBatch,]
+tmp2<-tmp2[order(tmp2$flaskId),]
+write.csv(tmp2[,c('name','type','rt','iu','flaskId','perWell','totalVirus','media','first')],'out/macaque_secondBatch.csv',row.names=FALSE)
+
+
 
 table(comboSpots$animal,comboSpots$day)
 attempted<-unique(plateLookup[,c('animal','day','vl','type')])
@@ -116,10 +141,11 @@ attempted$awaitingHarvest1Spot<-sapply(paste(attempted$animal,attempted$day,atte
 attempted$positivesRetro<-sapply(paste(attempted$animal,attempted$day,attempted$type),function(xx)sum(xx == paste(comboSpots$animal,comboSpots$day,comboSpots$type)&grepl('[AB]',comboSpots$plate48)))
 attempted$positivesRetroEFC<-sapply(paste(attempted$animal,attempted$day,attempted$type),function(xx)sum(xx == paste(comboSpots$animal,comboSpots$day,comboSpots$type)&grepl('[CD]',comboSpots$plate48)))
 attempted<-attempted[order(attempted$animal,suppressWarnings(as.numeric(attempted$day))),]
+attempted$vl<-round(attempted$vl)
 write.csv(attempted,'out/positive_vs_attempted_macaque.csv',row.names=FALSE)
+write.csv(attempted[,c('animal','day','vl','type','confirmedPositives')],'out/confirmed_vs_attempted_macaque.csv',row.names=FALSE)
 tmp<-bak[bak$date=='2020/01/24',c('animal','well48','day','type')]
 tmp<-tmp[order(tmp$animal,tmp$well48),]
 rownames(tmp)<-1:nrow(tmp)
 write.csv(tmp,'out/positives_2020-01-24.csv',row.names=FALSE)
-
 
