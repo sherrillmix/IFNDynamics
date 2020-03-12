@@ -145,7 +145,7 @@ compareIC50<-function(zapCombo,combo,ylab='IFNb IC50 (pg/ml)',additional=NULL){
   slantAxis(1,1:nrow(zapCombo),zapCombo$virus)
   points(1:nrow(zapCombo),zapCombo$ic50,pch=21,bg='grey',cex=1.5)
   if(!is.null(additional)){
-    points(additional$pos+vipor::offsetX(),additional$ic50,bg='#FF000033',col=NA,pch=21)
+    points(additional$pos,additional$ic50,bg='#FF000033',col=NA,pch=21)
   }
 }
 pdf('out/imc_beta.pdf',width=12,height=5.5)
@@ -162,3 +162,47 @@ pdf('out/imc_alpha.pdf',width=12,height=5.5)
 dev.off()
 
 
+source('rebound/readBeta.R',chdir=TRUE)
+long<-read.csv('out/allLongitudinal.csv',row.names=1,stringsAsFactors=FALSE)
+newImc<-read.csv('out/imc_20191105_ic50.csv',row.names=1)
+newImc<-newImc[grepl('50$',rownames(newImc))&!grepl('MM33.1.13C1',rownames(newImc)),]
+rownames(newImc)<-sub('_+IMC','',sub('_?(human CD4 expansion)? 50$','',rownames(newImc)))
+newImc$virus<-rownames(newImc)
+newImc<-newImc[order(grepl('MM33',newImc$virus),grepl('TF',newImc$virus),grepl('13',newImc$virus),decreasing=TRUE),]
+zapCombo<-zapRedo[grep('MM33.*Beta',rownames(zapRedo)),]
+zapCombo$virus<-sub(' +\\(.*$','',rownames(zapCombo))
+zapCombo<-zapCombo[order(grepl('TF',zapCombo$virus),grepl('13',zapCombo$virus),decreasing=TRUE),]
+tzmbl<-read.csv('out/2019-10-18_tzmblIc50Calc.csv',row.names=1)
+tzmbl<-tzmbl[!grepl('MM33.13.2D6|MM33.1.13C1',rownames(tzmbl)),]
+tzmbl$virus<-paste('TZMBL',rownames(tzmbl))
+tzmbl$repCap<-NA
+#zapCombo<-rbind(zapCombo,newImc,tzmbl[,colnames(newImc)])
+zapCombo<-rbind(zapCombo,newImc)
+
+
+
+#601 is a rake
+imcAdditional<-combo[grepl('601_P4(A7|A8|C1|B4)|A09-1A2|A08.21_P2F4',combo$virus),]
+imcAdditional$ic50<-imcAdditional$beta
+imcAdditional$pos<-ifelse(grepl('601',imcAdditional$virus),4,ifelse(grepl('A08',imcAdditional$virus),5,6))-.15
+#MM33.17.2A4 MM33.13.2D6
+additional<-long[grepl('MM33.01|MM33.13.2D6|MM33.17',long$id)&!is.na(long$beta),]
+additional$ic50<-additional$beta
+additional$pos<-ifelse(grepl('MM33.01',additional$id),1,ifelse(grepl('MM33.13',additional$id),2,3))-.15
+additional<-rbind(additional[,c('pos','ic50')],imcAdditional[,c('pos','ic50')])
+combo$ic50<-combo$beta
+compareIC50<-function(zapCombo,combo,ylab='IFNb IC50 (pg/ml)',additional=NULL){
+  layout(t(1:2),width=c(8,4))
+  pars<-plotQvoa2(combo$ic50,combo$label,pos,combo$class,combo$study,combo$speed,mar=c(6.9,4,.1,0),ylab=ylab)
+  par(mar=c(6.9,0,.1,4))
+  pos<-structure(1:length(unique(zapCombo$virus)),.Names=unique(zapCombo$virus))
+  plot(1,1,type='n',ylim=pars$ylim,log='y',yaxt='n',xaxt='n',xlim=c(0.5,max(pos)+.5),xlab='',ylab='')
+  slantAxis(1,pos,names(pos))
+  points(pos[zapCombo$virus],zapCombo$ic50,pch=21,bg='grey',cex=1.5)
+  if(!is.null(additional)){
+    points(additional$pos,additional$ic50,bg='#FF000033',col=NA,pch=21)
+  }
+}
+pdf('out/imc_beta2.pdf',width=12,height=5.5)
+  compareIC50(zapCombo,combo,additional=additional)
+dev.off()
