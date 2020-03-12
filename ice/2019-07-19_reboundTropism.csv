@@ -1,0 +1,49 @@
+Study,Name,ID
+VRC01,Rebound P1B5,1
+,Rebound P1D5,2
+,Rebound P2B2,3
+,A09-1A1 bulk,4
+,A09-1A2 bulk,5
+,A09-1A3 bulk,6
+,A09-1A4 bulk,7
+,A09-1A5 bulk,8
+INTERRUPT,S-22 (R16)_P24C4,9
+,S-22 (R-16)_P1E2,10
+,S-22 (R-16)_P1F5,11
+,S-22 (R-16)_P3A6,12
+,S-22 (R-16)_P3B6,13
+,S-23 (R-14)_P3D1,14
+,S-23 (R-14)_P24A5,15
+,S-30 (R-32) - 8D,16
+,S-30 (R-32) - 2D1,17
+,S-30 (R-32) - 2D2,18
+,S-30 (R-32) - 7D,19
+IFNa2b treatment,BEAT-004_P4D4,20
+,BEAT-004_P4E6,21
+,BEAT-004_P4D1,22
+,BEAT-030 (IFN-a2b) - 3E,23
+,BEAT-030 (IFN-a2b) - 2E,24
+,BEAT-030 (IFN-a2b) - 4E,25
+,BEAT-030 (IFN-a2b) - 8E,26
+,BEAT-044 (IFN-a2b) - 6F,27
+,BEAT-044 (IFN-a2b) - 5F,28
+,BEAT-044 (IFN-a2b) - 7F,29
+,BEAT-044 (IFN-a2b) - 8F,30
+3BNC117 / 10-1074,Rebound 601_P4B7,31
+,Rebound 601_P4C1,32
+,Rebound 601_P4C3,33
+,Rebound 601_P4A7,34
+,Rebound 601_P4A8,35
+,Rebound 601_P4B4,36
+,Rebound 9201_P6A7,37
+,Rebound 9201_P6B8,38
+,Rebound 9201_P6B2,39
+,Rebound 9201_P13B1,40
+,Rebound 9201_P13B8,41
+,Rebound 9202_P13F7,42
+,Rebound 9203_P7A8,43
+,Rebound 9203_P7A1,44
+,Rebound 9203_P7C1,45
+,Rebound 9203_P9D3,46
+,Rebound 9203_P9E6,47
+,Rebound 9207_P7D4,48

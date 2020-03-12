@@ -1,0 +1,49 @@
+Num,Row,Col,Plate,Virus,Dilution,Media,Polybrene,Virus,Reason
+1,A-D,1,1,SG3,20,555,6.75,45,Control
+2,A-D,2,1,89.6 (sup),20,555,6.75,45,Control
+3,A-D,3,1,MM15.02.1C2,2,150,6.75,450,No growth in last
+4,A-D,4,1,MM15.02.2B5.bulk,4,375,6.75,225,Retry timepoint 2
+5,A-D,5,1,MM15.2._P2A4,20,555,6.75,45,Titration success
+6,A-D,6,1,MM15.2.BULK,4,375,6.75,225,Titration success
+7,A-D,7,1,MM15.3_P2B1,20,555,6.75,45,Titration success
+8,A-D,8,1,MM15.14.2C4,4,375,6.75,225,Super virus
+9,A-D,9,1,MM15.14.2C3.bulk,4,375,6.75,225,Same time as super
+10,A-D,10,1,MM15.13.2C1.bulk,4,375,6.75,225,Just before super time
+11,A-D,11,1,MM23.07.2B2,4,375,6.75,225,Super virus
+12,A-D,12,1,MM23.01.2C2,4,375,6.75,225,Double check first time for super
+13,E-H,1,1,MM23.13.22B3,4,375,6.75,225,Double check last time for super
+14,E-H,2,1,MM23.07.2B5,4,375,6.75,225,Same time as super (different super infection clade)
+15,E-H,3,1,MM23.08.22C6,4,375,6.75,225,Time after super (chimera)
+16,E-H,4,1,MM23.05.2C1,4,375,6.75,225,Time before super
+17,E-H,5,1,MM33.01.16A5,4,375,6.75,225,First time
+18,E-H,6,1,MM33.08.1A2,4,375,6.75,225,Middle time
+19,E-H,7,1,MM33.19.4D1,4,375,6.75,225,Last time
+20,E-H,8,1,MM33.19.1A4,4,375,6.75,225,Last time (far from 4D1)
+21,E-H,9,1,MM34.01.1D1,4,375,6.75,225,First time (1 of 2 TFs?)
+22,E-H,10,1,MM34.13.11D5,4,375,6.75,225,Middle time
+23,E-H,11,1,MM34.18.2D2,4,375,6.75,225,Last time
+24,E-H,12,1,MM34.18.2A4,4,375,6.75,225,Last time
+25,A-D,1,2,MM39.02.2B5,4,375,6.75,225,First time (TF?)
+26,A-D,2,2,MM39.10.11B4,4,375,6.75,225,Middle time
+27,A-D,3,2,MM39.16.1B2,4,375,6.75,225,Last time
+28,A-D,4,2,MM39.16.2D2,4,375,6.75,225,Last time
+29,A-D,5,2,MM40.01.2B5,4,375,6.75,225,First time (1 of 2 TFs?)
+30,A-D,6,2,MM40.01.1B2,4,375,6.75,225,First time (2 of 2 TFs?)
+31,A-D,7,2,MM40.12.13D1,4,375,6.75,225,Middle time
+32,A-D,8,2,MM40.15.2C3,4,375,6.75,225,Last time
+33,A-D,9,2,MM40.15.2D6,4,375,6.75,225,Last time
+34,A-D,10,2,MM14.02.2A1.bulk,4,375,6.75,225,First time
+35,A-D,11,2,MM14.10.2C2.bulk,4,375,6.75,225,Middle time
+36,A-D,12,2,MM14.17.1B4.bulk,4,375,6.75,225,Last time
+37,E-H,1,2,MM14.16.1B2.bulk,4,375,6.75,225,Last time
+38,E-H,2,2,MM55.01.1A3.bulk,4,375,6.75,225,First time
+39,E-H,3,2,MM55.11.2A3.bulk,4,375,6.75,225,Middle time
+40,E-H,4,2,MM55.15.1A3.bulk,4,375,6.75,225,Last time
+41,E-H,5,2,MM55.15.1A4.bulk,4,375,6.75,225,Last time
+42,E-H,6,2,MM62.01.1A3.bulk,4,375,6.75,225,First time
+43,E-H,7,2,MM62.08.2A1.bulk,4,375,6.75,225,Middle time
+44,E-H,8,2,MM62.11.2B5.bulk,4,375,6.75,225,Last time
+45,E-H,9,2,MM62.11.2A2.bulk,4,375,6.75,225,Last time
+46,E-H,10,2,YU2,20,555,6.75,45,Control
+47,E-H,11,2,SG3+WEAU,20,555,6.75,45,Control
+48,E-H,12,2,No virus,1,-300,6.75,900,Control
