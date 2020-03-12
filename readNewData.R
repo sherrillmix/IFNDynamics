@@ -10,7 +10,7 @@ if(!exists('compiledMeta'))source('readMeta.R')
 #allDats<-lapply(c('data/for Scott_Data Marster.csv'),read.csv,stringsAsFactors=FALSE)
 #allDats<-lapply(c('data/For Scott Jan.2019.csv'),read.csv,stringsAsFactors=FALSE)
 #allDats<-lapply(c('data/Data Master Marvin_2019-04-10.csv'),read.csv,stringsAsFactors=FALSE)
-allDats<-lapply(c('data/Data Master 2019 .csv'),read.csv,stringsAsFactors=FALSE)
+allDats<-lapply(c('data/Data Master 20200213.csv'),read.csv,stringsAsFactors=FALSE)
 idCol<-'ID.for.statistical.analysis.....Scott.March..2018.'
 allDats<-lapply(allDats,function(dat)dat[!is.na(dat[,idCol])&dat[,idCol]!='',])
 allCols<-unique(unlist(lapply(allDats,colnames)))
@@ -39,7 +39,7 @@ dat$sample<-sapply(strsplit(dat$id,'\\.'),function(xx)paste(xx[1:2],collapse='.'
 dat$visit<-sapply(strsplit(dat$sample,'\\.'),'[',2)
 dat$virusId<-sapply(strsplit(dat$id,'\\.'),'[',3)
 dat$pat<-sub('\\.[^.]+$','',dat$sample)
-dat$time<-as.numeric(compiledMeta[dat$sample,'DFOSx'])
+dat$time<-as.numeric(compiledMeta[dat$sample,'time'])
 dat$timeBeforeArt<-compiledMeta[dat$sample,'daysBeforeArt']
 dat$timeBefore350<-compiledMeta[dat$sample,'daysBefore350']
 dat$vl<-compiledMeta[dat$sample,'vl']
@@ -91,8 +91,8 @@ infect$id[infect$id=='MM33.17_Bulk-I']<-'MM33.17.1A1.bulk'
 infect$id<-sub(' bulk','.bulk',infect$id)
 if(any(!infect$id %in% dat$id))stop('Problem associating infectivity with isolates')
 dat$infectivityMedia<-dat$infectivityDextran<-NA
-dat[infect$id,'infectivityMedia']<-infect$media/dat[infect$id,'rt']
-dat[infect$id,'infectivityDextran']<-infect$dextran/dat[infect$id,'rt']
+dat[infect$id,'infectivityMedia']<-infect$media/dat[infect$id,'rt']/1000
+dat[infect$id,'infectivityDextran']<-infect$dextran/dat[infect$id,'rt']/1000
 
 replicative<-read.csv('out/weau3_ic50.csv',row.names=1)
 replicative<-replicative[grep('Alpha|alpha',rownames(replicative)),]
@@ -126,6 +126,20 @@ dat[ice$id[inDat],'iceHalf']<-ice$half[inDat]
 
 # bayesian model 
 
+nameLookup<-read.csv('out/newNames.csv')
+nameLookup<-nameLookup[!is.na(nameLookup$isolate),]
+rownames(nameLookup)<-nameLookup$isolate
+dat$finalId<-sub('\\.01$','',nameLookup[dat$id,'newName'])
+dat$count<-ave(sapply(strsplit(dat$finalId,'\\.'),'[',5),paste(dat$pat,dat$time),FUN=function(xx){
+  if(any(is.na(xx)))xx[is.na(xx)]<-sprintf('%03d',max(c(0,as.numeric(xx)),na.rm=TRUE)+1:sum(is.na(xx)))
+  xx
+})
+dat$finalId[is.na(dat$finalId)]<-withAs(xx=dat[is.na(dat$finalId),],sprintf('%s.%s.%s.%05d.%s',xx$pat,ifelse(xx$qvoa,'PBMC','PLAS'),ifelse(xx$qvoa,'VOA','ISO'),xx$time,xx$count))
+if(any(table(dat$finalId)>1))stop('Duplicate name created')
+if(any(!sub('\\.01$','',nameLookup$newName) %in% dat$finalId))stop('Missing isolate data')
+if(any(!tapply(dat$count,paste(dat$pat,dat$time),function(xx)all(sort(as.numeric(xx))==1:length(xx)))))stop('Missing ID')
+
+
 
 message('Time after infection')
 print(mean(withAs(dat=dat[!dat$qvoa,],tapply(dat$time,dat$pat,FUN=max))/7))
@@ -152,3 +166,5 @@ dat$isLast<-dat$time==ave(dat$time*ifelse(dat$qvoa,0,1),dat$pat,FUN=max)
 write.csv(dat[dat$isFirst|dat$isNadir|dat$qvoa|dat$isSix|dat$isLast|dat$isBetaNadir,c('pat','time','ic50','isFirst','isNadir','isBetaNadir','isSix','isLast','qvoa','beta','replication')],'out/firstNadir.csv')
 write.csv(dat,'out/allLongitudinal.csv')
 
+timeMeans<-lapply(unique(dat$pat),function(xx)withAs(zz=dat[dat$pat==xx,],tapply(zz$beta,zz$time,function(yy)exp(mean(log(yy),na.rm=TRUE)))))
+cbind(unique(dat$pat),sapply(timeMeans,which.min),names(sapply(timeMeans,which.min)))
