@@ -253,7 +253,7 @@ baseDate<-by(comboMeta[,c('dfosx','rDate')],comboMeta$mm,function(xx){zz<-table(
 comboMeta$time<-comboMeta$rDate-ymd(baseDate[comboMeta$mm])
 comboMeta[comboMeta$visit=='12 MW'&comboMeta$mm=='MM39','visit']<-'13'
 
-comboMeta[comboMeta$vl==37611600&!is.na(comboMeta$vl),'vl']<-NA
+#comboMeta[comboMeta$vl==37611600&!is.na(comboMeta$vl),'vl']<-NA
 
 if(any(apply(table(comboMeta$visit,comboMeta$mm)>1,2,any)))stop('Duplicate visit found')
 write.csv(comboMeta,'out/combinedMeta.csv')
@@ -331,6 +331,7 @@ weauMeta$ART<-weauMeta$Notes<-NA
 weauMeta$pat<-weauMeta$mm<-weauMeta$ej<-'WEAU'
 rownames(weauMeta)<-weauMeta$Time.Points<-sprintf('WEAU.%02d',weauMeta$id)
 weauMeta<-weauMeta[order(weauMeta$time),]
+aztDfosx<-list('WEAU'=ymd(c('start'='1992/01/23','end'='1994/06/01'))-weauSymptomDate)
 
 
 compiledMeta<-rbind(compiledMeta,weauMeta[,colnames(compiledMeta)])
