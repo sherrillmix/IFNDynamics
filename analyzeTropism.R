@@ -497,6 +497,7 @@ axisCex<-.8
 axis(2,1:nrow(thisMat),rownames(thisMat),las=1,cex.axis=axisCex,mgp=c(3,.4,0),tcl=-.3)
 axis(1,1:3,c('AMD','Tak','AMD+Tak'),mgp=c(3,.4,0),tcl=-.3,las=1)
 trop<-apply(thisMat,1,function(xx)c('1'='R5','2'='X4','3'='Dual','4'='Problem','5'='Problem','6'='Problem','7'='Problem','8'='Problem','9'='Problem','10'='Problem','0'='Problem')[as.character(sum(which(xx>20)))])
+trop[thisMat[,'est.drugAMD+Tak']>10]<-'Problem'
 axis(4,1:nrow(thisMat),trop,las=1,mgp=c(3,.8,0),cex.axis=axisCex)
 #axis(4,1:nrow(s3out),s3out$tropism,las=1,cex.axis=.5,mgp=c(3,.4,0),tcl=-.3)
 box()
@@ -511,11 +512,14 @@ axis(1,1:3,c('AMD','Mar','AMD+Mar'),mgp=c(3,.4,0),tcl=-.3)
 box()
 par(lheight=.7)
 dnar::insetScale(breaks=breaks,col=cols,at=c(0,50,100),labels=c(0,50,'>100'),insetPos=c(.008,.035,.015,.25),main='Percent of untreated\ninfectivity',cex=.7)
-trop<-apply(thisMat,1,function(xx)c('1'='R5','2'='X4','3'='Dual','4'='Problem','5'='Problem','6'='Problem','7'='Problem','8'='Problem','9'='Problem','10'='Problem')[as.character(sum(which(xx>20)))])
-axis(4,1:nrow(thisMat),trop,las=1,mgp=c(3,.8,0),cex.axis=axisCex)
+trop2<-apply(thisMat,1,function(xx)c('1'='R5','2'='X4','3'='Dual','4'='Problem','5'='Problem','6'='Problem','7'='Problem','8'='Problem','9'='Problem','10'='Problem')[as.character(sum(which(xx>20)))])
+trop2[thisMat[,'HiMar+AMD']>10]<-'Problem'
+axis(4,1:nrow(thisMat),trop2,las=1,mgp=c(3,.8,0),cex.axis=axisCex)
 dev.off()
 
-
+if(any(!names(trop2) %in% names(trop)))stop('Trop name not found')
+trop[names(trop2)]<-trop2
+write.csv(data.frame('id'=names(trop),'tropism'=trop),'out/mmTropism.csv')
 
 nrCompare<-cbind(trop3[order(trop3$plate,trop3$col,trop3$row),c('plate','col','row','n')],nr3[order(nr3$plate,nr3$col,nr3$row),c('plate','col','row','n')])
 colnames(nrCompare)<-paste(rep(c('no','NR'),each=4),c('plate','col','row','n'),sep='_')
@@ -1913,5 +1917,403 @@ for(ii in unique(virus)){
     mtext(sprintf('%0.1f IU/ul',thisIu),3)
 }
 dev.off()
+
+tit<-readCounts('ice/out/2020-02-20_20200210_macIsoInfectivity/counts.csv')
+tit<-tit[!grepl('0207_control',tit$plate),]
+control<-c('NL43+VSVg 4/11','YU2 8/23','MM33.17 IMC 7/29','MM33.TF IMC 1/24','SG3+WEAU 11/01','SL92b 10/21','SG3 7/25','89.6 9/16')
+vir<-read.csv('ice/RT list for macaque isolates_20200210.csv',stringsAsFactors=FALSE)
+if(any(vir$flask!=1:26))stop('ID mismatch')
+virus<-c(Vir$Name,sprintf('F%d',c(1,8,9,11,13,15)),sprintf('A08 Reb %s',c('8B3','8B5','7C2','5C2','6B3','6B5','7A3')),'A08 PreQVOA 1E2',control)
+virus<-c(virus,virus)
+names(virus)<-sprintf('%s%d',rep(LETTERS[1:8],12),rep(1:12,each=8))
+tit$virus<-virus[tit$well]
+tit$dil<-4*as.numeric(sub('x.*','',tit$plate))*ifelse(tit$col>6,6,1)
+
+iusStan<-unlist(cacheOperation('work/macIsoInf_20200210.Rdat',parallel::mclapply,structure(unique(tit$virus),.Names=unique(tit$virus)),function(virus,tit,...){
+    thisDat<-tit[!is.na(tit$virus)&tit$virus==virus,c('n','dil')]
+    if(nrow(thisDat)==0)return(NA)
+    fit<-simpleCountIU(iuModSimple,thisDat$n,thisDat$dil,1,disperse=.1)
+    return(mean(as.matrix(fit)[,'baseIU'])/100)
+},tit,mc.cores=20))
+write.csv(data.frame('flaskId'=names(iusStan),'iu/ul'=iusStan),'out/macIsoInf_20200210.csv')
+
+pdf('out/macIsoInf_20200210.pdf')
+for(ii in unique(virus)){
+    thisDat<-tit[tit$virus==ii,]
+    thisDat$logDil<--log(thisDat$dil)
+    withAs(zz=thisDat,plot(zz$dil,zz$n+1,xlab='Dilution',ylab='TZMBL count',las=1,log='yx',main=paste(ii),ylim=range(tit$n+1),xlim=c(1,max(tit$dil,na.rm=TRUE)),pch=21,bg='blue',cex=2,xaxt='n'))
+    logAxis(1)
+    thisIu<-iusStan[ii]
+    fakeDils=1:50000
+    preds<-thisIu/fakeDils*100
+    lines(fakeDils,preds+1)
+    mtext(sprintf('%0.1f IU/ul',thisIu),3)
+}
+dev.off()
+
+
+tit<-readCounts('ice/out/2020-02-20_20200204_macaqueOptimization/counts.csv')
+tit$day<-as.numeric(sub('d','',sapply(strsplit(tit$plate,'_'),'[',1)))
+tit$dilPlate<-as.numeric(sub('D','',sapply(strsplit(tit$plate,'_'),'[',2)))
+tit$dil<-4*60/25*4^(tit$dilPlate-1)
+rowVir<-structure(c(rep(c('SHIV.D.375M','B'='SL92b'),3),'Media','Media'),.Names=LETTERS[1:8])
+controlVir<-c('SL92b 10/21','89.6 9/16','YU2 8/23','SG3+WEAU 11/01','NL43-GFP+VSVg 4/11','MM33.13 IMC 7/29','MM33.TF IMC 1/24')
+rowNt<-structure(rep(c(' 0.6ng',' 1.8ng',' 5.4ng',''),each=2),.Names=LETTERS[1:8])
+tit$virus<-sprintf('%s %s',rowVir[tit$row],rowNt[tit$row])
+tit$virus[tit$row=='G'&tit$day!=2]<-c(controlVir,controlVir[1:5])[tit$col[tit$row=='G'&tit$day!=2]]
+tit$virus[tit$row=='H'&tit$day!=2]<-c(controlVir,controlVir[6:7],rep('Media',3))[tit$col[tit$row=='H'&tit$day!=2]]
+tit$treat<-sprintf('%s %s %d',rep(rep(c(0,40,80),each=2),2)[tit$col],rep(c('Retro','No retro'),each=6)[tit$col],rep(1:2,6)[tit$col])
+tit$treat[tit$row=='G'&tit$day!=2]<-'Control'
+tit$treat[tit$row=='H'&tit$day!=2]<-'Control'
+tit$treat[tit$row=='G'&tit$day!=2]<-'Control'
+tit$dil[tit$row=='G'&tit$day!=2]<-rep(c(4*1,4*6),c(7,5))[tit$col[tit$row=='G'&tit$day!=2]]*4^(tit$dilPlate[tit$row=='G'&tit$day!=2]-1)
+tit$dil[tit$row=='H'&tit$day!=2]<-rep(c(4*2,4*6),c(7,5))[tit$col[tit$row=='H'&tit$day!=2]]*4^(tit$dilPlate[tit$row=='H'&tit$day!=2]-1)
+tit<-tit[!(tit$plate=='d3_D2_2'&tit$row=='G'),] #looks like forgotten pipette
+tit<-tit[!(tit$plate=='d7_D2_2'&tit$row=='H'),] #looks like forgotten pipette
+
+
+
+iusStan<-cacheOperation('work/macOpt_20200204.Rdat',parallel::mclapply,structure(unique(tit$day),.Names=unique(tit$day)),function(day,tit,...){
+  do.call(rbind,lapply(structure(unique(tit$virus),.Names=unique(tit$virus)),function(virus){
+  sapply(structure(unique(tit$treat),.Names=unique(tit$treat)),function(treat){
+    thisDat<-tit[!is.na(tit$virus)&tit$virus==virus&tit$treat==treat&tit$day==day,c('n','dil')]
+    if(nrow(thisDat)==0)return(NA)
+    fit<-simpleCountIU(iuModSimple,thisDat$n,thisDat$dil,1)
+    return(mean(as.matrix(fit)[,'baseIU'])/100)
+})}))},tit,mc.cores=20)
+#sl92b<-do.call(rbind,lapply(iusStan,function(xx)xx[c('SL92b'),])[order(as.numeric(names(iusStan)))])
+#sl92b<-sl92b[,order(colnames(sl92b))]
+#shiv<-do.call(rbind,lapply(iusStan,function(xx)xx[c('SHIV.D.375M'),])[order(as.numeric(names(iusStan)))])
+
+pdf('out/macOpt_20200204.pdf')
+for(ii in sort(unique(tit$virus))){
+  par(mfrow=c(3,2))
+  for(jj in c(sort(unique(tit$day[tit$virus==ii])))){
+    for(kk in c(sort(unique(tit$treat[tit$virus==ii&tit$day==jj])))){
+      #if(jj==''){plot(1,1,bty='n',xlab='',ylab='',type='n',xaxt='n',yaxt='n');next()}
+      thisDat<-tit[tit$virus==ii&tit$day==jj&tit$treat==kk,]
+      thisDat$logDil<--log(thisDat$dil)
+      withAs(zz=thisDat,plot(zz$dil,zz$n+1,xlab='Dilution',ylab='TZMBL count',las=1,log='yx',main=paste(ii,'day',jj,kk),ylim=range(tit$n+1),xlim=c(1,max(tit$dil,na.rm=TRUE)),pch=21,bg='blue',cex=2,xaxt='n'))
+      logAxis(1)
+      thisIu<-iusStan[[as.character(jj)]][ii,kk]
+      fakeDils=1:50000
+      preds<-thisIu/fakeDils*100
+      lines(fakeDils,preds+1)
+      mtext(sprintf('%0.1f IU/ul',thisIu),3)
+    }
+  }
+}
+dev.off()
+
+iusStan<-iusStan[order(as.numeric(names(iusStan)))]
+days<-as.numeric(names(iusStan))
+lims<-range(unlist(lapply(iusStan,function(xx)xx[grepl('SHIV.D.375M|SL92b',rownames(xx)),])),na.rm=TRUE)
+pdf('out/macaqueOptimization.pdf',width=8,height=8)
+for(ii in c('SHIV.D.375M','SL92b')){
+  par(mfrow=c(3,3))
+  for(jj in c('0.6ng','1.8ng','5.4ng')){
+    for(dex in c('0','40','80')){
+      thisIus<-do.call(rbind,lapply(iusStan,function(xx)xx[grepl(sprintf('%s.*%s',ii,jj),rownames(xx)),grep(sprintf('^%s ',dex),colnames(xx))]))
+      thisIus<-thisIus[,!apply(is.na(thisIus),2,any)]
+      plot(1,1,type='n',xlim=range(days),ylim=lims,xlab='Day',ylab='IU/ul',main=sprintf('%s %s %s ug/ml DEAE',ii,jj,dex))
+      for(kk in 1:ncol(thisIus)){
+        points(days,thisIus[,kk],pch=21,bg=ifelse(grepl('No retro',colnames(thisIus)[kk]),'#FF000033','#0000FF33'))
+        lines(days,thisIus[,kk],col=ifelse(grepl('No retro',colnames(thisIus)[kk]),'#FF000033','#0000FF33'))
+      }
+    }
+  }
+  legend('topright',c('No retro','Retro'),lty=1,col=c('#FF000033','#0000FF33'),bty='n')
+}
+dev.off()
+
+
+tit<-readCounts('ice/out/2020-02-24_manolisMonitor/counts.csv')
+withAs(xx=tit[tit$n>1,],table(xx$row,xx$col,xx$plate))
+tmp<-tit[tit$col>6&tit$plate=='910Flasks',]
+nums<-structure(c(50:57,60:67,68:72,81:83,84:91,92:93,58,59,102,100,101,103,104,'YU2','YU2',rep('Media',5)),.Names=sprintf('%s%d',rep(LETTERS[1:8],6),rep(7:12,each=8)))
+tmp$flask<-nums[tmp$well]
+write.csv(tmp[,c('well','n','flask')],'out/flaskCheck_20200224.csv',row.names=FALSE)
+
+tit<-readCounts('ice/out/2020-02-26_macIC50/counts.csv')
+inf<-tit[grepl('inf',tit$plate),]
+tit<-tit[!grepl('inf',tit$plate),]
+tit$dayPlate<-sapply(strsplit(tit$plate,'_'),'[',1)
+tit$dil<-as.numeric(sub('x','',sapply(strsplit(tit$plate,'_'),'[',2)))*4
+
+iusStan<-cacheOperation('work/macIc50_20200226.Rdat',lapply,structure(unique(tit$dayPlate),.Names=unique(tit$dayPlate)),function(plate,tit,...){
+  do.call(rbind,parallel::mclapply(structure(unique(tit$row),.Names=unique(tit$row)),function(row,tit,...){
+    sapply(sort(unique(tit$col)),function(col,tit,...){
+      thisDat<-tit[tit$col==col&tit$row==row,c('n','dil')]
+      if(nrow(thisDat)==0)return(NA)
+      fit<-simpleCountIU(iuModSimple,thisDat$n,thisDat$dil,1,disperse=.05)
+      return(mean(as.matrix(fit)[,'baseIU'])/100)
+  },tit)
+},tit[tit$dayPlate==plate,],mc.cores=20))},tit)
+
+inf$dil<-as.numeric(sub('x','',sapply(strsplit(inf$plate,'_'),'[',2)))*ifelse(inf$col>6,10,1)
+inf$dil[inf$well %in% c('C6','C12')]<-inf$dil[inf$well %in% c('C6','C12')]*20
+#yu2 was freeze thawed on plate 
+vir<-data.frame('flaskId'=rep(c(50:57,60:67,68:72,81:83,84:91,92:93,58,59,102,100,101,103,104,'YU2','YU2','MM33.TF IMC','MM33.17 IMC','SG3+WEAU','Media','Media'),2),row.names=paste(rep(LETTERS[1:8],12),rep(1:12,each=8),sep=''),stringsAsFactors=FALSE)
+inf$virus<-vir[inf$well,'flaskId']
+
+iusStan<-cacheOperation('work/inf_20200226.Rdat',parallel::mclapply,structure(unique(inf$virus),.Names=unique(inf$virus)),function(virus,tit,...){
+    thisDat<-tit[!is.na(tit$virus)&tit$virus==virus,c('n','dil')]
+    if(nrow(thisDat)==0)return(NA)
+    fit<-simpleCountIU(iuModSimple,thisDat$n,thisDat$dil,1,disperse=.1)
+    return(mean(as.matrix(fit)[,'baseIU'])/100)
+},inf,mc.cores=20)
+iusStan<-iusStan[order(names(iusStan))]
+write.csv(data.frame('name'=names(iusStan),'iu/ul'=unlist(iusStan)),'out/macInf_20200226.csv',row.names=FALSE)
+read.csv('out/macInf_20200226.csv')
+
+pdf('out/inf_20200226.pdf')
+for(ii in sort(unique(inf$virus))){
+  thisDat<-inf[inf$virus==ii,]
+  thisDat$logDil<--log(thisDat$dil)
+  withAs(zz=thisDat,plot(zz$dil,zz$n+1,xlab='Dilution',ylab='TZMBL count',las=1,log='yx',main=ii,ylim=range(inf$n+1),xlim=c(1,max(inf$dil,na.rm=TRUE)),pch=21,bg='blue',cex=2,xaxt='n'))
+  logAxis(1)
+  thisIu<-iusStan[[ii]]
+  fakeDils=1:50000
+  preds<-thisIu/fakeDils*100
+  lines(fakeDils,preds+1)
+  mtext(sprintf('%0.1f IU/ul',thisIu),3)
+}
+dev.off()
+
+
+out<-data.frame(do.call(rbind,iusStan),row.names=NULL)
+out$plate<-rep(names(iusStan),sapply(iusStan,nrow))
+out$row<-unlist(lapply(iusStan,rownames))
+write.csv(out,'out/tzmblMacIc50_20200226.csv',row.names=FALSE)
+
+pdf('out/macIc50_20200226.pdf',width=12,height=8)
+for(ii in sort(unique(tit$dayPlate))){
+  for(jj in sort(unique(tit$row))){
+  par(mfrow=c(2,6))
+  for(kk in c(sort(unique(tit$col)))){
+      thisDat<-tit[tit$dayPlate==ii&tit$row==jj&tit$col==kk,]
+      thisDat$logDil<--log(thisDat$dil)
+      withAs(zz=thisDat,plot(zz$dil,zz$n+1,xlab='Dilution',ylab='TZMBL count',las=1,log='yx',main=paste(ii,jj,kk),ylim=range(tit$n+1),xlim=c(1,max(tit$dil,na.rm=TRUE)),pch=21,bg='blue',cex=2,xaxt='n'))
+      logAxis(1)
+      thisIu<-iusStan[[ii]][jj,kk]
+      fakeDils=1:50000
+      preds<-thisIu/fakeDils*100
+      lines(fakeDils,preds+1)
+      mtext(sprintf('%0.1f IU/ul',thisIu),3)
+    }
+  }
+}
+dev.off()
+
+tit<-readCounts('ice/out/2020-02-28_20200128_infectivity/counts.csv')
+tit<-tit[tit$plate!='p2_d5_25',] #no such plate
+tit$p<-sub('P','p',sapply(strsplit(tit$plate,'_'),'[',1))
+tit$d<-sub('D','d',sapply(strsplit(tit$plate,'_'),'[',2))
+tit$is25<-grepl('_25$',tit$plate)
+withAs(xx=tit[grepl('control',tit$plate),],tapply(xx$n,list(xx$row,xx$col,xx$plate),c))
+zz<-withAs(xx=tit[grepl('control',tit$plate),],tapply(xx$n,list(xx$row,xx$col,xx$plate),c))
+zzz<-data.frame('overnight'=as.vector(zz[,,'control_2']),'oneDay'=as.vector(zz[,,'control_25']))
+summary(mod<-glm(oneDay~I(log(overnight+1)),dat=zzz,family='poisson'))
+summary(mod2<-lm(I(log(oneDay+1))~I(log(overnight+1)),dat=zzz))
+fakeDat<-data.frame(overnight=0:2000)
+preds<-predict(mod2,fakeDat)
+pdf('test.pdf');plot(zzz$overnight+1,zzz$oneDay+1,log='xy',xlab='Overnight IU',ylab='One Day IU',las=1);lines(fakeDat$overnight,exp(preds));abline(0,1,lty=2);dev.off()
+withAs(xx=tit[tit$d %in% c('d1','d2')&tit$is25,],tapply(xx$n,list(xx$row,xx$col,xx$plate),c))
+#too little spots to be worth messing with. dropping
+
+tit<-readCounts('ice/out/2020-02-28_20200204_infectivity/counts.csv')
+tit$plate<-sub('--','-',tit$plate)
+tit$p<-sub('P','p',sapply(strsplit(tit$plate,'[-_]'),'[',1))
+tit$d<-sub('D','d',sapply(strsplit(tit$plate,'[-_]'),'[',2))
+withAs(xx=tit[tit$d=='d1',],tapply(xx$n,list(xx$row,xx$col,xx$plate),c))
+#note spots are lighter (or saline crystals) than usual so probably undercounting. could adjust but...
+#too little spots to be worth messing with. dropping
+
+
+
+
+tit<-readCounts('ice/out/2020-02-28_macIC50/counts.csv')
+tit$dayPlate<-sapply(strsplit(tit$plate,'-'),'[',1)
+#25+50 initial. 4x dil. 25+75 on tzmbl
+tit$dil<-3*as.numeric(sub('x','',sapply(strsplit(tit$plate,'-'),'[',2)))*4
+
+iusStan<-cacheOperation('work/macIc50_20200228.Rdat',lapply,structure(unique(tit$dayPlate),.Names=unique(tit$dayPlate)),function(plate,tit,...){
+  do.call(rbind,parallel::mclapply(structure(unique(tit$row),.Names=unique(tit$row)),function(row,tit,...){
+    sapply(sort(unique(tit$col)),function(col,tit,...){
+      thisDat<-tit[tit$col==col&tit$row==row,c('n','dil')]
+      if(nrow(thisDat)==0)return(NA)
+      fit<-simpleCountIU(iuModSimple,thisDat$n,thisDat$dil,1,disperse=.05)
+      return(mean(as.matrix(fit)[,'baseIU'])/100)
+  },tit)
+},tit[tit$dayPlate==plate,],mc.cores=20))},tit)
+
+pdf('out/macIc50_20200228.pdf',width=12,height=8)
+for(ii in sort(unique(tit$dayPlate))){
+  for(jj in sort(unique(tit$row))){
+  par(mfrow=c(2,6))
+  for(kk in c(sort(unique(tit$col)))){
+      thisDat<-tit[tit$dayPlate==ii&tit$row==jj&tit$col==kk,]
+      thisDat$logDil<--log(thisDat$dil)
+      withAs(zz=thisDat,plot(zz$dil,zz$n+1,xlab='Dilution',ylab='TZMBL count',las=1,log='yx',main=paste(ii,jj,kk),ylim=range(tit$n+1),xlim=c(1,max(tit$dil,na.rm=TRUE)),pch=21,bg='blue',cex=2,xaxt='n'))
+      logAxis(1)
+      thisIu<-iusStan[[ii]][jj,kk]
+      fakeDils=1:50000
+      preds<-thisIu/fakeDils*100
+      lines(fakeDils,preds+1)
+      mtext(sprintf('%0.1f IU/ul',thisIu),3)
+    }
+  }
+}
+dev.off()
+
+
+out<-data.frame(do.call(rbind,iusStan),row.names=NULL)
+out$plate<-rep(names(iusStan),sapply(iusStan,nrow))
+out$row<-unlist(lapply(iusStan,rownames))
+write.csv(out,'out/tzmblMacIc50_20200228.csv',row.names=FALSE)
+
+tit<-readCounts('ice/out/2020-03-02_manolisMonitor/counts.csv')
+tapply(tit$n,list(tit$row,tit$col,tit$plate),c)
+pos<-tit[tit$n>2&tit$plate %in% c('1234','5678','910')&!(tit$plate=='910'&tit$row %in% LETTERS[5:8]),]
+convert<-convert96To24(pos$well)
+plateLookup<-list('1234'=1:4,'5678'=5:8,'910'=9:10)
+convert$well24<-paste(convert$row,convert$col,sep='')
+convert$well96<-pos$well
+convert$plate96<-pos$plate
+convert$plate24<-mapply(function(xx,yy)yy[xx],convert$plate,plateLookup[convert$plate96])
+convert$n<-pos$n
+convert<-convert[order(convert$plate24,convert$well24),]
+convert<-convert[!(convert$plate96=='1234'&convert$well96=='H7'),] #not real by eyeball
+convert$flaskId<-sprintf('M%02d',1:nrow(convert))
+write.csv(convert[,c('flaskId','well24','plate24','n','well96','plate96')],'out/manolis_2020-03-02.csv',row.names=FALSE)
+read.csv('out/manolis_2020-03-09.csv')
+
+dir.create('ice/2020-03-02_manolisMonitor/tmp',showWarnings=FALSE)
+for(ii in 1:nrow(convert)){
+  outFile<-sprintf('ice/2020-03-02_manolisMonitor/tmp/M%02d_%s_%s.CTL',ii,convert[ii,'plate24'],convert[ii,'well24'])
+  file.copy(sprintf('ice/2020-03-02_manolisMonitor/%s/%s.CTL',convert[ii,'plate96'],convert[ii,'well96']),outFile)
+  system(sprintf('mogrify -format jpg %s',outFile))
+  file.remove(outFile)
+}
+
+tit<-readCounts('ice/out/2020-03-09_manolisMonitor/counts.csv')
+withAs(tit=tit,tapply(tit$n,list(tit$row,tit$col,tit$plate),c))
+pos<-tit[tit$n>2&tit$plate %in% c('1234','5678','910Flasks')&!(tit$plate=='910Flasks'&tit$row %in% LETTERS[5:8]),]
+convert2<-convert96To24(pos$well)
+plateLookup<-list('1234'=1:4,'5678'=5:8,'910Flasks'=9:10)
+convert2$well24<-paste(convert2$row,convert2$col,sep='')
+convert2$well96<-pos$well
+convert2$plate96<-pos$plate
+convert2$plate24<-mapply(function(xx,yy)yy[xx],convert2$plate,plateLookup[convert2$plate96])
+convert2$n<-pos$n
+convert2<-convert2[order(convert2$plate24,convert2$well24),]
+convert2<-convert2[!(convert2$plate96=='1234'&convert2$well96=='H7'),] #not real by eyeball
+convert2$flaskId<-sprintf('M%02d',19+1:nrow(convert2))
+write.csv(convert2[,c('flaskId','well24','plate24','n','well96','plate96')],'out/manolis_2020-03-09.csv',row.names=FALSE)
+read.csv('out/manolis_2020-03-09.csv')
+
+tit<-readCounts('ice/out/2020-03-11_manolisMonitor/counts.csv')
+withAs(tit=tit,tapply(tit$n,list(tit$row,tit$col,tit$plate),c))
+
+
+
+tit<-readCounts('ice/out/2020-03-04_macIc50/counts.csv')
+withAs(tit=tit[grepl('p1-d2-2',tit$plate),],tapply(tit$n,list(tit$row,tit$col,tit$plate),c))
+bak<-tit[tit$plate %in% c('p1-d2-2_rewet','p1-d2-2','p2-d2-2'),]
+tit<-tit[!tit$plate %in% c('p1-d2-2_rewet','p1-d2-2','p2-d2-2'),]
+tit[tit$plate=='p2-d2-2_duplicateOopsB','plate']<-'p1-d2-2'
+tit[tit$plate=='p2-d2-2_duplicateOops','plate']<-'p2-d2-2'
+tit[tit$plate=='p2_d1','plate']<-'p3-d1'
+tit[tit$plate=='p3-d3'&tit$row %in% c('C','D'),'row']<-c('D'='C','C'='D')[tit[tit$plate=='p3-d3'&tit$row %in% c('C','D'),'row']]
+tit$subPlate<-sapply(strsplit(tit$plate,'[_-]'),'[',1)
+#25+75 in first, 33+67 in 2-6. 25ul + 75ul on TZMbl
+tit$dil<-4*.33^(-as.numeric(sub('d','',sapply(strsplit(tit$plate,'[_-]'),'[',2)))+1)*4
+
+iusStan<-cacheOperation('work/macIc50_20200304.Rdat',lapply,structure(unique(tit$subPlate),.Names=unique(tit$subPlate)),function(plate,tit,...){
+  do.call(rbind,parallel::mclapply(structure(unique(tit$row),.Names=unique(tit$row)),function(row,tit,...){
+    sapply(sort(unique(tit$col)),function(col,tit,...){
+      thisDat<-tit[tit$col==col&tit$row==row,c('n','dil')]
+      if(nrow(thisDat)==0)return(NA)
+      fit<-simpleCountIU(iuModSimple,thisDat$n,thisDat$dil,1,disperse=.05)
+      return(mean(as.matrix(fit)[,'baseIU'])/100)
+  },tit)
+},tit[tit$subPlate==plate,],mc.cores=20))},tit)
+
+pdf('out/macIc50_20200304.pdf',width=12,height=8)
+for(ii in sort(unique(tit$subPlate))){
+  for(jj in sort(unique(tit$row))){
+  par(mfrow=c(2,6))
+  for(kk in c(sort(unique(tit$col)))){
+      thisDat<-tit[tit$subPlate==ii&tit$row==jj&tit$col==kk,]
+      thisDat$logDil<--log(thisDat$dil)
+      withAs(zz=thisDat,plot(zz$dil,zz$n+1,xlab='Dilution',ylab='TZMBL count',las=1,log='yx',main=paste(ii,jj,kk),ylim=range(tit$n+1),xlim=c(1,max(tit$dil,na.rm=TRUE)),pch=21,bg='blue',cex=2,xaxt='n'))
+      logAxis(1)
+      thisIu<-iusStan[[ii]][jj,kk]
+      fakeDils=1:50000
+      preds<-thisIu/fakeDils*100
+      lines(fakeDils,preds+1)
+      mtext(sprintf('%0.1f IU/ul',thisIu),3)
+    }
+  }
+}
+dev.off()
+
+
+out<-data.frame(do.call(rbind,iusStan),row.names=NULL)
+out$plate<-rep(names(iusStan),sapply(iusStan,nrow))
+out$row<-unlist(lapply(iusStan,rownames))
+write.csv(out,'out/tzmblMacIc50_20200304.csv',row.names=FALSE)
+
+
+
+tit<-readCounts('ice/out/2020-03-06_infectivityTropismCheck/counts.csv')
+withAs(tit=tit[grepl('nd_1x',tit$plate),],tapply(tit$n,list(tit$row,tit$col,tit$plate),c))
+inf<-tit[tit$plate=='flaskInf',]
+tit<-tit[!grepl('flaskInf|_dry|_850Bright',tit$plate),]
+tit$dil<-4*ifelse(tit$plate=='nd_3x',structure(c(3*4^c(0:3,0:3)),.Names=LETTERS[1:8])[tit$row],structure(c(5^c(0:3,0:3)),.Names=LETTERS[1:8])[tit$row])
+tit$drug<-sub('_.*$','',tit$plate)
+virus<-read.csv('ice/2020-03-06_tropismVirus.csv',stringsAsFactors=FALSE)
+rownames(virus)<-paste(virus$set,virus$col)
+tit$virus<-virus[paste(ceiling(tit$rowNum/4),tit$col),'virus']
+
+iusStan<-do.call(rbind,cacheOperation('work/tropism_20200309.Rdat',parallel::mclapply,structure(unique(tit$virus),.Names=unique(tit$virus)),function(virus,tit,...){
+  sapply(structure(unique(tit$drug),.Names=unique(tit$drug)),function(treat){
+    thisDat<-tit[!is.na(tit$virus)&tit$virus==virus&tit$drug==treat,c('n','dil')]
+    if(nrow(thisDat)==0)return(NA)
+    fit<-simpleCountIU(iuModSimple,thisDat$n,thisDat$dil,1,disperse=.05)
+    return(mean(as.matrix(fit)[,'baseIU'])/100)
+})},tit,mc.cores=20))
+round(iusStan[orderIn(rownames(iusStan),virus$virus),c('nd','amd','mar','amdMar')])
+
+uniqDrugs<-unique(tit$drug)
+drugNames<-c('nd'='ND','amd'='AMD','mar'='Mar','amdMar'='AMD+Mar')
+drugColors<-structure(rainbow.lab(length(uniqDrugs)),.Names=names(drugNames))
+pdf('out/imcTropism_20200311_with896.pdf')
+for(ii in virus$virus){
+  thisDat<-tit[tit$virus==ii,]
+  thisDat$logDil<--log(thisDat$dil)
+  withAs(zz=thisDat,plot(zz$dil,zz$n+1,xlab='Dilution',ylab='TZMBL count',las=1,log='yx',main=ii,ylim=range(tit$n+1)*c(1,2),xlim=range(tit$dil),type='n'))
+  for(dd in uniqDrugs){
+    withAs(zz=thisDat[thisDat$drug==dd,],points(zz$dil,zz$n+1,pch=21,cex=2,bg=drugColors[dd],lwd=3))
+  }
+  legend('topright',drugNames[names(drugColors)],col=drugColors,lty=1,inset=.01)
+  for(dd in uniqDrugs){
+    fakeDil<-2^seq(0,16,.1)
+    preds<-iusStan[ii,dd]*100/fakeDil
+    lines(fakeDil,preds+1,col=drugColors[dd])
+  }
+  amd<-1-iusStan[ii,'amd']/iusStan[ii,'nd']
+  mar<-1-iusStan[ii,'mar']/iusStan[ii,'nd']
+  amdMar<-1-iusStan[ii,'amdMar']/iusStan[ii,'nd']
+  mtext(sprintf('Inhibition:\nAMD: %0.2f%%\nMar: %0.2f%%\nAMD+Mar: %0.2f%%',amd*100,mar*100,amdMar*100),3,at=exp(log(max(tit$dil))*.9))
+}
+dev.off()
+system(sprintf("pdftk out/imcTropism_20200311_with896.pdf cat 1 4-end output  out/imcTropism_20200311.pdf"))
+
+
+
+
+withAs(tit=inf,tapply(tit$n,list(tit$row,tit$col,tit$plate),c))
+
 
 
