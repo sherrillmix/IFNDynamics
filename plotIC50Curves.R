@@ -57,9 +57,12 @@ oldAll$id<-sub('[ _][Bb]ulk','.bulk',sub('19P4B5','19.P4B5',sub(' .*$','',sub('B
 #oldAll$id[grepl('^[0-9]',oldAll$id)]<-sprintf('UK%s',oldAll$id[grepl('^[0-9]',oldAll$id)])
 oldAll$id<-sub('[.-]P([0-9])','.\\1',convertUKMM(oldAll$id,mmLookup))
 oldAll$id[grepl('^MM',oldAll$id)]<-sapply(oldAll$id[grepl('^MM',oldAll$id)],fixDecimals)
+oldAll<-oldAll[nchar(oldAll$id)>2,]
 rowIds<-lapply(oldAll$id,grep,dat$id)
 probs<-which(sapply(rowIds,length)>1)
-if(any(probs))rowIds[probs]<-mapply(function(bulk,rows)rows[grepl('bulk',dat[rows,'id'],ignore.case=TRUE)],grepl('bulk',oldAll$sample[probs],ignore.case=TRUE),rowIds[probs],SIMPLIFY=FALSE)
+#assuming "bulk" was not left off
+rowIds[probs]<-lapply(oldAll$id[probs],function(xx)grep(sprintf('%s$',xx),dat$id))
+#if(any(probs))rowIds[probs]<-mapply(function(bulk,rows)rows[grepl('bulk',dat[rows,'id'],ignore.case=TRUE)],grepl('bulk',oldAll$sample[probs],ignore.case=TRUE),rowIds[probs],SIMPLIFY=FALSE)
 if(any(sapply(rowIds,length)>1))stop('Found ambiguous ID')
 oldAll$row<-NA
 oldAll$row[sapply(rowIds,length)==1]<-unlist(rowIds[sapply(rowIds,length)==1])
@@ -106,6 +109,76 @@ pdf(tmp,width=6,height=4)
   }
 dev.off()
 system(sprintf('pdftk %s cat 2 4 6 8 output out/example_ic50.pdf',tmp))
+
+#find all mm33 curves
+oldMm33<-oldAll[grepl('MM33',oldAll$newId),]
+oldMm33<-oldMm33[apply(is.na(oldMm33[,1:20]),1,sum)<5,]
+#mislabeled
+oldMm33[oldMm33$newId=='MM33.19.2D2'&round(oldMm33$V1) %in% c(21618,22813),'newId']<-'MM33.19.3D2'
+mm33<-readIfns('data/Missing IC50 for curves.xlsx',exclude=0,minRows=2,dilCol=1,maxRows=80)
+mm33$isBeta<-grepl('[Bb]eta',mm33$sample)
+mm33$isAlpha<-grepl('[Aa]lpha',mm33$sample)
+if(any(mm33$isAlpha+mm33$isBeta!=1))stop('Ambiguous alpha/beta')
+mm33$newId<-sub(' .*','',mm33$sample)
+mm33IdsAlpha<-dat[dat$pat=='MM33'&!is.na(dat$ic50),'id'] 
+mm33IdsBeta<-dat[dat$pat=='MM33'&!is.na(dat$beta),'id'] 
+#dat[dat$pat=='MM33'&!is.na(dat$beta),'id'] %in% c(oldMm33$newId[oldMm33$isBeta],mm33$newId[mm33$isBeta])
+
+targetCols<-c(sprintf('V%d',1:20),'isBeta','newId','sample')
+allMm33<-rbind(oldMm33[,targetCols],mm33[,targetCols])
+allMm33$sum<-apply(round(allMm33[,1:20]),1,sum,na.rm=TRUE)
+allMm33<-allMm33[!duplicated(paste(allMm33$newId,allMm33$sum)),]
+allMm33<-allMm33[apply(allMm33[,1:2],1,mean,na.rm=TRUE)>200&!is.na(allMm33[,'V1']),]
+dummy<-sapply(mm33IdsAlpha[!mm33IdsAlpha %in% allMm33$newId[!allMm33$isBeta]],message,' missing alpha')
+dummy<-sapply(mm33IdsBeta[!mm33IdsBeta %in% allMm33$newId[allMm33$isBeta]],message,' missing beta')
+if(any(duplicated(allMm33$sum)))stop('Duplicate IC50 found')
+allMm33[,c('ic50','vres','max')]<-t(apply(allMm33[,1:20],1,function(xx){calculateBasicIc50(concBeta,matrix(xx,nrow=1))})[c(1,3,4),])
+propMm33<-t(apply(t(do.call(rbind,lapply(1:10,function(ii)apply(allMm33[,(ii-1)*2+1:2],1,mean,na.rm=TRUE)))),1,function(xx)xx/xx[1]))
+propById<-by(propMm33,list(allMm33$isBeta,allMm33$newId),apply,2,median,na.rm=TRUE)
+propAlpha<-do.call(rbind,propById['FALSE',])
+propBeta<-do.call(rbind,propById['TRUE',])
+alphaDays<-sapply(rownames(propAlpha),function(xx)dat[dat$id==xx,'time'])
+betaDays<-sapply(rownames(propBeta),function(xx)dat[dat$id==xx,'time'])
+if(any(is.na(alphaDays))|any(is.na(betaDays)))stop('Missing day')
+fakeDays<-0:max(dat[dat$pat=='MM33'&!dat$qvoa,'time'])
+cols<-rainbow.lab(length(fakeDays),alpha=.4)
+names(cols)<-fakeDays
+pdf('out/mm33_curves.pdf',width=5,height=5)
+  plotFunc<-function(concBeta,propBeta,xlab='IFNb concentration (pg/ml)',col='#00000033',...){
+    if(length(col)==1)col<-rep(col,nrow(propBeta))
+    else if(length(col)!=nrow(propBeta))stop('Color length mismatch with proportions')
+    par(mar=c(3.5,3,1.5,.5))
+    origConcs<-concs<-concBeta
+    zeroOffset<-.01
+    fakeZero<-min(concs[concs>0])*zeroOffset
+    concs[concs==0]<-fakeZero
+    plot(1,1,type='n',xlab=xlab,ylab='',log='x',las=1,xaxt='n',mgp=c(1.8,1,0),ylim=c(0,1),yaxt='n',xlim=range(concs),bty='l',...)
+    title(ylab='Proportion of untreated p24',mgp=c(2.1,1,0))
+    axis(2,pretty(c(0,1.2)),las=1,tcl=-.2,mgp=c(3,.5,0))
+    abline(h=.5,lty=2)
+    sapply(1:nrow(propBeta),function(xx)lines(concs,propBeta[xx,],col=col[xx]))
+    dnar::logAxis(1,axisMin=min(origConcs[origConcs>0]),mgp=c(2.5,.7,0))
+    axis(1,min(origConcs[origConcs>0])*zeroOffset,0,mgp=c(2.5,.7,0))
+  }
+  plotFunc(concAlpha,propAlpha,xlab='IFNa2 concentration (pg/ml)')
+  plotFunc(concBeta,propBeta)
+dev.off()
+pdf('out/mm33_curves_by_time.pdf',width=10,height=5)
+  par(mfrow=c(2,4))
+  for(ii in unique(alphaDays)){
+    theseIds<-dat[dat$time==ii&dat$pat=='MM33','id']
+    plotFunc(concAlpha,propAlpha[rownames(propAlpha) %in% theseIds,],xlab='IFNa2 concentration (pg/ml)',main=sprintf('%d DFOSx',ii),col=cols[as.character(ii)])
+  }
+  plotFunc(concAlpha,propAlpha,xlab='IFNa2 concentration (pg/ml)',col=cols[as.character(alphaDays)],main='Combined')
+  par(mfrow=c(2,4))
+  for(ii in unique(betaDays)){
+    theseIds<-dat[dat$time==ii&dat$pat=='MM33','id']
+    plotFunc(concBeta,propBeta[rownames(propBeta) %in% theseIds,],main=sprintf('%d DFOSx',ii),col=cols[as.character(ii)])
+  }
+  plotFunc(concBeta,propBeta,col=cols[as.character(betaDays)],main='Combined')
+dev.off()
+
+
 
 if(FALSE){
   oldAlphaVresIc50<-as.data.frame(do.call(rbind,by(oldAlpha,oldAlpha$sample,function(xx)findVresIc50(concAlpha,xx[,1:20]))))
@@ -577,6 +650,136 @@ pch<-rep(c(22,21,22),c(2,nrow(macConvert2)-4,2))
 names(pch)<-names(col)
 pdf('out/macaqueStack.pdf',height=4.5,,width=6.5)
 plotStackedIfns(macConvert2,concBetaMac,'IFNb concentration (pg/ml)',col=rev(col),bty='n',pch=pch)
+dev.off()
+
+
+imcRaw<-read6ConcIfns('data/IC50 Beta 10.21.2019.xlsx',dilCol=1,exclude=1,ifnCol=27)
+imcRaw<-imcRaw[!grepl('Standard',imcRaw$sample),]
+imcRaw$dilution<-as.numeric(sub('1 to |1:','',imcRaw$dilution))
+imcRaw$isBeta<-TRUE #grepl('beta|Beta',imcRaw$ifn)
+imcRaw$sample<-paste(imcRaw$sample,imcRaw$dil)#paste(imcRaw$sample,imcRaw$ifn,imcRaw$dil)#paste(sub('\\(.*','',imcRaw$sample),imcRaw$ifn)
+imc<-rbind(
+  #as.data.frame(do.call(rbind, by(imcRaw[!imcRaw$isBeta,],imcRaw$sample[!imcRaw$isBeta],function(xx) calcBasicIc50(concAlpha6,convertIfn6(xx[,1:24,drop=FALSE]),dil=as.numeric(xx[,'dilution']))))),
+  as.data.frame(do.call(rbind, by(imcRaw[imcRaw$isBeta,],imcRaw$sample[imcRaw$isBeta],function(xx) calcBasicIc50(concBeta6,convertIfn6(xx[,1:24,drop=FALSE]),dil=as.numeric(xx[,'dilution'])))))
+)
+imcOut<-imc[,]
+rownames(imcOut)<-sub('  +',' ',sub(' \\(p.*\\)','',rownames(imcOut)))
+write.csv(imcOut,'out/imc_20191105_ic50.csv')
+
+imcConvert<-convertIfn6(imcRaw[,1:24])
+#imcConvert$sample<-rep(sprintf('%02d %s',1:nrow(imcRaw),imcRaw$sample),each=2)
+imcConvert$sample<-rep(sprintf('%s',imcRaw$sample),each=2)
+imcConvert$isBeta<-TRUE#grepl('Beta|beta',imcConvert$sample)
+pdf('out/imc_20191105_ic50.pdf',width=6,height=6)
+  plotIfns(imcConvert[imcConvert$isBeta,],concBeta6,'IFNb concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
+dev.off()
+
+
+imcRaw<-read6ConcIfns('data/IC50 11.14.2019.xlsx',dilCol=1,exclude=1,ifnCol=27)
+imcRaw<-imcRaw[!grepl('Standard|EMPTY|FRED',imcRaw$sample),]
+imcRaw$dilution<-as.numeric(sub('1 to |1:','',imcRaw$dilution))
+imcRaw$isBeta<-grepl('beta|Beta',imcRaw$sheet)
+imcRaw$orig<-imcRaw$sample
+imcRaw$sample<-paste(imcRaw$sample,ifelse(imcRaw$isBeta,'IFNb','IFNa2'))#paste(imcRaw$sample,imcRaw$ifn,imcRaw$dil)#paste(sub('\\(.*','',imcRaw$sample),imcRaw$ifn)
+imcRaw$plate<-sub('(Plate [0-9]).*','\\1',imcRaw$sheet)
+imcRaw$sample<-sprintf('%s%s',imcRaw$sample,ifelse(grepl('MM33.*IMC',imcRaw$sample),sprintf(' %s',imcRaw$plate),''))
+imcRaw$sample<-sub('  +',' ',sub(' \\([Pp].*\\)','',imcRaw$sample))
+imcRaw$sampleIfn<-imcRaw$sample
+imcRaw$sample<-paste(imcRaw$sample,imcRaw$dil)
+selector<-apply(imcRaw[,c(1:2,13:14)],1,mean)>10000
+if(any(imcRaw[selector,'dilution']>50))stop('High dilution sample blow out')
+origImc<-imcRaw
+imcRaw<-imcRaw[!selector,]
+imc<-rbind(
+  as.data.frame(do.call(rbind, by(imcRaw[!imcRaw$isBeta,],imcRaw$sample[!imcRaw$isBeta],function(xx) calcBasicIc50(concAlpha6,convertIfn6(xx[,1:24,drop=FALSE]),dil=as.numeric(xx[,'dilution']))))),
+  as.data.frame(do.call(rbind, by(imcRaw[imcRaw$isBeta,],imcRaw$sample[imcRaw$isBeta],function(xx) calcBasicIc50(concBeta6,convertIfn6(xx[,1:24,drop=FALSE]),dil=as.numeric(xx[,'dilution'])))))
+)
+imcOut<-imc[,]
+#rownames(imcOut)<-sub('  +',' ',sub(' \\([Pp].*\\)','',rownames(imcOut)))
+write.csv(imcOut,'out/imc_20191114_ic50.csv')
+
+imcRaw$minDil<-ave(imcRaw$dilution,imcRaw$sampleIfn,FUN=min)
+selectRaw<-imcRaw[imcRaw$minDil==imcRaw$dilution,]
+selectRaw$sample<-selectRaw$sampleIfn
+if(any(apply(selectRaw[,c(11:12,23:24)],1,mean)<30&selectRaw$dilution==105))stop('Low vres')
+imcSelect<-withAs(imcRaw=selectRaw,rbind(
+  as.data.frame(do.call(rbind, by(imcRaw[!imcRaw$isBeta,],imcRaw$sample[!imcRaw$isBeta],function(xx) calcBasicIc50(concAlpha6,convertIfn6(xx[,1:24,drop=FALSE]),dil=as.numeric(xx[,'dilution']))))),
+  as.data.frame(do.call(rbind, by(imcRaw[imcRaw$isBeta,],imcRaw$sample[imcRaw$isBeta],function(xx) calcBasicIc50(concBeta6,convertIfn6(xx[,1:24,drop=FALSE]),dil=as.numeric(xx[,'dilution'])))))
+))
+selectRaw$id<-sub('IFN[ab]2? ?','',selectRaw$sample)
+out<-data.frame('IFNa2 IC50'=rep(NA,length(unique(selectRaw$id))),'IFNa2 Vres'=NA,'IFNb IC50'=NA,'IFNb Vres'=NA,'repCap'=NA,'IFNa2 repCap'=NA,'IFNb repCap'=NA,stringsAsFactors=FALSE,row.names=unique(selectRaw$id),check.names=FALSE)
+for(ii in rownames(out)){
+  if(any(selector<-grepl(gsub(' Plate','.*Plate',ii),rownames(imcSelect))&grepl('IFNa2',rownames(imcSelect))))out[ii,c('IFNa2 IC50','IFNa2 Vres','IFNa2 repCap')]<-imcSelect[selector,c(1:2,4)]
+  if(sum(selector)>1)stop('What')
+  if(any(selector<-grepl(gsub(' Plate','.*Plate',ii),rownames(imcSelect))&grepl('IFNb',rownames(imcSelect))))out[ii,c('IFNb IC50','IFNb Vres','IFNb repCap')]<-imcSelect[selector,c(1:2,4)]
+  if(any(selector<-grepl(gsub(' Plate','.*Plate',ii),rownames(imcSelect))))out[ii,c('repCap')]<-mean(imcSelect[selector,'repCap'])
+}
+
+write.csv(out,'out/imc_20191115_ic50.csv')
+
+
+imcConvert<-convertIfn6(imcRaw[,1:24])
+#imcConvert$sample<-rep(sprintf('%02d %s',1:nrow(imcRaw),imcRaw$sample),each=2)
+imcConvert$sample<-rep(sprintf('%s',imcRaw$sample),each=2)
+imcConvert$isBeta<-TRUE#grepl('Beta|beta',imcConvert$sample)
+pdf('out/imc_20191114_ic50.pdf',width=6,height=6)
+  plotIfns(imcConvert[!imcConvert$isBeta,],concAlpha6,'IFNa concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
+  plotIfns(imcConvert[imcConvert$isBeta,],concBeta6,'IFNb concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
+dev.off()
+
+macRaw<-read6ConcIfns('data/10.21.2019 - IC50 Beta Mac.Isol. - Human CD4 cells.xlsx',dilCol=1,nameCol=2,nCol=12)
+macRaw$sample<-sprintf('%s (human cells)',sub(' \\(human.*','',sub(' \\(p27.*\\)','',macRaw$sample)))
+macRaw2<-read6ConcIfns('data/12.24.2019 - IC50 Beta Mac.Isol. - Macaque CD4 cells.xlsx',dilCol=1,nameCol=2,nCol=12)
+macRaw2$sample<-sprintf('%s (macaque cells)',sub(' \\(human.*','',sub(' \\(p27.*\\)','',macRaw2$sample)))
+macRaw<-rbind(macRaw,macRaw2)
+macRaw<-macRaw[!grepl('Standard',macRaw$sample),]
+#p27 protocol includes a 1:5 dilution
+macRaw$dilution<-as.numeric(sub('1 to ','',macRaw$dilution))*5
+macRaw$isBeta<-TRUE
+macConvert<-macRaw
+macConvert[,1:12]<-macConvert[,rep(1:6,each=2)+rep(c(0,6),6)]
+mac<-as.data.frame(do.call(rbind, by(macConvert,macRaw$sample,function(xx)calcBasicIc50(concBeta6,xx[,1:12,drop=FALSE],dil=as.numeric(xx[,'dilution'])))))
+macConvert[,1:12]<-macConvert[,1:12]+100
+pdf('out/macaqueIc50_20191021.pdf',width=5,height=4)
+  plotIfns(macConvert,concBeta6,'IFNb concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50,ylab='p27 concentration (pg/ml)',showFit=FALSE)
+dev.off()
+pdf('out/macaqueIc50_20191021_pretty.pdf',width=10,height=8)
+  par(mfrow=c(2,2))
+  plotIfns(macConvert[apply(macConvert[,1:2],1,mean)>600&grepl('maca',macConvert$sample),],concBeta6,'IFNb concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50,ylab='p27 concentration (pg/ml)',showFit=FALSE)
+dev.off()
+
+
+repP24<-readIfns('data/For Replicative  Capacity in supplemental table.xlsx',exclude=0,minRows=2,dilCol=1)
+repP24$isAlpha<-TRUE
+out<-as.data.frame(do.call(rbind, by(repP24,repP24$sample,function(xx){calcBasicIc50(concAlpha,xx[,1:20,drop=FALSE],dil=as.numeric(xx$dil))})))
+write.csv(out,'out/repCapFind_20200213_ic50.csv')
+pdf('out/repCapFind_20200213.pdf',width=6,height=4)
+  plotIfns(repP24,concAlpha,'IFNa2 concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
+dev.off()
+
+fredRaw<-read6ConcIfns('data/IC50 12.24.2019.xlsx',dilCol=1,ifnCol=27)
+fredRaw$sample<-trimws(sub('\\(.*$','',sub('\\(IMC\\).*\\(PLATE ([0-9])','IMC Plate \\1(',fredRaw$sample)))
+fredRaw<-fredRaw[!grepl('Standard',fredRaw$sample),]
+fredRaw$dilution<-as.numeric(sub('1 to ','',fredRaw$dilution))
+fredRaw$isBeta<-fredRaw$ifn=='Beta'
+fredRaw$sampleIfn<-sprintf('%s %s',fredRaw$sample,ifelse(fredRaw$isBeta,'IFNa2','IFNb'))
+switch<-c('MM33 TF IMC Plate 7'='MM33.13  IMC Plate 7','MM33.13  IMC Plate 7'='MM33 TF IMC Plate 7')
+fredRaw$sample[fredRaw$sample %in% names(switch)]<-switch[fredRaw$sample[fredRaw$sample %in% names(switch)]]
+fred<-list(
+  as.data.frame(do.call(rbind, by(fredRaw[!fredRaw$isBeta,],fredRaw$sample[!fredRaw$isBeta],function(xx) calcBasicIc50(concAlpha6,convertIfn6(xx[,1:24,drop=FALSE]),dil=as.numeric(xx[,'dilution']))))),
+  as.data.frame(do.call(rbind, by(fredRaw[fredRaw$isBeta,],fredRaw$sample[fredRaw$isBeta],function(xx) calcBasicIc50(concBeta6,convertIfn6(xx[,1:24,drop=FALSE]),dil=as.numeric(xx[,'dilution'])))))
+)
+fred<-lapply(fred,function(xx){xx$sample<-rownames(xx);xx})
+fredOut<-merge(fred[[1]],fred[[2]],by.x='sample',by.y='sample',all.x=TRUE,all.y=TRUE,suffixes=c('.IFNa2','.IFNb'))
+write.csv(fredOut,'out/fred_20200224_ic50.csv',row.names=FALSE)
+
+
+fredConvert<-convertIfn6(fredRaw[,1:24])
+fredConvert$sample<-rep(sprintf('%s',fredRaw$sample),each=2)
+fredConvert$isBeta<-rep(fredRaw$isBeta,each=2)
+pdf('out/fred_20200224_ic50.pdf',width=6,height=6)
+  plotIfns(fredConvert[!fredConvert$isBeta,],concAlpha6,'IFNa concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
+  plotIfns(fredConvert[fredConvert$isBeta,],concBeta6,'IFNb concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
 dev.off()
 
 
