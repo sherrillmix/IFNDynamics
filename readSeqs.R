@@ -128,3 +128,9 @@ xx$source<-sapply(strsplit(xx$name,'\\.'),'[',2)
 xx$type<-sapply(strsplit(xx$name,'\\.'),'[',3)
 xx$time<-(sapply(strsplit(xx$name,'\\.'),'[',4))
 write.csv('out/mmDayCount.csv',table(paste(xx$mm,xx$time),paste(xx$source,xx$type)))
+
+zz<-combine[!is.na(combine$isolate),]
+zz$isAmbiguous<-grepl('[^ACTG]',zz$seq)
+write.csv(zz[zz$isAmbiguous&!grepl('bulk',zz$isolate),c('isolate','name','newName','seq')],'out/ambigIsolates.csv',row.names=FALSE)
+write.csv(zz[!zz$isAmbiguous&grepl('bulk',zz$isolate),c('isolate','name','newName','seq')],'out/unambiguousBulkIsolates.csv',row.names=FALSE)
+write.csv(zz[zz$isAmbiguous&grepl('bulk',zz$isolate),c('isolate','name','newName','seq')],'out/ambiguousBulkIsolates.csv',row.names=FALSE)
