@@ -411,16 +411,112 @@ collect$Study[is.na(collect$Study)&grepl('^BEAT-[0-9]+$',collect$Patient)]<-'BEA
 collect$Study[is.na(collect$Study)&grepl('^PIP-[0-9]+$',collect$Patient)]<-'PIP'
 collect$ID[is.na(collect$Study)]
 collect<-collect[!grepl('293T',collect$ID),]
+collect<-collect[collect$ID!='Reb. 9201-r1_UT_macro',]
+collect$infectivity<-collect$IU_Isolate/collect$RT_Isolate/1000
 write.csv(collect[,!colnames(collect) %in% c('simple','id')],'out/qvoaReboundCollected_2020110.csv',row.names=FALSE)
 write.csv(collect[,c('Study','Type','Patient','ID','RT_Isolate','IU_Isolate')],'out/qvoaReboundIU_2020110.csv',row.names=FALSE)
+picks<-collect[collect$RT_Isolate>.01 & collect$IU_Isolate>200&!is.na(collect$RT_Isolate)&!is.na(collect$IU_Isolate)&!is.na(collect$Type),c('ID','Patient','Type','IU_Isolate','RT_Isolate')]
+#print(picks,row.names=FALSE)
+#print(nrow(picks))
+write.csv(picks,'highIuPicks.csv',row.names=FALSE)
+
+newIc50<-read.csv('out/fred_20200224_ic50.csv',stringsAsFactors=FALSE)
+newIc50<-newIc50[!grepl('MM33|PIP',newIc50$sample),]
+newIc50$repCap<-(newIc50$repCap.IFNa2+newIc50$repCap.IFNb)/2
+newIc50[newIc50$max.IFNa2<300,c('ic50.IFNa2','ic50.IFNb','vres.IFNa2','vres.IFNb')]<-NA
+newIc50[newIc50$max.IFNa2<500,c('vres.IFNa2','vres.IFNb')]<-NA
+rownames(newIc50)<-newIc50$sample
+if(any(!rownames(newIc50) %in% collect$ID))stop('Mismatched ID')
+#newIc50[!newIc50$sample %in% collect$ID,'sample']
+collect[collect$ID %in% rownames(newIc50),c('ic50_IFNa2','ic50_IFNb','vres_IFNa2','vres_IFNb','repCap')]<-newIc50[collect[collect$ID %in% rownames(newIc50),'ID'],c('ic50.IFNa2','ic50.IFNb','vres.IFNa2','vres.IFNb','repCap')] 
+neut<-read.csv('data/neuts infect 01142020 sCD4 rebound results table.csv',stringsAsFactors=FALSE)
+neut<-neut[neut$ID!='',!grepl('^X\\.[0-9]+$',colnames(neut))]
+if(any(!neut$ID %in% collect$ID & neut$Patient !='293T stock'))stop('Missing ID')
+collect<-merge(collect,neut[,c('ID','sCD4.IC50','CD4.Ig.IC50')],by.x='ID',by.y='ID',all.x=TRUE)
+collect$tropism<-apply(collect[,c('No.Drug_Isolate','AMD_Isolate','Mar_Isolate','AMD.Mar_Isolate')],1,function(xx){
+  minNoDrug<-5
+  threshold<-20
+  if(any(is.na(xx)))return(NA)
+  if(xx[1]<minNoDrug)return(NA)
+  perc<-xx[2:4]/xx[1]*100
+  if(perc[3]>threshold)warning('Problem AMD+Mar virus')
+  if(all(perc[1:2]<threshold))stop('Problem virus')
+  if(all(perc[1:2]>threshold))return('Dual')
+  else return(c('R5','X4')[perc[1:2]>threshold])
+})
+
+write.csv(collect[,!colnames(collect) %in% c('simple','id')],'out/qvoaReboundCollected_20200224.csv',row.names=FALSE)
+
+
+s3<-read.csv('data/Table S3.csv',stringsAsFactors=FALSE)
+s3<-s3[!s3$Virus.ID %in% c('','Patient ID'),]
+if(any(!s3$Virus.ID %in% collect$ID))stop('Missing ID')
+s3out<-merge(s3,collect[,c('ID','RT_Isolate','IU_Isolate','AMD_Isolate','Mar_Isolate','AMD.Mar_Isolate','ic50_IFNa2','vres_IFNa2','ic50_IFNb','vres_IFNb','repCap')],by.x='Virus.ID',by.y='ID',all.x=TRUE,all.y=TRUE)
+neut<-read.csv('data/neuts infect 01142020 sCD4 rebound results table.csv',stringsAsFactors=FALSE)
+neut<-neut[neut$ID!='',!grepl('^X\\.[0-9]+$',colnames(neut))]
+if(any(!neut$ID %in% s3out$Virus.ID & neut$Patient !='293T stock'))stop('Missing ID')
+s3out<-merge(s3out,neut[,c('ID','sCD4.IC50','CD4.Ig.IC50')],by.x='Virus.ID',by.y='ID',all.x=TRUE)
+s3out<-s3out[orderIn(s3out$Virus.ID,s3$Virus.ID),]
+s3out$infectivity<-s3out$IU_Isolate/s3out$RT_Isolate/1000
+s3out$AMD_percent<-s3out$AMD_Isolate/s3out$IU_Isolate*100
+s3out$Mar_percent<-s3out$Mar_Isolate/s3out$IU_Isolate*100
+s3out$AMDMar_percent<-s3out$AMD.Mar_Isolate/s3out$IU_Isolate*100
+s3out[s3out$IU_Isolate<1&!is.na(s3out$IU_Isolate),c('AMD_percent','Mar_percent','AMDMar_percent')]<-NA
+bak<-s3out
+s3out<-s3out[,!colnames(s3out) %in% c('IU_Isolate','RT_Isolate','AMD_Isolate','Mar_Isolate','AMD.Mar_Isolate')]
+if(any(!s3$Virus.ID %in% s3out$Virus.ID))stop('Lost virus')
+if(any(s3out$Virus.ID[1:nrow(s3)]!=s3$Virus.ID))stop('Messed up order')
+s3out$tropism<-apply(s3out[,c('AMD_percent','Mar_percent','AMDMar_percent')],1,function(xx){
+  threshold<-20
+  if(any(is.na(xx)))return(NA)
+  if(xx[3]>threshold)warning('Problem AMD+Mar virus')
+  if(all(xx[1:2]>threshold))return('Dual')
+  else return(c('R5','X4')[xx[1:2]>threshold])
+})
+write.csv(s3out,'out/qvoaReboundIUNeut_2020124.csv',row.names=FALSE)
+
+pdf('out/qvoaReboundTropism.pdf',height=12,width=3.5)
+par(mar=c(2.5,6,.1,1.5))
+cols<-rev(heat.colors(100))
+breaks<-seq(0,100,1)
+thisMat<-t(as.matrix(s3out[,c('AMD_percent','Mar_percent','AMDMar_percent')]))
+thisMat[thisMat>100]<-100
+image(1:3,1:nrow(s3out),thisMat,xaxt='n',yaxt='n',xlab='',ylab='',col=cols,breaks=)
+axis(2,1:nrow(s3out),s3out$Virus.ID,las=1,cex.axis=.5,mgp=c(3,.4,0),tcl=-.3)
+axis(1,1:3,c('AMD','Mar','AMD+Mar'),mgp=c(3,.4,0),tcl=-.3)
+nas<-which(is.na(t(as.matrix(s3out[,c('AMD_percent','Mar_percent','AMDMar_percent')]))),arr.ind=TRUE)
+rect(nas[,1]-.5,nas[,2]-.5,nas[,1]+.5,nas[,2]+.5,col='grey',border=NA)
+axis(4,1:nrow(s3out),s3out$tropism,las=1,cex.axis=.5,mgp=c(3,.4,0),tcl=-.3)
+box()
+par(lheight=.7)
+dnar::insetScale(breaks=breaks,col=cols,at=c(0,50,100),labels=c(0,50,'>100'),insetPos=c(.008,.035,.015,.25),main='Percent of untreated\ninfectivity',cex=.7)
+dev.off()
+
+
 
 #inTropAll and miniOut have additional tropism if needed
 
-pdf('test.pdf')
-suppressWarnings(withAs(collect=collect[!is.na(collect$Type)&!is.na(collect$RT_Isolate)&!is.na(collect$IU_Isolate),],vipor::vpPlot(sub(' .*','',collect$Type),collect$IU_Isolate/collect$RT_Isolate,log='y')))
-suppressWarnings(withAs(collect=collect[!is.na(collect$Type)&!is.na(collect$RT_Bead)&!is.na(collect$IU_Bead),],vipor::vpPlot(sub(' .*','',collect$Type),collect$IU_Bead/collect$RT_Bead,log='y')))
-suppressWarnings(withAs(collect=collect[!is.na(collect$Type)&!is.na(collect$RT_Retro)&!is.na(collect$IU_Retro),],vipor::vpPlot(sub(' .*','',collect$Type),collect$IU_Retro/collect$RT_Retro,log='y')))
+pdf('out/mini_vs_isolate_infectivity.pdf',width=4,height=4)
+par(mar=c(2,4,1,0.1))
+thisDat<-collect[!is.na(collect$Type)&!is.na(collect$RT_Bead)&!is.na(collect$IU_Bead),]
+thisDat$type<-sub(' .*','',thisDat$Type)
+pos<-structure(1:length(unique(thisDat$type)),.Names=unique(thisDat$type))
+xSpread<-vipor::offsetX(log10(thisDat$IU_Bead/thisDat$RT_Bead/1000),thisDat$type)
+tmp<-c(collect$IU_Bead/collect$RT_Bead/1000,collect$IU_Isolate/collect$RT_Isolate/1000)
+ylim<-range(tmp[tmp<Inf],na.rm=TRUE)
+plot(pos[thisDat$type]+xSpread,thisDat$IU_Bead/thisDat$RT_Bead/1000,log='y',main='Miniexpansion',ylab='Infectivity',yaxt='n',xaxt='n',xlab='',ylim=ylim)
+axis(1,pos,names(pos))
+logAxis(las=1)
+thisDat<-collect[!is.na(collect$Type)&!is.na(collect$RT_Isolate)&!is.na(collect$IU_Isolate),]
+thisDat$type<-sub(' .*','',thisDat$Type)
+thisDat$inf<-thisDat$IU_Isolate/thisDat$RT_Isolate/1000
+pos<-structure(1:length(unique(thisDat$type)),.Names=unique(thisDat$type))
+xSpread<-vipor::offsetX(log10(thisDat$inf),thisDat$type)
+plot(pos[thisDat$type]+xSpread,thisDat$inf,log='y',main='Isolates',ylab='Infectivity',yaxt='n',xaxt='n',xlab='',ylim=ylim)
+logAxis(las=1)
+axis(1,pos,names(pos))
 dev.off()
+t.test(log(thisDat$inf[thisDat$type=='Rebound'&!is.na(thisDat$type)&thisDat$inf<Inf]),log(thisDat$inf[thisDat$type=='VOA'&!is.na(thisDat$type)&thisDat$inf<Inf]))
 
 pdf('out/IU_problem.pdf')
 plot(collect$No.Drug_old,collect$IU_Isolate,log='xy',col=(!collect$isIsolate_old)+1,ylab='12-24 Isolate IU/ul',xlab='Previous "isolate" IU/ul');abline(0,1)
@@ -436,7 +532,96 @@ points(collect$IU_Isolate/collect$RT_Isolate/1000,collect$IU_Retro/collect$RT_Re
 legend('topleft',inset=.01,c('Bead first','Bead second','Retro'),col=c('blue','black','red'),pch=1)
 dev.off()
 
+pdf('out/Inf_problem.pdf')
+#calculate infectivity for the miniexpansion and isolates here
+plot(collect$IU_Isolate,collect$IU_Bead,log='xy',ylab='Miniexpansion IU/ul',xlab='Original isolate IU/ul',bg=ifelse(collect$isFirstBead,'blue','red'),pch=21);abline(0,1)
+legend('topleft',inset=.01,c('Bead first','Bead second'),pt.bg=c('blue','red'),pch=21)
+plot(collect$IU_Isolate/collect$RT_Isolate/1000,collect$IU_Bead/collect$RT_Bead/1000,log='xy',ylab='Miniexpansion infectivity',xlab='Original isolate infectivity',bg=ifelse(collect$isFirstBead,'blue','red'),pch=21);abline(0,1)
+legend('topleft',inset=.01,c('Bead first','Bead second'),pt.bg=c('blue','red'),pch=21)
+dev.off()
+
+
 pdf('test.pdf');plot(collect$IU_Isolate,collect$IU_Bead,log='xy');abline(0,1);dev.off()
 pdf('test.pdf');plot(collect$No.Drug_Isolate,collect$IU_Isolate_old);abline(0,1);dev.off()
-pdf('test.pdf');plot(tmp$redoRetro,tmp$IU_Retro);abline(0,1);dev.off()
-pdf('test.pdf');plot(tmp$redoBead,tmp$IU_Bead);abline(0,1);dev.off()
+#pdf('test.pdf');plot(tmp$redoRetro,tmp$IU_Retro);abline(0,1);dev.off()
+#pdf('test.pdf');plot(tmp$redoBead,tmp$IU_Bead);abline(0,1);dev.off()
+
+s3<-read.csv('data/Table S3.nearfinal_20200226.csv',skip=1,stringsAsFactors=FALSE)
+s3<-s3[s3$Isolate.ID!='',colnames(s3)!='X']
+s3out<-merge(s3,collect[!is.na(collect$Type)&!is.na(collect$Patient),c('ID','Study','Patient','Type','repCap','ic50_IFNa2','ic50_IFNb','infectivity','sCD4.IC50','CD4.Ig.IC50','tropism')],by.x='Isolate.ID',by.y='ID',all.x=TRUE,all.y=TRUE,suffixes=c('','.TMP'))
+s3out[is.na(s3out$Type),'Type']<-s3out[is.na(s3out$Type),'Type.TMP']
+rownames(s3out)<-s3out$Isolate.ID
+s3out<-s3out[c(s3$Isolate.ID,rownames(s3out)[!rownames(s3out) %in% s3$Isolate.ID]),]
+s3out$Patient<-sub(' \\(.*','',s3out$Patient)
+s3out$simpleType<-c('Rebound'='REBOUND','VOA'='VOA','VOA - Pre ATI'='VOA_PRE','VOA - Post ATI'='VOA_POST')[s3out$Type]
+s3out$identifier<-sub('^[PM]([0-9])','\\1',sub('.*[ _-]','',trimws(sub('_BE$|_UT$','',sub(' \\(?pre.*| post.*','',sub(' bulk','',sub(' *pre-ATI\\(wk.*','',s3out$Isolate.ID)))))))
+s3out$pubID<-sprintf('%s.%s.%s',s3out$Patient,s3out$simpleType,s3out$identifier)
+if(any(table(s3out$pubID)>1))stop('Duplicate name created')
+fillFunc<-function(df,col1,col2){selector<-is.na(df[,col1])&!is.na(df[,col2]);df[selector,col1]<-df[selector,col2];df}
+s3out<-fillFunc(s3out,'Replicative.Capacity..ng.p24.ml.','repCap')
+s3out<-fillFunc(s3out,'IFN.a2.IC50..pg.ml.','ic50_IFNa2')
+s3out<-fillFunc(s3out,'IFN.b.IC50..pg.ml.','ic50_IFNb')
+s3out<-fillFunc(s3out,'Infectivity..IU.pg.RT.','infectivity')
+s3out<-fillFunc(s3out,'sCD4.IC50..ug.ml.','sCD4.IC50')
+s3out<-fillFunc(s3out,'CD4.Ig.IC50..ug.ml.','CD4.Ig.IC50')
+s3out<-fillFunc(s3out,'Isolate.Tropism','tropism')
+s3out$tropism==s3out$Isolate.Tropism
+write.csv(s3out[,!colnames(s3out) %in% c('simpleType','identifier')],'out/S3Update_20200226.csv',row.names=FALSE)
+
+
+alias92<-c('9241'='9207', '9244'='9203', '9243'='9202', '9242'='9201', '601'='601')
+alias92Rev<-structure(names(alias92),.Names=alias92)
+collect$alias<-ifelse(collect$Patient %in% names(alias92Rev),alias92Rev[collect$Patient],collect$Patient)
+reg<-'^.*wk([0-9-]+).*$'
+collect$type2<-ifelse(collect$Patient %in% alias92&grepl(reg,collect$ID),sprintf('%s (week %s)',collect$Type,sub(reg,'\\1',collect$ID)),collect$Type)
+lapply(unique(collect$Study),function(xx)withAs(collect=collect[collect$Study==xx&!is.na(collect$ic50_IFNb),],sum(table(collect$alias,collect$type2,collect$Study))))
+lapply(unique(collect$Study),function(xx)withAs(this=collect[collect$Study==xx&!is.na(collect$ic50_IFNb),],(table(this$alias,factor(this$type2,unique(collect$type2)),this$Study)))) # 
+levs<-sort(unique(collect$type2))
+out<-do.call(rbind,lapply(unique(collect$alias[!is.na(collect$ic50_IFNb)]),function(xx)withAs(this=collect[collect$alias==xx&!is.na(collect$ic50_IFNb),],do.call(data.frame,c('study'=this$Study[1],'pat'=this$alias[1],as.list(table(factor(this$type2,levs))),stringsAsFactors=FALSE)))))
+colnames(out)[-1:-2]<-levs
+out<-out[order(out$study,out$pat),]
+write.csv(out,'out/isolatesWithIFNb.csv',row.names=FALSE)
+
+
+p24<-read.csv('data/p24_01.17.2020.csv',row.names=1,stringsAsFactors=FALSE)
+p24[,1:24]<-as.numeric(sub('[<>]','',unlist(p24[,1:24])))
+p24[9:16,c(22,24)]<-NA
+means<-t(apply(p24[,1:24],1,tapply,rep(1:12,each=2),mean,na.rm=TRUE))
+p24_2<-read.csv('data/p24_01.22.2020.csv',row.names=1,stringsAsFactors=FALSE)
+p24_2[,1:24]<-as.numeric(sub('[<>]','',unlist(p24_2[,1:24])))
+p24_2<-p24_2[1:16,1:24]
+means2<-t(apply(p24_2[,1:24],1,tapply,rep(1:12,each=2),mean,na.rm=TRUE))
+virus<-read.csv('ice/2019-12-18_tropism.csv',stringsAsFactors=FALSE)
+vir<-rbind(t(virus[1:12,10:3]),t(virus[13:24,10:3])) 
+#miniP24<-data.frame('virus'=as.vector(vir),'p24'=as.vector(means),row.names=1:192,stringsAsFactors=FALSE)
+miniP24<-data.frame('virus'=as.vector(vir),'p24'=as.vector(means),'p24_2'=as.vector(means2),row.names=1:192,stringsAsFactors=FALSE)
+rownames(collect)<-collect$ID
+miniP24$virus<-sub('Reb. ','',sub('Rebound 50','A09',miniP24$virus))
+miniP24$virus<-sub(' D-14 | W12 ',' ',miniP24$virus)
+matches<-lapply(structure(miniP24$virus,.Names=miniP24$virus),function(xx){
+  regex<-sprintf('%s[ _-]',gsub('[ _-]+','[ ._-].*',sub('(UT|BE) -(.*)','\\2 \\1',trimws(sub('\\([^)]+\\)','',xx)))))
+  hits<-collect$ID[grep(regex,sprintf('%s ',collect$ID))]
+  hits<-hits[!grepl('macro',hits)]
+  hits
+})
+head(matches[sapply(matches,length)!=1&!grepl('^RM',names(matches))&!grepl('IMC',names(matches))])
+miniP24$convert<-unlist(matches[sapply(matches,length)==1&!grepl('^RM',names(matches))&!grepl('IMC',names(matches))])[miniP24$virus]
+miniP24[,'rt']<-collect[miniP24$convert,'RT_Isolate']
+miniP24[,'iu']<-collect[miniP24$convert,'IU_Isolate']
+
+pdf('out/miniP24.pdf',width=5,height=5)
+  par(mar=c(3.3,3.3,1,.1),mgp=c(2.3,.8,0))
+  plot(miniP24$rt,miniP24$p24,ylab='Output miniexpansion 1/17 p24 (pg/ml)',xlab='Input isolate RT',log='y',yaxt='n',pch=21,bg='#00000022',cex=1.2)
+  #logAxis(1)
+  logAxis(las=1)
+  plot(miniP24$iu,miniP24$p24,ylab='Output miniexpansion 1/17 p24 (pg/ml)',xlab='Input isolate IU/ul',log='xy',xaxt='n',yaxt='n',pch=21,bg='#00000022',cex=1.2)
+  logAxis(1)
+  logAxis(las=1)
+  plot(miniP24$p24,miniP24$p24_2,log='xy',xlab='Mini expansion 1/17 p24 (pg/ml)',ylab='Mini expansion 1/22 p24 (pg/ml)',xaxt='n',yaxt='n',pch=21,bg='#00000022',cex=1.2)
+  logAxis(1)
+  logAxis(las=1)
+  abline(0,1,lty=2)
+  plot(miniP24$iu,miniP24$p24_2,ylab='Output miniexpansion 1/22 p24 (pg/ml)',xlab='Input isolate IU/ul',log='xy',xaxt='n',yaxt='n',pch=21,bg='#00000022',cex=1.2,ylim=range(miniP24$p24))
+  logAxis(1)
+  logAxis(las=1)
+dev.off()
