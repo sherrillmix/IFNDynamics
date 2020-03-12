@@ -4,7 +4,6 @@ library(dnar)
 which.maxN<-function(x,n=1){
   which(-x==sort(-x,partial=n)[n])
 }
-
 findMostExtremePoint<-function(red,green,nOutlier=0,slopeNOutlier=nOutlier){
   redBase<-quantile(red,.25)
   #greenBase<-quantile(green[red<redBase],.95)
@@ -12,7 +11,6 @@ findMostExtremePoint<-function(red,green,nOutlier=0,slopeNOutlier=nOutlier){
   id<-which.maxN(atan2(green-greenBase,red),slopeNOutlier+1)
   return(c('slope'=(green[id]-greenBase)/red[id],'yint'=greenBase,'id'=id))
 }
-
 findMostExtremePoint2<-function(red,green,nOutlier=0){
   redBase<-quantile(red,.25)
   #greenBase<-quantile(green[red<redBase],.95)
@@ -27,9 +25,6 @@ wellToRowCol<-function(wells){
   rows<-ceiling(wells/12)
   data.frame('col'=cols,'row'=rows)
 }
-
-
-
 readFcsDir<-function(fcsDir){
   fcsFiles<-list.files(fcsDir,'[0-9]+.FCS$')
   fcs<-lapply(fcsFiles,function(xx){
@@ -39,20 +34,49 @@ readFcsDir<-function(fcsDir){
     timeReq<-as.numeric(diff(as.difftime(unlist(fcs@description[c("$BTIM","$ETIM")])))*60*60)
     nCells<-nrow(out)
     out<-cbind(out,'density'=if(nCells>0)nCells/timeReq else NULL)
-    return(out)
+    return(list('dat'=out,'wellId'=description(fcs)$`GTI$WELL`))
   })
   wellNums<-as.numeric(sub('.*_([0-9]+).FCS','\\1',fcsFiles))
   samples<-sub('(.*)_[0-9]+.FCS','\\1',fcsFiles)
   names(fcs)<-names(wellNums)<-names(samples)<-fcsFiles
-  return(list('fcs'=fcs,'well'=wellNums,'sample'=samples))
+  wellIds<-sapply(fcs,'[[','wellId')
+  return(list('fcs'=lapply(fcs,'[[','dat'),'well'=wellNums,'sample'=samples,'wellId'=wellIds))
 }
 readFcsDf<-function(fcsDir){
   fcs<-readFcsDir(fcsDir)
   out<-as.data.frame(do.call(rbind,fcs[['fcs']]))
   out$well<-rep(fcs[['well']],sapply(fcs[['fcs']],function(xx)ifelse(is.null(xx),0,nrow(xx))))
   out$sample<-rep(fcs[['sample']],sapply(fcs[['fcs']],function(xx)ifelse(is.null(xx),0,nrow(xx))))
+  out$wellId<-rep(fcs[['wellId']],sapply(fcs[['fcs']],function(xx)ifelse(is.null(xx),0,nrow(xx))))
   return(out)
 }
+plotGuava<-function(allDat,outFile,slope=1,int=0,wells=1:96,col1='GRN-HLog',col2='RED-HLog',nrow=8,ncol=12){
+  allDat$outlier<-allDat[,col1]-int-slope*allDat[,col2]
+  png(outFile,height=nrow*400,width=ncol*500)
+    par(mfrow=c(nrow,ncol),mar=c(0,0,0,0))
+    for(ii in wells){
+      thisDat<-allDat[allDat$well==ii,]
+      if(nrow(thisDat)==0){
+        plot(1,1,type='n',xlab='',ylab='',xaxt='n',yaxt='n',bty='n')
+        message('Missing ',ii)
+      }else{
+        #max is a bit crazy in CD4
+        ylim<-quantile(allDat[,col1],c(0,1))
+        xlim<-quantile(allDat[allDat[,col2]<250,col2],c(0,1))
+        plot(thisDat[,col2],thisDat[,col1],ylim=ylim,xaxt='n',yaxt='n',xlim=xlim,cex=.5,col='#0000FF66')
+        fakeDat<-data.frame('tmp'=seq(1:10000),check.names=FALSE)
+        colnames(fakeDat)<-col2
+        predGrn<-int+fakeDat[,col2]*slope
+        lines(fakeDat[,col2],predGrn,lty=2)
+        if(!is.null(thisDat$virus)&&thisDat$virus[1]=='No virus'&&any(thisDat$outlier>0))withAs(xx=thisDat[thisDat$outlier>0,],points(xx[,col2],xx[,col1],col='red',cex=1))
+      }
+      if(!is.null(thisDat$virus)&&!is.null(thisDat$treat))desc<-sprintf('%s\n%s\n',thisDat$virus[1],thisDat$treat[1])
+      else desc<-''
+      title(main=sprintf('%s%0.2f%%\n%0.1f cells/sec',desc,mean(thisDat$outlier>0)*100,thisDat$density[1]),line=-11,cex.main=3)
+    }
+  dev.off()
+}
+
 
 
 fcs<-readFcsDir('ice/2018-04-23_jltr_spin/')
@@ -199,32 +223,6 @@ for(ii in unique(fcs2$sample)){
 }
 
 
-plotGuava<-function(allDat,outFile,slope=1,int=0){
-  allDat$outlier<-allDat[,'GRN-HLog']-int-slope*allDat[,'RED-HLog']
-  png(outFile,height=8*400,width=12*500)
-    par(mfrow=c(8,12),mar=c(0,0,0,0))
-    for(ii in 1:96){
-      thisDat<-allDat[allDat$well==ii,]
-      if(nrow(thisDat)==0){
-        plot(1,1,type='n',xlab='',ylab='',xaxt='n',yaxt='n',bty='n')
-        message('Missing ',ii)
-      }else{
-        #max is a bit crazy in CD4
-        ylim<-quantile(allDat[,'GRN-HLog'],c(0,1))
-        xlim<-quantile(allDat[allDat[,'RED-HLog']<250,'RED-HLog'],c(0,1))
-        plot(thisDat[,'RED-HLog'],thisDat[,'GRN-HLog'],ylim=ylim,xaxt='n',yaxt='n',xlim=xlim,cex=.5,col='#0000FF66')
-        fakeDat<-data.frame('RED-HLog'=seq(1:10000),check.names=FALSE)
-        predGrn<-int+fakeDat$`RED-HLog`*slope
-        lines(fakeDat$`RED-HLog`,predGrn,lty=2)
-        if(!is.null(thisDat$virus)&&thisDat$virus[1]=='No virus'&&any(thisDat$outlier>0))withAs(xx=thisDat[thisDat$outlier>0,],points(xx$`RED-HLog`,xx$`GRN-HLog`,col='red',cex=1))
-      }
-      if(!is.null(thisDat$virus)&&!is.null(thisDat$treat))desc<-sprinf('%s\n%s\n',thisDat$virus[1],thisDat$treat[1])
-      else desc<-''
-      title(main=sprintf('%s%0.2f%%\n%0.1f cells/sec',desc,mean(thisDat$outlier>0)*100,thisDat$density[1]),line=-11,cex.main=3)
-    }
-  dev.off()
-}
-
 
 virus<-rep(c('SG3','89.6','WEAU','YU2','MM15.14.2C4','MM23.07.2B2'),2)
 treat<-rep(c('No drug','AMD','Tak','AMD+Tak'),2)
@@ -286,4 +284,44 @@ pdf('out/evoAnalyze.pdf')
   plotEvo(fcsEvo4,'August 24, 2018',maxChange=maxChange)
 dev.off()
 
-#xx<-read.FCS('ice/2018-04-23_jltr_spin/cd4_culture_dilute_0001.FCS')
+xx<-rbind(
+  readFcsDf('ice/2019-12-16_p24Test/'),
+  readFcsDf('ice/2019-12-13_p24TestAfterClog/'),
+  readFcsDf('ice/2019-12-13_p24Test/')
+)
+xx$well<-xx$wellId
+xx$virus<-xx$well
+xx$treat<-''
+xx$GYHLog<-xx$`YEL-HLog`+xx$`GRN-HLog`
+plotGuava(xx,'out/20191216_p24.png',1,200,wells=sort(unique(xx$well[!grepl('E',xx$well)])))
+plotGuava(xx,'out/20191216_p24_NIR.png',1,200,wells=sort(unique(xx$well[!grepl('E',xx$well)])),col2='NIR2-HLog')
+plotGuava(xx,'out/20191216_p24_NIR_red.png',1,200,wells=sort(unique(xx$well[!grepl('E',xx$well)])),col2='NIR2-HLog',col1='RED-HLog')
+plotGuava(xx,'out/20191216_p24_NIR_yellow.png',1,200,wells=sort(unique(xx$well[!grepl('E',xx$well)])),col2='NIR2-HLog',col1='YEL-HLog')
+plotGuava(xx,'out/20191216_p24_NIR_greenYellow.png',1,200,wells=sort(unique(xx$well[!grepl('E',xx$well)])),col2='NIR2-HLog',col1='GYHLog')
+
+xx<-readFcsDf('ice/2020-01-10_ifnIntSites/')
+xx$well<-xx$wellId
+xx$virus<-xx$well
+xx$treat<-''
+xx$GYHLog<-xx$`YEL-HLog`+xx$`GRN-HLog`
+xx$isUninfected<-xx$well %in% c('A07','B07')|grepl('A0[1-6]$',xx$well)
+xx$col<-as.numeric(sub('[A-H]','',xx$well))
+xx$row<-sub('[0-9]+','',xx$well)
+censor<-xx
+for(ii in colnames(censor)[grep('GRN|YEL|RED|NIR|RED2|NIR2',colnames(censor))]){
+  print(ii)
+  cut<-quantile(censor[,ii],.999,na.rm=TRUE)
+  print(cut)
+  print(summary(censor[,ii]))
+  censor[censor[,ii]>cut,ii]<-cut
+  print(summary(censor[,ii]))
+}
+
+#GYslopeInt<-withAs(yy=censor[censor$isUninfected,],findMostExtremePoint(yy[,'NIR2-HLog'],yy[,'GYHLog'],.01*nrow(yy)))
+plotGuava(censor,'out/20200110_p24.png',1,200,wells=sort(unique(censor$well)),ncol=7,nrow=8)
+plotGuava(censor,'out/20200110_p24_NIR_greenYellow.png',1,200,wells=sort(unique(censor$well)),col1='NIR2-HLog',col2='GYHLog',ncol=7,nrow=8)
+plotGuava(censor,'out/20200110_p24_NIR_greenYellow.png',0,10,wells=sort(unique(censor$well)),col2='FSC-HLin',col1='GRN-HLog',ncol=7,nrow=8)
+withAs(censor=censor[sample(which(censor$well %in% c('H07','B04','B01')),20000),],plot(censor$`RED-HLog`,censor$`GRN-HLog`+censor$`YEL-HLog`,col=censor$isUninfected+1))
+withAs(censor=censor[sample(which(censor$isUninfected),20000),],points(censor$`RED-HLog`,censor$`GRN-HLog`+censor$`YEL-HLog`,col=censor$isUninfected+1))
+withAs(censor=censor[sample(which(censor$well %in% c('H07','B04','B01')),20000),],plot(censor$`FSC-HLog`,censor$`GRN-HLog`,col=censor$isUninfected+1))
+withAs(censor=censor[sample(which(censor$isUninfected),20000),],points(censor$`FSC-HLog`,censor$`GRN-HLog`,col=censor$isUninfected+1))
