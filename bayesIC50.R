@@ -165,7 +165,7 @@ calcSims<-function(fit,dat,riseAfter=FALSE){ #,fastProgressors=c()
     }
     sigmas<-mat[,'sigma']
     if(any(is.na(predIc50)))browser()
-    predInt<-rbind(apply(predIc50-sigmas,2,quantile,.025),apply(predIc50+sigmas,2,quantile,.975))
+    predInt<-rbind(apply(predIc50-1.96*sigmas,2,quantile,.025),apply(predIc50+1.96*sigmas,2,quantile,.975))
     summaries<-apply(predIc50,2,function(xx)c('mean'=mean(xx),quantile(xx,c(.025,.975))))
     summaries<-rbind(summaries,predInt)
     if(any(summaries['mean',]< -1e+08))browser()
@@ -186,7 +186,8 @@ fitRep<-withAs(xx=dat[!is.na(dat$replication)&!dat$qvoa,],bayesIC50(ic50Mod,xx$r
 fitInf<-withAs(xx=dat[!is.na(dat$infectivityDextran)&!dat$qvoa,],bayesIC50(ic50Mod,xx$infectivityDextran,xx$time,xx$timeBeforeArt,xx$pat,ic50Code=ic50CodeWithFast,fastProgressors=c('MM15','WEAU')))
 fitInf2<-withAs(xx=dat[!is.na(dat$infectivityMedia)&!dat$qvoa,],bayesIC50(ic50Mod,xx$infectivityMedia,xx$time,xx$timeBeforeArt,xx$pat,ic50Code=ic50CodeWithFast,fastProgressors=c('MM15','WEAU')))
 
-save(fit,fitB,fitRep,fitInf,fitInf2,file='work/bayesIC50.Rdat')
+#save(fit,fitB,fitRep,fitInf,fitInf2,file='work/bayesIC50.Rdat')
+save(fit,fitB,fitRep,fitInf,fitInf2,file='work/bayesIC50_20200504.Rdat')
 sims<-calcSims(fit,dat) #,fastProgressors=c('MM15','WEAU')
 simsB<-calcSims(fitB,dat)
 simsR<-calcSims(fitRep,dat)
@@ -220,18 +221,22 @@ plotPointsLine<-function(dat,ic50,ii,ylab,addTitle=TRUE,sims=NULL,addFit=TRUE,fi
   }
   points(thisDat$time/7,thisIc50,pch=21+thisDat$bulk,bg=patCols[ii])
 }
-plotCondenseIfn<-function(dat,ic50,ylab,showLegend=TRUE,sims=NULL,addFit=TRUE,filterAfter=TRUE){
+plotCondenseIfn<-function(dat,ic50,ylab,showLegend=TRUE,sims=NULL,addFit=TRUE,filterAfter=TRUE,subplotLetters=LETTERS[1:3]){
   par(mar=c(0,0,0,0))
-  layout(lay2,width=c(.5,rep(1,2),.3),height=c(.01,c(1,1,1,.2,1,.2,1),1.3))
+  layout(lay2,width=c(.4,rep(1,2),.01),height=c(.15,c(1,1,1,.2,1,.2,1),ifelse(showLegend,1.3,.32)))
   counter<-1
   for(ii in patOrder){
     plotPointsLine(dat,ic50,ii,ylab,sims=sims,addFit=addFit,filterAfter=filterAfter)
-    if(counter>8)axis(1,(0:3)*100,cex.axis=1.2,mgp=c(2.75,.7,0))
-    if(counter>8)axis(1,(0:2)*100+50,rep('',3),cex.axis=1.2,mgp=c(2.75,.7,0))
+    if(counter>4)axis(1,seq(0,6,2)*100,cex.axis=1.2,mgp=c(2.75,.4,0),tcl=-.3)
+    if(counter>4)axis(1,seq(1:3)*100,rep('',3),cex.axis=1.2,mgp=c(2.75,.7,0),tcl=-.3)
     if(counter%%2==1)logAxis(2,las=1,cex.axis=1.1,mgp=c(3,.7,0))
-    if(counter==5)text(par('usr')[1]-.33*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),ylab,srt=90,xpd=NA,cex=2)
-    if(counter==9)text(max(par('usr')[1:2]),10^(par('usr')[3]-.27*diff(par('usr')[3:4])),'Weeks after onset of symptoms',xpd=NA,cex=2)
+    labCex<-1.7
+    if(counter==5)text(par('usr')[1]-.33*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),ylab,srt=90,xpd=NA,cex=labCex)
+    if(counter==9)text(max(par('usr')[1:2]),10^(par('usr')[3]-.25*diff(par('usr')[3:4])),'Weeks from onset of symptoms',xpd=NA,cex=labCex)
     if(counter==9&showLegend)legend(par('usr')[1]-diff(par('usr')[1:2])*.3,10^(par('usr')[3]-diff(par('usr')[3:4])*.45),c(ifelse(is.null(sims),'Quadratic regression','Bayesian model'),ifelse(is.null(sims),'95% confidence interval','95% credible interval'),'95% prediction interval','Limiting dilution isolate','Bulk isolate'),col=c(patCols[1],NA,NA,'black','black'),pt.bg=c(NA,patCols2[1],patCols3[1],patCols[1],patCols[1]),lty=c(1,NA,NA,NA,NA),pch=c(NA,22,22,21,22),border=NA,pt.cex=c(3.2,3.2,3.2,1.4,1.4),cex=1.1,xjust=0,yjust=1,xpd=NA)
+    if(counter==1)text(grconvertX(-.27,from='npc'),grconvertY(1.10,from='npc'),subplotLetters[1],xpd=NA,adj=c(0,1),cex=2.5)
+    if(counter==7)text(grconvertX(-.27,from='npc'),grconvertY(1.10,from='npc'),subplotLetters[2],xpd=NA,adj=c(0,1),cex=2.5)
+    if(counter==9)text(grconvertX(-.27,from='npc'),grconvertY(1.10,from='npc'),subplotLetters[3],xpd=NA,adj=c(0,1),cex=2.5)
     counter<-counter+1
   }
 }
@@ -240,7 +245,7 @@ plotFit<-function(sims,dat,var='ic50',ylab='IC50',filterAfter=TRUE){
   xlim<-c(1,max(sapply(sims,function(sim)max(sim[1,]))))
   for(ii in names(sims)){
     if(filterAfter)sim<-sims[[ii]][,sims[[ii]]['time',]<ifelse(is.na(artStart[ii]),Inf,artStart[ii])]
-    plot(sim['time',]/7,exp(sim['mean',]),type='l',ylim=ylim,log='y',ylab=ylab,xlab='Days after onset of symptoms',yaxt='n',main=ii,xlim=xlim/7,mgp=c(2.25,1,0))
+    plot(sim['time',]/7,exp(sim['mean',]),type='l',ylim=ylim,log='y',ylab=ylab,xlab='Days from onset of symptoms',yaxt='n',main=ii,xlim=xlim/7,mgp=c(2.25,1,0))
     dnar::logAxis(las=1,mgp=c(1,.6,0))
     polygon(c(sim['time',],rev(sim['time',]))/7,exp(c(sim['lowCI',],rev(sim['highCI',]))),border=NA,col='#00000022')
     polygon(c(sim['time',],rev(sim['time',]))/7,exp(c(sim['lowPred',],rev(sim['highPred',]))),border=NA,col='#00000022')
@@ -252,7 +257,7 @@ plotSummaries<-function(fit,var='IFN IC50'){ #,fastProgressors=c()
   mat<-as.matrix(fit$fit)
   artStart<-fit$artStart
   #,'fastChange'=sprintf('Fast progressor nadir fold change in\n %s from other progression',var)
-  vars<-c('nadirTime'='Nadir time\n(weeks after onset of infection)','nadirChange'=sprintf('Nadir fold change in\n %s from acute',var),'riseTime'='Rise time\n(weeks before ART initiation)','riseChange'=sprintf('Rise fold change in\n %s from nadir',var),'acute'=sprintf('Base level in %s\nat acute infection',var)) 
+  vars<-c('nadirTime'='Nadir time\n(weeks from onset of symptoms)','nadirChange'=sprintf('Nadir fold change in\n %s from acute',var),'riseTime'='Rise time\n(weeks before ART initiation)','riseChange'=sprintf('Rise fold change in\n %s from nadir',var),'acute'=sprintf('Base level in %s\nat acute infection',var)) 
   for(ii in names(vars)){
     nadirTimes<-c(colnames(mat)[grep(sprintf('%s\\[',ii),colnames(mat))],sprintf('%sMean',ii))
     nads<-mat[,nadirTimes,drop=FALSE]
@@ -283,6 +288,28 @@ plotSummaries<-function(fit,var='IFN IC50'){ #,fastProgressors=c()
     if(grepl('Change',ii))abline(v=1,lty=2)
   }
 }
+for(showLegend in c(TRUE,FALSE)){
+pdf(sprintf('out/bayesFit%s.pdf',ifelse(showLegend,'_legend','')),width=4,height=8)
+noQvoa<-dat#dat[!dat$qvoa,]
+plotCondenseIfn(noQvoa,noQvoa$ic50,ylab=expression('IFN'*alpha*'2 IC'[50]*' (pg/ml)'),sims=sims,filterAfter=TRUE,showLegend=showLegend)
+  #text(grconvertX(.01,from='ndc'),grconvertY(.99,from='ndc'),'A',xpd=NA,adj=c(0,1),cex=2.5)
+plotCondenseIfn(noQvoa,noQvoa$beta,ylab=expression('IFN'*beta*' IC'[50]*' (pg/ml)'),sims=simsB,filterAfter=TRUE,subplotLetters=LETTERS[4:6],showLegend=showLegend)
+  #text(grconvertX(.01,from='ndc'),grconvertY(.99,from='ndc'),'B',xpd=NA,adj=c(0,1),cex=2.5)
+#plotCondenseIfn(noQvoa,noQvoa$replication,ylab='Replicative capacity (day 7 p24 ng/ml)',sims=simsR)
+#plotCondenseIfn(noQvoa,noQvoa$infectivityDextran,ylab='Infectivity (IU/ng RT with dextran)',sims=simsInf)
+#plotCondenseIfn(noQvoa,noQvoa$infectivityMedia,ylab='Infectivity (IU/ng RT without dextran)',sims=simsInf2)
+dev.off()
+}
+pdf('out/bayesFitNoPred.pdf',width=4,height=8)
+noQvoa<-dat[!dat$qvoa,]
+plotCondenseIfn(noQvoa,noQvoa$ic50,ylab='IFNa2 IC50',sims=sims,addFit=FALSE)
+plotCondenseIfn(noQvoa,noQvoa$beta,ylab='IFNb IC50',sims=simsB,addFit=FALSE)
+#plotCondenseIfn(noQvoa,noQvoa$replication,ylab='Replicative capacity (day 7 p24 ng/ml)',sims=simsR,addFit=FALSE)
+#plotCondenseIfn(noQvoa,noQvoa$infectivityDextran,ylab='Infectivity (IU/ng RT with dextran)',sims=simsInf,addFit=FALSE)
+#plotCondenseIfn(noQvoa,noQvoa$infectivityMedia,ylab='Infectivity (IU/ng RT without dextran)',sims=simsInf2,addFit=FALSE)
+dev.off()
+
+
 pdf('out/bayesSummary.pdf',width=4,height=8)
   par(mar=c(4.1,4.5,.1,.1))
   plotSummaries(fit,var='IFNa2 IC50') #,fastProgressors=c('MM15','WEAU')
@@ -299,25 +326,6 @@ pdf('out/bayes350.pdf',width=4,height=8)
   plotSummaries(fit350,var='IFNa2 IC50')
   noQvoa<-dat[!dat$qvoa,]
   plotCondenseIfn(noQvoa,noQvoa$ic50,ylab='IFNa2 IC50 (pg/ml)',sims=sims350,filterAfter=FALSE)
-dev.off()
-
-pdf('out/bayesFit.pdf',width=4,height=8)
-noQvoa<-dat#dat[!dat$qvoa,]
-plotCondenseIfn(noQvoa,noQvoa$ic50,ylab='IFNa2 IC50 (pg/ml)',sims=sims,filterAfter=TRUE)
-  text(grconvertX(.01,from='ndc'),grconvertY(.99,from='ndc'),'A',xpd=NA,adj=c(0,1),cex=2.5)
-plotCondenseIfn(noQvoa,noQvoa$beta,ylab='IFNb IC50 (pg/ml)',sims=simsB,filterAfter=TRUE)
-  text(grconvertX(.01,from='ndc'),grconvertY(.99,from='ndc'),'B',xpd=NA,adj=c(0,1),cex=2.5)
-#plotCondenseIfn(noQvoa,noQvoa$replication,ylab='Replicative capacity (day 7 p24 ng/ml)',sims=simsR)
-#plotCondenseIfn(noQvoa,noQvoa$infectivityDextran,ylab='Infectivity (IU/ng RT with dextran)',sims=simsInf)
-#plotCondenseIfn(noQvoa,noQvoa$infectivityMedia,ylab='Infectivity (IU/ng RT without dextran)',sims=simsInf2)
-dev.off()
-pdf('out/bayesFitNoPred.pdf',width=4,height=8)
-noQvoa<-dat[!dat$qvoa,]
-plotCondenseIfn(noQvoa,noQvoa$ic50,ylab='IFNa2 IC50',sims=sims,addFit=FALSE)
-plotCondenseIfn(noQvoa,noQvoa$beta,ylab='IFNb IC50',sims=simsB,addFit=FALSE)
-#plotCondenseIfn(noQvoa,noQvoa$replication,ylab='Replicative capacity (day 7 p24 ng/ml)',sims=simsR,addFit=FALSE)
-#plotCondenseIfn(noQvoa,noQvoa$infectivityDextran,ylab='Infectivity (IU/ng RT with dextran)',sims=simsInf,addFit=FALSE)
-#plotCondenseIfn(noQvoa,noQvoa$infectivityMedia,ylab='Infectivity (IU/ng RT without dextran)',sims=simsInf2,addFit=FALSE)
 dev.off()
 
 
@@ -376,7 +384,7 @@ predIc50SlowBeta<-exampleCurve(fitB$fit,timeToArt=NA,times=seq(1,5*365),reps=2)
 
 plotExamples<-function(predIc50,predIc50Fast=NULL,predIc50Slow=NULL,ylab='IFNa2 IC50'){
   plot(1,1,type='n',xlim=c(1,5*365)/7,ylim=range(predIc50$pat[,c('mean','lower','upper')]),las=1,log='y',yaxt='n',ylab=ylab,xlab='',mgp=c(2.6,.7,0))
-  title(xlab='Time after infection (weeks)',mgp=c(1.9,.7,0))
+  title(xlab='Weeks from onset of symptoms',mgp=c(1.9,.7,0))
   logAxis(las=1)
   lines(predIc50$mean$time/7,predIc50$mean$mean,col='#FF8000')
   polygon(c(predIc50$mean$time,rev(predIc50$mean$time))/7,c(predIc50$mean$lower,rev(predIc50$mean$upper)),border='#FF800011',col='#FF800033')
@@ -411,7 +419,7 @@ plotParams<-function(fit,totalTime=6,timeAfterInf=1,ylab='IFNa2 IC50'){
   riseTime<-exp(mat[,'riseTimeMean'])/365
   plot(1,1,type='n',xlim=c(-.3,totalTime),ylim=exp(quantile(c(acute,acute+nadirChange),c(.01,.99))),bty='n',xlab='',ylab=ylab,yaxt='n',log='y',xaxt='n')
   logAxis(las=1)
-  mtext("Time after onset\nof symptoms",1,at=mean(c(0,timeAfterInf)),3.75)
+  mtext("Weeks from onset\nof symptoms",1,at=mean(c(0,timeAfterInf)),3.75)
   axis(1,0:timeAfterInf,mgp=c(2,1.75,1))
   axis(1,(timeAfterInf+1):totalTime,rev(totalTime-totalTime:(timeAfterInf+1)),mgp=c(2,1.75,1))
   mtext("Time prior to\n ART initiation",1,at=mean(c(timeAfterInf+1,totalTime)),3.75)
