@@ -56,6 +56,28 @@ dat$logTime4<-log(dat$time)^4
 dat$logVl<-log(dat$vl)
 dat$rt<-as.numeric(sub('N/A','',dat$RT.activity..ηg.μl.))
 
+dat$fillVl<-dat$vl
+dat$fillVl[is.na(dat$vl)]<-sapply(which(is.na(dat$vl)),function(xx){
+  thisTime<-dat[xx,'time']
+  thisPat<-dat[xx,'pat']
+  thisDat<-compiledMeta[compiledMeta$mm==thisPat&!is.na(compiledMeta$vl),c('time','vl')]
+  #print(thisDat)
+  #print(thisTime)
+  if(thisTime>max(thisDat$time))return(thisDat$vl[thisDat$time==max(thisDat$time)])
+  else return(approx(thisDat$time,thisDat$vl,thisTime)$y)
+})
+
+
+dat$fillCD4<-dat$CD4
+dat$fillCD4[is.na(dat$CD4)]<-sapply(which(is.na(dat$CD4)),function(xx){
+  thisTime<-dat[xx,'time']
+  thisPat<-dat[xx,'pat']
+  thisDat<-compiledMeta[compiledMeta$mm==thisPat&!is.na(compiledMeta$cd4),c('time','cd4')]
+  #if(thisTime>max(thisDat$time))return(thisDat$vl[thisDat$time==max(thisDat$time)])
+  approx(thisDat$time,thisDat$cd4,thisTime)$y
+})
+
+
 cols<-rainbow.lab(length(unique(dat$pat)))
 names(cols)<-unique(dat$pat)
 
