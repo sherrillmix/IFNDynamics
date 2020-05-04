@@ -345,7 +345,7 @@ rownames(compiledMeta)<-compiledMeta$sample
 meta$artDay<-c(artDfosx,'WEAU'=371)[meta$mm]
 meta$daysBeforeArt<-meta$artDay-as.numeric(meta$DFOSx)
 compiledMeta$artDay<-c(artDfosx,'WEAU'=371)[compiledMeta$mm]
-compiledMeta$daysBeforeArt<-compiledMeta$artDay-as.numeric(compiledMeta$DFOSx)
+compiledMeta$daysBeforeArt<-compiledMeta$artDay-as.numeric(compiledMeta$time)
 
 founders<-read.csv('founder.csv',stringsAsFactors=FALSE,row.names=1)
 superDate<-ymd(founders$superDate)
@@ -360,7 +360,7 @@ less350Time<-by(compiledMeta[!is.na(compiledMeta$cd4),],compiledMeta[!is.na(comp
   return(out)
 })
 compiledMeta$day350<-less350Time[compiledMeta$mm]
-compiledMeta$daysBefore350<-compiledMeta$day350-as.numeric(compiledMeta$DFOSx)
+compiledMeta$daysBefore350<-compiledMeta$day350-as.numeric(compiledMeta$time)
 
 if(FALSE){
 comboMeta[which(!paste(comboMeta$mm,comboMeta$rDate) %in% paste(compiledMeta$mm,compiledMeta$rDate) & !is.na(comboMeta$mm)&(!is.na(comboMeta$vl)|!is.na(comboMeta$cd4))),c('mm','date','rDate','time','vl','cd4','source')]
