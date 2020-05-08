@@ -89,20 +89,17 @@ stanCode4_withMixture<-'
     vector[nStudy-1] studyMeansRaw;
     vector<lower=0>[nState] stateSds;
     vector<lower=0>[nState] stateIsoSds;
-    vector[nPatient] statePropsRaw;
-    real<lower=0> propMean;
-    real<lower=0> propSD;
+    real<lower=0,upper=1> postProp;
   }
   transformed parameters{
     matrix[nPatient,nState] expectedIC50;
     vector[nStudy] studyMeans;
-    vector<lower=0,upper=1>[nPatient] stateProps;
     studyMeans[1]=0;
     studyMeans[2:nStudy]=studyMeansRaw;
     for(ii in 1:nPatient){
-      stateProps[ii]=1.0/(1.0+exp(-(propMean+statePropsRaw[ii]*propSD)));
       for(jj in 1:nState){
         expectedIC50[ii,jj]=studyMeans[studies[ii]]+stateMeans[1]+baseIc50Raw[ii,1]*stateSds[1];
+        if(states[ii]>1)expectedIC50[ii,jj]=expectedIC50[ii,jj]+stateMeans[jj]+baseIc50Raw[ii,jj]*stateSds[jj];
       }
     }
   }
@@ -112,15 +109,14 @@ stanCode4_withMixture<-'
       if(states[ii]>nState){
         //HARD CODING MIXTURE OF FIRST 2 STATES
         target += log_sum_exp(
-          log(stateProps[patients[ii]])+normal_lpdf(ic50[ii]|expectedIC50[patients[ii],2],stateIsoSds[1]),
-          log(1-stateProps[patients[ii]])+normal_lpdf(ic50[ii]|expectedIC50[patients[ii],3],stateIsoSds[2])
+          log(postProp)+normal_lpdf(ic50[ii]|expectedIC50[patients[ii],2],stateIsoSds[2]),
+          log(1-postProp)+normal_lpdf(ic50[ii]|expectedIC50[patients[ii],3],stateIsoSds[3])
         );
       }
     }
+    postProp~beta(1,1);
     stateIsoSds~gamma(1,.1);
     stateSds~gamma(1,.1);
-    propSD~gamma(1,.1);
-    statePropsRaw~normal(0,1);
     for(ii in 1:nState){
       baseIc50Raw[,ii]~normal(0,1);
     }
@@ -149,7 +145,9 @@ fitBayes2<-function(model,patient,states,studies,ic50,baseState='Acute',mixState
   return(list('fit'=fit,pats=patientId,states=stateId,studies=studyId,patientStudy=patientStudy,dat=dat))
 }
 fitA_withMix<-withAs(combined=combined[!is.na(combined$ic50_IFNa2),],fitBayes2(mod4,combined$pat,combined$simpleClass,ifelse(combined$study %in% c('Transmission','BEAT','IFNa2b treatment'),combined$study,'Other'),combined$ic50_IFNa2,chains=50,stateId=structure(1:5,.Names=c('Acute','Rebound','Outgrowth','Chronic','Post-ATI'))))
-
+tmp<-fitA_withMix
+tmp$states<-tmp$states[1:4]
+pdf('test.pdf');plotSummary(tmp,addAcute=FALSE);dev.off()
 
 stanCode3<-'
   data {
