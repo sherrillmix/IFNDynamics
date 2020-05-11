@@ -89,15 +89,22 @@ stanCode4_withMixture<-'
     vector[nStudy-1] studyMeansRaw;
     vector<lower=0>[nState] stateSds;
     vector<lower=0>[nState] stateIsoSds;
-    real<lower=0,upper=1> postProp;
-    real<lower=0,upper=1> preProp;
+    vector[nPatient] postBeta;
+    vector[nPatient] preBeta;
+    real postMean;
+    real preMean;
+    real<lower=0> propSd;
   }
   transformed parameters{
+    vector<lower=0,upper=1>[nPatient] postProps;
+    vector<lower=0,upper=1>[nPatient] preProps;
     matrix[nPatient,nState] expectedIC50;
     vector[nStudy] studyMeans;
     studyMeans[1]=0;
     studyMeans[2:nStudy]=studyMeansRaw;
     for(ii in 1:nPatient){
+      postProps[ii]=1.0/(1.0+exp(-postMean-postBeta[ii]*propSd));
+      preProps[ii]=1.0/(1.0+exp(-preMean-preBeta[ii]*propSd));
       for(jj in 1:(nState)){
         expectedIC50[ii,jj]=studyMeans[studies[ii]]+stateMeans[1]+baseIc50Raw[ii,1]*stateSds[1];
         if(jj>1)expectedIC50[ii,jj]=expectedIC50[ii,jj]+stateMeans[jj]+baseIc50Raw[ii,jj]*stateSds[jj];
@@ -109,19 +116,22 @@ stanCode4_withMixture<-'
       if(states[ii]<nState)ic50[ii]~normal(expectedIC50[patients[ii],states[ii]],stateIsoSds[states[ii]]);
       if(states[ii]==nState+1){
         target += log_sum_exp(
-          log(postProp)+normal_lpdf(ic50[ii]|expectedIC50[patients[ii],2],stateIsoSds[2]),
-          log(1-postProp)+normal_lpdf(ic50[ii]|expectedIC50[patients[ii],nState],stateIsoSds[nState])
+          log(postProps[patients[ii]])+normal_lpdf(ic50[ii]|expectedIC50[patients[ii],2],stateIsoSds[2]),
+          log(1-postProps[patients[ii]])+normal_lpdf(ic50[ii]|expectedIC50[patients[ii],nState],stateIsoSds[nState])
         );
       }
       if(states[ii]==nState){
         target += log_sum_exp(
-          log(preProp)+normal_lpdf(ic50[ii]|expectedIC50[patients[ii],2],stateIsoSds[2]),
-          log(1-preProp)+normal_lpdf(ic50[ii]|expectedIC50[patients[ii],nState],stateIsoSds[nState])
+          log(preProps[patients[ii]])+normal_lpdf(ic50[ii]|expectedIC50[patients[ii],2],stateIsoSds[2]),
+          log(1-preProps[patients[ii]])+normal_lpdf(ic50[ii]|expectedIC50[patients[ii],nState],stateIsoSds[nState])
         );
       }
     }
-    postProp~beta(1,1);
-    preProp~beta(1,1);
+    //postProp~beta(1,1);
+    //preProp~beta(1,1);
+    postBeta~normal(0,1);
+    preBeta~normal(0,1);
+    propSd~gamma(1,1);
     stateIsoSds~gamma(1,1);
     stateSds~gamma(1,1);
     for(ii in 1:nState){
