@@ -1,18 +1,51 @@
 pre<-read.csv('data/prelim data 032120.csv',stringsAsFactors=FALSE,skip=6)
 
-
 mac<-list(
-  zb722=read.csv('data/macrophage replication data 032020.csv',nrow=7,stringsAsFactors=FALSE,check.names=FALSE),
-  zb725=read.csv('data/macrophage replication data 032020.csv',skip=10,nrow=7,stringsAsFactors=FALSE,check.names=FALSE),
-  zb668=read.csv('data/macrophage replication data 032020.csv',skip=20,nrow=7,stringsAsFactors=FALSE,check.names=FALSE)
+  zb722=read.csv('data/macrophage replication data 050820_1.csv',skip=5,nrow=7,stringsAsFactors=FALSE,check.names=FALSE),
+  zb725=read.csv('data/macrophage replication data 050820_1.csv',skip=16,nrow=7,stringsAsFactors=FALSE,check.names=FALSE),
+  zb668=read.csv('data/macrophage replication data 050820_1.csv',skip=27,nrow=7,stringsAsFactors=FALSE,check.names=FALSE),
+  zb620=read.csv('data/macrophage replication data 050820_2.csv',skip=5,nrow=7,stringsAsFactors=FALSE,check.names=FALSE),
+  zb624=read.csv('data/macrophage replication data 050820_2.csv',skip=16,nrow=7,stringsAsFactors=FALSE,check.names=FALSE),
+  zb710=read.csv('data/macrophage replication data 050820_2.csv',skip=27,nrow=7,stringsAsFactors=FALSE,check.names=FALSE),
+  zb28=read.csv('data/macrophage replication data 050820_3.csv',skip=7,nrow=7,stringsAsFactors=FALSE,check.names=FALSE),
+  zb31=read.csv('data/macrophage replication data 050820_3.csv',skip=18,nrow=7,stringsAsFactors=FALSE,check.names=FALSE)
 )
-macro<-do.call(rbind,lapply(mac,function(xx){
-  goodCol<-!(1:ncol(xx) %in% 1:2) & !is.na(xx[1,])
-  out<-data.frame('donor'=rep(xx$donor,sum(goodCol)),'day'=rep(xx$`days post infection`,sum(goodCol)),'virus'=rep(colnames(xx)[goodCol],each=nrow(xx)),'p24'=unlist(xx[,goodCol]),stringsAsFactors=FALSE)
-}))
-dupes<-c('A08 UT P5E4','A08 UT P6D3','A08 UT P6F6','A08 BE P4C8','A08 BE P5D5','A08 BE P5E1')
 
-macro<-macro[!macro$virus %in% dupes,]
+nameFixes<-c('QVOA.post.A08-P6D3_UT'='A08 UT P6D3','QVOA.post.A08-P6F6_UT'='A08 UT P6F6','QVOA.post.A08-P5E4_UT'='A08 UT P5E4','9201 293T'='Reb. 9201_293T stock','601 293T'='Reb. 601r1_293T stock','A08 2F5 293T'='Reb. A08-2F4_293T stock','A09 293T'='Reb. A09-1A2_293T stock','A08 1A5 293T'='Reb. A08-1A5_293T stock')
+macro<-do.call(rbind,mapply(function(xx,yy){
+  goodCol<-!(1:ncol(xx) %in% 1) & !is.na(xx[1,])
+  #xx<-xx[!apply(is.na(xx),1,all),]
+  print(yy)
+  out<-data.frame('donor'=rep(yy,nrow(xx)*sum(goodCol)),'day'=rep(xx$`days post infection`,sum(goodCol)),'virus'=rep(colnames(xx)[goodCol],each=nrow(xx)),'p24'=unlist(xx[,goodCol]),stringsAsFactors=FALSE)
+  out$virus[out$virus %in% names(nameFixes)]<-nameFixes[out$virus[out$virus %in% names(nameFixes)]]
+  out
+},mac,names(mac),SIMPLIFY=FALSE))
+
+#dupes<-c('A08 UT P5E4','A08 UT P6D3','A08 UT P6F6','A08 BE P4C8','A08 BE P5D5','A08 BE P5E1')
+#macro<-macro[!macro$virus %in% dupes,]
+
+finalNames<-read.csv('data/Table S5_05.21.2020-1.csv',stringsAsFactors=FALSE,skip=4)
+finalNames<-finalNames[finalNames$ID!=''&nchar(finalNames$ID)<80,]
+macNames<-data.frame('orig'=unique(macro$virus),stringsAsFactors=FALSE)
+select<-!grepl(' Q2 ',macNames$orig)&!grepl('-BE4C8| BE7E2',macNames$orig)&!grepl('Ao2 pre',macNames$orig)&!grepl('A14|A02|A13',macNames$orig)&!grepl('P51A3 L80',macNames$orig)&!grepl(' BE ',macNames$orig)&!grepl('_BE$',macNames$orig)
+bak<-macNames[!select,]
+macNames<-macNames[select,,drop=FALSE]
+rownames(macNames)<-macNames$orig
+macNames$final<-NA
+macNames[macNames$orig%in% finalNames$ID,'final']<-macNames[macNames$orig%in% finalNames$ID,'orig']
+select<-sub(' ?TF$','',macNames$orig)%in% finalNames$ID
+macNames[select,'final']<-sub(' ?TF$','',macNames[select,'orig'])
+select<-sub('CH58','CH058',sub('TF 293T$','',macNames$orig))%in% finalNames$ID
+macNames[select,'final']<-sub('CH58','CH058',sub('TF 293T','',macNames[select,'orig']))
+nameConversion<-c('MM33 TF'='MM33.TF','Reb. 601r1_293T stock'='601.REB.r1','Reb. 9201_293T stock'='9242.REB.r1','RHPA TF'='RHPA','UG21'='UG021','UG24'='UG024','CH42 TF'='CH042','CH77 TF'='CH077','CH58 TF'='CH058','MM33 17'='MM33.17','9203 preATI GI2'='9244.VOA.G12','CH492 P51A3 293T'='CH492','CH492 P51A3'='CH492')
+macNames[macNames$orig %in% names(nameConversion),'final']<-nameConversion[macNames[macNames$orig %in% names(nameConversion),'orig']]
+macNames[is.na(macNames$final),'orig']
+macNames$fix<-sub('QVOA.post.A08-P([0-9][A-Z][0-9]).*','A08.VOA.\\1',sub('Reb. A0([98])-([0-9][A-Z][0-9])_.*','A0\\1.REB.\\2',sub('Reb. A08.21-','A08.REB.',sub(' UT P','.VOA.',sub('BEAT','',sub('9201','9242',sub('9202','9243',sub('9203','9244',sub('9207','9241',sub(' reb ','.REB.',sub(' (preATI|postATI|Q2) ','.VOA.',macNames$orig)))))))))))
+macNames[is.na(macNames$final)&macNames$fix %in% finalNames$ID,'final']<-macNames[is.na(macNames$final)&macNames$fix %in% finalNames$ID,'fix']
+if(nrow(macNames[is.na(macNames$final),])>0)stop('Missing assignment for mac data')
+if(any(!finalNames$ID %in% macNames$final))stop('Missing assignment for final table')
+macro$fix<-macNames[macro$virus,'final']
+
 auc<-function(xx,yy,low=min(xx),high=max(xx)){
   integrate(approxfun(xx,yy),low,high)
 }
@@ -32,13 +65,15 @@ predMat<-do.call(rbind,lapply(structure(rownames(area),.Names=rownames(area)),fu
 s3<-read.csv('out/S3Update_20200226.csv',stringsAsFactors=FALSE)
 rownames(s3)<-s3$Isolate.ID
 
-virDf<-data.frame('virus'=rownames(predMat),'rebound'=grepl('Reb',rownames(predMat)),'beta'=grepl('[_.]BE',rownames(predMat)),stringsAsFactors=FALSE)
+virDf<-data.frame('virus'=rownames(predMat),'rebound'=grepl('[rR]eb',rownames(predMat)),'beta'=grepl('[_. -]BE',rownames(predMat)),stringsAsFactors=FALSE)
 virDf$tf<-grepl('TF',virDf$virus)
-virDf$voa<-grepl('A08',virDf$virus)&!virDf$rebound
-virDf$chronic<-virDf$virus=='CH492 P51A3 293T'
-if(any(apply(virDf[,c('rebound','chronic','tf','voa')],1,sum)!=1))stop('Misassignment of virus')
-virDf$type<-factor(ifelse(virDf$tf,'TF',ifelse(virDf$voa,'VOA',ifelse(virDf$rebound,'Rebound',ifelse(virDf$chronic,'Chronic',NA)))),levels=c('VOA','TF','Rebound','Chronic'))
-virDf$type2<-factor(ifelse(virDf$beta,'IFNb VOA',as.character(virDf$type)),levels=c('Rebound','VOA','IFNb VOA','TF','Chronic'))
+virDf$voa<-grepl('VOA|pre|post|A[0-9]+ UT',virDf$virus)&!virDf$rebound
+virDf$chronic<-grepl('CH492|MM33[ .]1[37]',virDf$virus)
+virDf$class<-ifelse(virDf$rebound,'Rebound',ifelse(virDf$beta,'IFNb-selected',ifelse(virDf$tf,'TF',ifelse(virDf$voa,'VOA',ifelse(virDf$chronic,'Chronic','')))))
+write.csv(virDf[,c('virus','class')],'out/macroVirusDoublecheck.csv',row.names=FALSE)
+classes<-read.csv('data/macroVirusDoublecheck-FBRupdate.csv',stringsAsFactors=FALSE,row.names=1)
+if(any(!virDf$virus %in% rownames(classes)))stop('Missing virus class')
+virDf$type2<-classes[virDf$virus,'class']
 virDf$auc<-coef[virDf$virus]
 virDf$tropism<-NA
 #Reb..A08.2F5_293T.stock from email
@@ -46,62 +81,56 @@ virDf$tropism[virDf$virus %in% c('CH470TF 293T','CH58TF 293T','Reb. 9201_293T st
 virDf$tropism[virDf$virus %in% c('Reb. A08-1A5_293T stock','A08 UT P7C1','A08 BE P4E6','A08 UT P5E2')]<-'X4'
 virDf$tropism[virDf$virus %in% c('A08 UT P7F8','A08 UT P8E8')]<-'Dual'
 virDf$tropism[virDf$virus %in% s3$Isolate.ID]<-s3[virDf$virus[virDf$virus %in% s3$Isolate.ID],'tropism']
-virDf$ic50<-NA
-virDf$ic50[virDf$virus %in% s3$Isolate.ID]<-s3[virDf$virus[virDf$virus %in% s3$Isolate.ID],'IFN.b.IC50..pg.ml.']
-if(any(is.na(virDf$tropism)))stop('Missing tropism')
-summary(lm(auc~type,dat=virDf[virDf$type!='Chronic',]))
-summary(lm(auc~type2,dat=virDf[virDf$type!='Chronic',]))
-summary(lm(auc~type2,dat=virDf[grep('A08',virDf$virus),]))
-table(virDf$type2,virDf$auc>.2,virDf$tropism)
 
 
-
-pdf('out/macroRep.pdf',width=10,height=3.5)
-par(mfrow=c(1,length(unique(macro$donor))),mar=c(4.4,4,1.1,6))
-ylim<-range(macro$p24)
-for(ii in unique(macro$donor)){
-  plot(1,1,type='n',ylim=ylim,ylab='',yaxt='n',xlim=range(macro$day),xlab='Day',log='y',mgp=c(1.75,.5,0),tcl=-.3,main=ii)
-  title(ylab='p24 concentration (ng/ml)',mgp=c(2.75,1,0))
-  dnar::logAxis(las=1)
-  thisDat<-macro[macro$donor==ii,]
-  thisDat<-thisDat[order(thisDat$virus,thisDat$day),]
-  for(jj in unique(thisDat$virus)){
-    lines(thisDat[thisDat$virus==jj,'day'],thisDat[thisDat$virus==jj,'p24'])
+pdf('out/macroRep.pdf',width=20,height=3.5)
+  par(mfrow=c(1,length(unique(macro$donor))),mar=c(4.4,4,1.1,6))
+  ylim<-range(macro$p24)
+  for(ii in unique(macro$donor)){
+    plot(1,1,type='n',ylim=ylim,ylab='',yaxt='n',xlim=range(macro$day),xlab='Day',log='y',mgp=c(1.75,.5,0),tcl=-.3,main=ii)
+    title(ylab='p24 concentration (ng/ml)',mgp=c(2.75,1,0))
+    dnar::logAxis(las=1)
+    thisDat<-macro[macro$donor==ii,]
+    #thisDat<-thisDat[order(thisDat$virus,thisDat$day),]
+    for(jj in unique(thisDat$virus)){
+      if(any(thisDat$virus==jj))for(kk in seq(1,sum(thisDat$virus==jj),7))lines(thisDat[thisDat$virus==jj,'day'][kk+0:6],thisDat[thisDat$virus==jj,'p24'][kk+0:6])
+    }
+    isLast<-thisDat$day==max(thisDat$day)
+    thisLast<-thisDat[isLast,]
+    thisLast<-thisLast[order(thisLast$p24),]
+    clusters<-cutree(hclust(dist(log(thisLast$p24))),h=.15)
+    nClust<-ave(clusters,clusters,FUN=length)
+    probs<-nClust>1
+    probAdjust<-thisLast[probs,'p24']*1.15^ave(clusters[probs],clusters[probs],FUN=function(xx)1:length(xx)-length(xx)/2-.5)
+    axis(4,thisLast$p24[!probs],thisLast$virus[!probs],las=1,cex.axis=.4,tcl=-.1,mgp=c(1,.2,0))
+    axis(4,thisLast$p24[probs],rep('',sum(probs)),las=1,cex.axis=.4,tcl=-.1,mgp=c(1,.2,0))
+    axis(4,probAdjust,thisDat[isLast,'virus'][probs],las=1,cex.axis=.4,tcl=-.1,mgp=c(1,.5,0),xpd=NA,tick=FALSE)
+    segments(dnar::convertLineToUser(.1,4),thisLast[probs,'p24'],dnar::convertLineToUser(.5,4),probAdjust,xpd=NA,lwd=.5)
   }
-  isLast<-thisDat$day==max(thisDat$day)
-  thisLast<-thisDat[isLast,]
-  thisLast<-thisLast[order(thisLast$p24),]
-  clusters<-cutree(hclust(dist(log(thisLast$p24))),h=.15)
-  nClust<-ave(clusters,clusters,FUN=length)
-  probs<-nClust>1
-  probAdjust<-thisLast[probs,'p24']*1.15^ave(clusters[probs],clusters[probs],FUN=function(xx)1:length(xx)-length(xx)/2-.5)
-  axis(4,thisLast$p24[!probs],thisLast$virus[!probs],las=1,cex.axis=.4,tcl=-.1,mgp=c(1,.2,0))
-  axis(4,thisLast$p24[probs],rep('',sum(probs)),las=1,cex.axis=.4,tcl=-.1,mgp=c(1,.2,0))
-  axis(4,probAdjust,thisDat[isLast,'virus'][probs],las=1,cex.axis=.4,tcl=-.1,mgp=c(1,.5,0),xpd=NA,tick=FALSE)
-  segments(dnar::convertLineToUser(.1,4),thisLast[probs,'p24'],dnar::convertLineToUser(.5,4),probAdjust,xpd=NA,lwd=.5)
-}
-par(mfrow=c(4,ceiling(length(unique(macro$virus))/4)),mar=c(0,0,0,0))
-ylim<-range(macro$p24)
-donorCol<-structure(dnar::rainbow.lab(length(unique(macro$donor))),.Names=unique(macro$donor))
-donorOffset<-structure(2^seq(-.25,.25,length.out=length(unique(macro$donor))),.Names=unique(macro$donor))
-for(ii in unique(macro$virus)){
-  plot(1,1,type='n',ylim=ylim,ylab='',yaxt='n',xlim=range(macro$day),xlab='Day',log='y',mgp=c(1.75,.5,0),tcl=-.3,xaxt='n')
-  mtext(ii,3,line=-1,cex=.35)
-  #title(ylab='p24 concentration (ng/ml)',mgp=c(2.75,1,0))
-  #dnar::logAxis(las=1)
-  thisDat<-macro[macro$virus==ii,]
-  thisDat<-thisDat[order(thisDat$donor,thisDat$day),]
-  for(jj in unique(thisDat$donor)){
-    lines(thisDat[thisDat$donor==jj,'day'],thisDat[thisDat$donor==jj,'p24']*ifelse(thisDat[thisDat$donor==jj,'p24']==.01,donorOffset[jj],1),col=donorCol[jj])
+  par(mfrow=c(4,ceiling(length(unique(macro$virus))/4)),mar=c(0,0,0,0))
+  ylim<-range(macro$p24)
+  donorCol<-structure(dnar::rainbow.lab(length(unique(macro$donor))),.Names=unique(macro$donor))
+  donorOffset<-structure(2^seq(-.5,.5,length.out=length(unique(macro$donor))),.Names=unique(macro$donor))
+  for(ii in unique(macro$virus)){
+    plot(1,1,type='n',ylim=ylim,ylab='',yaxt='n',xlim=range(macro$day),xlab='Day',log='y',mgp=c(1.75,.5,0),tcl=-.3,xaxt='n')
+    mtext(ii,3,line=-1,cex=.35)
+    #title(ylab='p24 concentration (ng/ml)',mgp=c(2.75,1,0))
+    #dnar::logAxis(las=1)
+    thisDat<-macro[macro$virus==ii,]
+    #thisDat<-thisDat[order(thisDat$donor,thisDat$day),]
+    for(jj in unique(thisDat$donor)){
+      #hard coding 7 days
+      for(kk in seq(1,sum(thisDat$donor==jj),7))lines(thisDat[thisDat$donor==jj,'day'][kk+0:6],thisDat[thisDat$donor==jj,'p24'][kk+0:6]*ifelse(thisDat[thisDat$donor==jj,'p24'][kk+0:6]==.01,donorOffset[jj],1),col=donorCol[jj])
+    }
   }
-}
-legend('right',inset=.07,names(donorCol),col=donorCol,lty=1,cex=.5)
+  plot(1,1,type='n',xlab='',ylab='',xaxt='n',yaxt='n',bty='n')
+  legend('right',inset=.07,names(donorCol),col=donorCol,lty=1,cex=.5)
 dev.off()
 
 
 
-pdf('out/macroAucHeat.pdf',height=10,width=5)
-  par(mar=c(2.3,6,.1,3.1))
+pdf('out/macroAucHeat.pdf',height=12,width=7)
+  par(mar=c(3.3,6,.1,3.1))
   breaks<-exp(seq(min(log(area),na.rm=TRUE)*.99,max(log(area),na.rm=TRUE)*1.01,length.out=101))
   cols<-rev(heat.colors(100))
   plotFunc<-function(area){
@@ -113,28 +142,28 @@ pdf('out/macroAucHeat.pdf',height=10,width=5)
   axis(1,1:ncol(area),colnames(area),tcl=-.3,mgp=c(1,.4,0))
   axis(2,1:nrow(area),rownames(area),las=1,cex.axis=.5)
   axis(4,1:nrow(area),sprintf('%.02f',exp(coef[rownames(area)])),las=1,cex.axis=.5)
-  dnar::insetScale(log10(breaks),cols,insetPos=c(.0175,.01,.025,.28),at=0:3,labels=sapply(0:3,function(xx)as.expression(bquote(10^.(xx)))),main='p24 AUC')
+  dnar::insetScale(log10(breaks),cols,insetPos=c(.0175,.01,.025,.24),at=0:3,labels=sapply(0:3,function(xx)as.expression(bquote(10^.(xx)))),main='p24 AUC')
   }
-  plotFunc(area)
+  #plotFunc(area)
   plotFunc(area[order(coef[rownames(area)]),])
 dev.off()
 
 
 pdf('out/macroCompare.pdf',width=10,height=5)
-  xPos<-structure(1:length(levels(virDf$type2)),.Names=levels(virDf$type2))
+  xPos<-structure(1:length(unique(virDf$type2)),.Names=unique(virDf$type2))
   posOffset<-ave(virDf$auc,virDf$type2,FUN=function(xx)seq(-.05,.05,length.out=length(xx)))
-  plot(xPos[as.character(virDf$type2)]+posOffset,exp(virDf$auc),yaxt='n',xaxt='n',log='y',ylab='Base p24 AUC',xlab='',pch=21,bg=ifelse(virDf$tropism=='R5','#FF000033','#0000FF33'))
+  plot(xPos[as.character(virDf$type2)]+posOffset,exp(virDf$auc),yaxt='n',xaxt='n',log='y',ylab='Inferred p24 AUC',xlab='',pch=21,bg=ifelse(is.na(virDf$tropism),NA,ifelse(virDf$tropism=='R5','#FF000033','#0000FF33')))
   abline(h=.2,lty=2)
   dnar::logAxis(las=1)
   axis(1,xPos,names(xPos))
-  tmp<-virDf[virDf$tropism=='R5',]
+  legend('topright',inset=.01,c('R5','X4/Dual'),pch=21,pt.bg=c('#FF000033','#0000FF33'))
+  tmp<-virDf[virDf$tropism=='R5'&!is.na(virDf$tropism),]
   xPos<-structure(1:length(levels(tmp$type2)),.Names=levels(tmp$type2))
   posOffset<-ave(tmp$auc,tmp$type2,FUN=function(xx)seq(-.05,.05,length.out=length(xx)))
-  legend('topright',inset=.01,c('R5','X4/Dual'),pch=21,pt.bg=c('#FF000033','#0000FF33'))
-  plot(xPos[as.character(tmp$type2)]+posOffset,exp(tmp$auc),yaxt='n',xaxt='n',log='y',ylab='Base p24 AUC',xlab='',main='R5 viruses')
-  abline(h=.2,lty=2)
-  dnar::logAxis(las=1)
-  axis(1,xPos,names(xPos))
+  #plot(xPos[as.character(tmp$type2)]+posOffset,exp(tmp$auc),yaxt='n',xaxt='n',log='y',ylab='Base p24 AUC',xlab='',main='R5 viruses')
+  #abline(h=.2,lty=2)
+  #dnar::logAxis(las=1)
+  #axis(1,xPos,names(xPos))
 dev.off()
 
 
@@ -142,13 +171,14 @@ pdf('out/macPredHeat.pdf')
   image(1:ncol(area),1:nrow(area),exp(t(predMat)),col=cols,breaks=breaks,xaxt='n',yaxt='n',xlab='',ylab='')
   axis(1,1:ncol(area),colnames(area),tcl=-.3,mgp=c(1,.4,0))
   axis(2,1:nrow(area),rownames(area),las=1,cex.axis=.5)
+  nas<-which(is.na(area),arr.ind=TRUE)
   rect(nas[,2]-.5,nas[,1]-.5,nas[,2]+.5,nas[,1]+.5,col='#CCCCCC',border=NA)
   abline(v=2:ncol(area)-.5,h=2:nrow(area)-.5,col='#777777')
   box()
   dnar::insetScale(log10(breaks),cols,insetPos=c(.0175,.01,.025,.3),at=0:3,labels=sapply(0:3,function(xx)as.expression(bquote(10^.(xx)))),main='p24 AUC')
 dev.off()
 
-virDf$virus %in% seqs$name
+#virDf$virus %in% seqs$name
 seqs<-dnar::read.fa('a08Seqs/AlignSeq.nt.fasta')
 seqs$trim<-substring(seqs$seq,6500,8500)
 pdf('test.pdf')
