@@ -184,9 +184,33 @@ dat$isBetaNadir<-dat$meanBeta==ave(dat$meanBeta,dat$pat,FUN=function(xx)min(xx,n
 dat$isFirst<-dat$time==ave(dat$time,dat$pat,FUN=function(xx)min(xx,na.rm=TRUE))
 #dat$isSix<-dat$time==ave(dat$time,dat$pat,FUN=function(xx){diff<-abs(180-xx);out<-xx[which.min(diff)][1];if(diff[which.min(diff)][1]>30)return(FALSE);out})
 dat$isSix<-abs(dat$time-180)<30
+dat$isYear<-abs(dat$time-365)<60
 dat$isLast<-dat$time==ave(dat$time*ifelse(dat$qvoa,0,1),dat$pat,FUN=max)
 write.csv(dat[dat$isFirst|dat$isNadir|dat$qvoa|dat$isSix|dat$isLast|dat$isBetaNadir,c('pat','time','ic50','isFirst','isNadir','isBetaNadir','isSix','isLast','qvoa','beta','replication')],'out/firstNadir.csv')
 write.csv(dat,'out/allLongitudinal.csv')
 
 timeMeans<-lapply(unique(dat$pat),function(xx)withAs(zz=dat[dat$pat==xx,],tapply(zz$beta,zz$time,function(yy)exp(mean(log(yy),na.rm=TRUE)))))
 cbind(unique(dat$pat),sapply(timeMeans,which.min),names(sapply(timeMeans,which.min)))
+
+dat$patTime<-paste(dat$pat,dat$time)
+bulkTimes<-unique(dat[grepl('bulk',dat$id)&(!is.na(dat$ic50)|!is.na(dat$beta)),'patTime'])
+bulkTimes<-bulkTimes[sapply(bulkTimes,function(xx)any(!dat$bulk&dat$patTime==xx))]
+outside<-sapply(bulkTimes,function(xx,var='beta'){
+  thisDat<-dat[dat$patTime==xx,]
+  r<-range(thisDat[!thisDat$bulk,var],na.rm=TRUE)
+  s<-sd(log(thisDat[!thisDat$bulk,var]),na.rm=TRUE)
+  m<-mean(log(thisDat[!thisDat$bulk,var]),na.rm=TRUE)
+  thisDat[thisDat$bulk,var]<r[1]|thisDat[thisDat$bulk,var]>r[2]
+  #table(c(TRUE,FALSE,thisDat[thisDat$bulk,var]<r[1]|thisDat[thisDat$bulk,var]>r[2]))-1
+  #max(abs(thisDat[thisDat$bulk,var]-m)/s)
+  #abs(log(thisDat[thisDat$bulk,var])-m)/s
+  #pt(abs(log(thisDat[thisDat$bulk,var])-m)/s,sum(!thisDat$bulk)-1)
+  #t.test(log(thisDat[!thisDat$bulk,var]),log(thisDat[thisDat$bulk,var]),var.equal=TRUE)$p.value
+  2^abs(log2(thisDat[thisDat$bulk,var]/exp(m)))
+})
+
+summary(lm(I(log(ic50))~patTime+bulk,dat[dat$patTime %in% bulkTimes,]))
+summary(lm(I(log(beta))~patTime+bulk,dat[dat$patTime %in% bulkTimes,]))
+zz<-withAs(xx=dat[dat$patTime %in% bulkTimes,],tapply(log(xx$beta),list(xx$patTime,xx$bulk),mean,na.rm=TRUE))
+cor.test(zz[,1],zz[,2])
+
