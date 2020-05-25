@@ -78,7 +78,7 @@ calcIc50s<-function(dilutes,concAlpha){
   return(out)
 }
 
-readIfns<-function(file,exclude=1,firstCol=3,nameCol=firstCol-1,ifnCol=0,dilCol=0,minRows=10){
+readIfns<-function(file,exclude=1,firstCol=3,nameCol=firstCol-1,ifnCol=0,dilCol=0,minRows=10,maxRows=40){
   wb <- loadWorkbook(file)
   counter<-0
   ic50Curves<-lapply(getSheets(wb),function(sheet){
@@ -88,7 +88,7 @@ readIfns<-function(file,exclude=1,firstCol=3,nameCol=firstCol-1,ifnCol=0,dilCol=
     #can get weird error otherwise
     #rows<-lapply(1:40,function(xx)tryCatch(getCells(getRows(sheet)[xx])[[1]],error=function(e)return(NULL)))
     if(length(getRows(sheet))==0)return(NULL)
-    rows<-getCells(getRows(sheet,1:40),1:50,simplify=FALSE)
+    rows<-getCells(getRows(sheet,1:maxRows),1:50,simplify=FALSE)
     vals<-lapply(rows,function(row){
       tmp<-sapply(row,function(xx)ifelse(is.null(xx),NA,getCellValue(xx)))
       out<-rep(NA,50)
@@ -100,13 +100,16 @@ readIfns<-function(file,exclude=1,firstCol=3,nameCol=firstCol-1,ifnCol=0,dilCol=
     #assuming col 3, first row contains 1
     firstRow<-min(c(Inf,which(!is.na(sapply(vals[1:10],'[[',firstCol))&sapply(vals[1:10],'[[',firstCol)=='1')))+1
     if(firstRow==Inf){message('  Not found');return(NULL)}
-    lastRow<-firstRow+min(c(Inf,which(sapply(vals[firstRow:40],function(xx)is.null(xx)||all(is.na(xx[firstCol+0:5])|is.null(xx[firstCol+0:5]))))))-1-1
+    lastRow<-firstRow+min(c(Inf,which(sapply(vals[firstRow:maxRows],function(xx)is.null(xx)||all(is.na(xx[firstCol+0:5])|is.null(xx[firstCol+0:5]))))))-1-1
     if(lastRow==Inf)return(NULL)
     #if((lastRow-firstRow+1) %%2 !=0)warning('Number of rows not a multiple of 2 on sheet ',counter,' of ',file)
-    dat<-as.data.frame(apply(do.call(rbind,lapply(vals[firstRow:lastRow],function(zz)zz[firstCol+0:19])),2,function(xx){as.numeric(ifelse(xx==''|is.na(xx)|grepl('\\?\\?',xx),NA,sub('[><]','',xx)))}),stringsAsFactors=FALSE)
+    dat<-as.data.frame(do.call(rbind,lapply(vals[firstRow:lastRow],function(zz){
+          xx<-zz[firstCol+0:19]
+          return(as.numeric(ifelse(xx==''|is.na(xx)|grepl('\\?\\?',xx),NA,sub('[><]','',xx))))
+      })),stringsAsFactors=FALSE)
     dat$sample<-fillDown(sapply(vals[firstRow:lastRow],'[[',nameCol))
-    dat$ifn<-if(ifnCol==0)NA else fillDown(sapply(vals[firstRow:lastRow],'[[',ifnCol),errorIfFirstEmpty=FALSE)
-    dat$dil<-if(dilCol==0)NA else fillDown(sapply(vals[firstRow:lastRow],'[[',dilCol),errorIfFirstEmpty=FALSE)
+    dat$ifn<-if(ifnCol==0)NA else fillDown(sapply(vals[(firstRow):lastRow],'[[',ifnCol),errorIfFirstEmpty=FALSE)
+    dat$dil<-if(dilCol==0)NA else fillDown(sapply(vals[(firstRow-1):lastRow],'[[',dilCol),errorIfFirstEmpty=FALSE)[-1]
     return(dat)
   })
   names(ic50Curves)<-names(getSheets(wb))
@@ -119,7 +122,7 @@ readIfns<-function(file,exclude=1,firstCol=3,nameCol=firstCol-1,ifnCol=0,dilCol=
 #assuming 
 #bio#1-tech#1 bio#1-tech#2
 #bio#2-tech#1 bio#2-tech#2
-plotIfn<-function(concAlpha,p24s,main='',xlab='',ylims=range(p24s),log='xy',scaleMax=FALSE,findVresIc50Func=findVresIc50,showVres=TRUE,showMax=FALSE,showLegend=FALSE,showPercent=grepl('y',log),ylab='p24 concentration (pg/ml)'){
+plotIfn<-function(concAlpha,p24s,main='',xlab='',ylims=range(p24s),log='xy',scaleMax=FALSE,findVresIc50Func=findVresIc50,showVres=TRUE,showMax=FALSE,showLegend=FALSE,showPercent=grepl('y',log),ylab='p24 concentration (pg/ml)',showFit=TRUE){
   origConcs<-concs<-rep(concAlpha,each=ncol(p24s)/length(concAlpha)*nrow(p24s))
   if(scaleMax){
     p24s<-p24s/unlist(p24s[,1:2])
@@ -157,7 +160,7 @@ plotIfn<-function(concAlpha,p24s,main='',xlab='',ylims=range(p24s),log='xy',scal
   }else{
     fakeConc<-10^seq(-10,10,.001)
     fitLine<-fitFunc(fit,fakeConc)
-    lines(fakeConc,fitLine/mean(maxs),col='#00000066',lwd=3)
+    if(showFit)lines(fakeConc,fitLine/mean(maxs),col='#00000066',lwd=3)
   }
   if(scaleMax)title(ylab='Proportion maximum p24',mgp=c(2,1,0))
   else title(ylab=ylab,mgp=c(ifelse(grepl('y',log),2.25,2.9),1,0))
@@ -205,8 +208,8 @@ plotIfn<-function(concAlpha,p24s,main='',xlab='',ylims=range(p24s),log='xy',scal
 condenseReps<-function(xx){
   do.call(cbind,lapply(seq(1,ncol(xx),2),function(ii)apply(xx[,ii+0:1,drop=FALSE],1,mean,na.rm=TRUE)))
 }
-plotIfns<-function(dilutes,concAlpha,xlab='',condenseTechs=TRUE,log='xy',multiple=1,showMain=TRUE,ylims=range(dilutes[,1:nCol],na.rm=TRUE),...){
-  nCol<-length(concAlpha)*2
+plotIfns<-function(dilutes,concAlpha,xlab='',condenseTechs=TRUE,log='xy',multiple=1,showMain=TRUE,ylims=range(dilutes[,1:nCol],na.rm=TRUE),nRep=2,...){
+  nCol<-length(concAlpha)*nRep
   dilutes[,1:nCol]<-dilutes[,1:nCol]*multiple
   par(mar=c(3,3.8,1,3))
   fits<-list()
@@ -247,6 +250,7 @@ calculateBasicIc50<-function(concs,p24s,vocal=FALSE,means=condenseReps(p24s)){
   ic50s<-apply(props,1,function(xx){
     id<-min(c(Inf,which(xx<.5)))
     if(id==Inf)return(NA)
+    if(id==1)return(NA)
     if(any(concs[id+-1:0]==0))return(NA)
     GROWTH(xx[id+-1:0],concs[id+-1:0],.5)
   })
@@ -311,19 +315,19 @@ plotIfnStacked<-function(conc,p24,bioRep=rep(1,length(p24)),techRep=rep(1,length
   return(c(fit[3],fifty))
 }
 
-read6ConcIfns<-function(file,exclude=1,firstCol=3,nameCol=firstCol-1,ifnCol=0,dilCol=0,minRows=8){
-  wb <- loadWorkbook(file)
+read6ConcIfns<-function(file,exclude=1,firstCol=3,nameCol=firstCol-1,ifnCol=0,dilCol=0,minRows=8,nCol=24){
+  wb <- xlsx::loadWorkbook(file)
   counter<-0
-  ic50Curves<-lapply(getSheets(wb),function(sheet){
+  ic50Curves<-lapply(xlsx::getSheets(wb),function(sheet){
     counter<<-counter+1
     if(counter %in% exclude)return(NULL)
     message(' Sheet ',counter)
     #can get weird error otherwise
     #rows<-lapply(1:40,function(xx)tryCatch(getCells(getRows(sheet)[xx])[[1]],error=function(e)return(NULL)))
-    if(length(getRows(sheet))==0)return(NULL)
-    rows<-getCells(getRows(sheet,1:40),1:50,simplify=FALSE)
+    if(length(xlsx::getRows(sheet))==0)return(NULL)
+    rows<-xlsx::getCells(xlsx::getRows(sheet,1:40),1:50,simplify=FALSE)
     vals<-lapply(rows,function(row){
-      tmp<-sapply(row,function(xx)ifelse(is.null(xx),NA,getCellValue(xx)))
+      tmp<-sapply(row,function(xx)ifelse(is.null(xx),NA,xlsx::getCellValue(xx)))
       out<-rep(NA,50)
       names(out)<-1:50
       out[names(tmp)[names(tmp)!='']]<-tmp[names(tmp)!='']
@@ -336,13 +340,13 @@ read6ConcIfns<-function(file,exclude=1,firstCol=3,nameCol=firstCol-1,ifnCol=0,di
     lastRow<-firstRow+min(c(Inf,which(sapply(vals[firstRow:40],function(xx)is.null(xx)||all(is.na(xx[firstCol+0:5])|is.null(xx[firstCol+0:5]))))))-1-1
     if(lastRow==Inf)return(NULL)
     #if((lastRow-firstRow+1) %%2 !=0)warning('Number of rows not a multiple of 2 on sheet ',counter,' of ',file)
-    dat<-as.data.frame(apply(do.call(rbind,lapply(vals[firstRow:lastRow],function(zz)zz[firstCol+0:23])),2,function(xx){as.numeric(ifelse(xx==''|is.na(xx)|grepl('\\?\\?',xx),NA,sub('[><]','',xx)))}),stringsAsFactors=FALSE)
+    dat<-as.data.frame(apply(do.call(rbind,lapply(vals[firstRow:lastRow],function(zz)zz[firstCol+0:(nCol-1)])),2,function(xx){as.numeric(ifelse(xx==''|is.na(xx)|grepl('\\?\\?',xx),NA,sub('[><]','',xx)))}),stringsAsFactors=FALSE)
     dat$sample<-fillDown(sapply(vals[firstRow:lastRow],'[[',nameCol))
     if(ifnCol!=0)dat$ifn<-fillDown(sapply(vals[firstRow:lastRow],'[[',ifnCol),errorIfFirstEmpty=FALSE)
     if(dilCol!=0)dat$dilution<-fillDown(sapply(vals[firstRow:lastRow],'[[',dilCol),errorIfFirstEmpty=FALSE)
     return(dat)
   })
-  names(ic50Curves)<-names(getSheets(wb))
+  names(ic50Curves)<-names(xlsx::getSheets(wb))
   dilutes<-do.call(rbind,ic50Curves)
   dilutes$sheet<-rep(names(ic50Curves),sapply(ic50Curves,function(xx)ifelse(is.null(xx),0,nrow(xx))))
   dilutes$sample<-sprintf('%s (%s)',dilutes$sample,dilutes$sheet)
@@ -497,4 +501,22 @@ plotCondenseIfn<-function(dat,ic50,ylab,showLegend=TRUE,logY=TRUE){
     if(counter==9&showLegend)legend(par('usr')[1]-diff(par('usr')[1:2])*.3,10^(par('usr')[3]-diff(par('usr')[3:4])*.35),c('Quadratic regression','95% confidence interval','95% prediction interval','Limiting dilution isolate','Bulk isolate'),col=c(patCols[1],NA,NA,'black','black'),pt.bg=c(NA,patCols2[1],patCols3[1],patCols[1],patCols[1]),lty=c(1,NA,NA,NA,NA),pch=c(NA,22,22,21,22),border=NA,pt.cex=c(3.2,3.2,3.2,1.4,1.4),cex=1.1,xjust=0,yjust=1,xpd=NA)
     counter<-counter+1
   }
+}
+
+convert96To48<-function(wells){
+  row<-sub('[0-9]+','',wells)
+  col<-sub('[A-Z]+','',wells)
+  rowConvert<-structure(8:1,.Names=LETTERS[1:8])
+  colConvert<-structure(rep(LETTERS[1:6],2),.Names=1:12)
+  plateConvert<-structure(rep(1:2,each=6),.Names=1:12)
+  data.frame('row'=colConvert[col],'col'=rowConvert[row],'plate'=plateConvert[col],stringsAsFactors=FALSE,row.names=c())
+}
+
+convert96To24<-function(wells){
+  row<-sub('[0-9]+','',wells)
+  col<-sub('[A-Z]+','',wells)
+  colConvert<-structure(rep(1:6,2),.Names=1:12)
+  rowConvert<-structure(rep(LETTERS[1:4],2),.Names=LETTERS[1:8])
+  plateConvert<-structure(c(rep(rep(c(1,3),each=4),6),rep(rep(c(2,4),each=4),6)),.Names=sprintf('%s%d',rep(LETTERS[1:8],12),rep(1:12,each=8)))
+  data.frame('row'=rowConvert[row],'col'=colConvert[col],'plate'=plateConvert[wells],stringsAsFactors=FALSE,row.names=c())
 }
