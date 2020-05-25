@@ -296,3 +296,140 @@ pdf('out/macIc50_20200306_ic50.pdf',width=15,height=6)
     }
 dev.off()
 
+tzm<-read.csv('out/tzmblIc50_20200330.csv',stringsAsFactors=FALSE)
+#tzm[,c(1,3,7,9)]<-tzm[,c(3,1,9,7)]
+tzm<-tzm[!grepl('^mac',tzm$plate),]
+tzm<-tzm[order(tzm$plate,tzm$row),]
+tzm[,1:12]<-tzm[,12:1]
+vir<-read.csv('ice/2020-03-30-ic50Virus.csv')
+rownames(vir)<-paste(vir$plate,vir$row)
+tzm$virus<-vir[paste(tzm$plate,tzm$row),'virus']
+tzm$virPlate<-paste(tzm$plate,tzm$row,tzm$virus)
+tzm[,c('ic50','vres','max')]<-t(apply(tzm[,1:12],1,function(xx){yy<-convertIfn6(matrix(xx,ncol=12));calculateBasicIc50(concBeta6,yy,means=yy)})[c(1,3,4),])
+tzm[tzm$vres>40&is.na(tzm$ic50),'ic50']<-max(concBeta6)
+tzmConvert<-convertIfn6(tzm[,1:12])
+tzmConvert$sample<-rep(sprintf('%s',tzm$virus),each=2)
+pdf('out/ic50_20200330Tzmbl.pdf',width=6,height=6)
+        #thisDat<-tzmStack[tzmStack$virus==ii&tzmStack$day==day,,drop=FALSE][jj,]
+        #thisDat$sample<-sprintf('%s %s d%s',thisDat$virus,thisDat$origPlate,thisDat$day)
+        #plotIfns(thisDat,concBetaMac,'IFNb concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=function(concs,p24s)calculateBasicIc50(concs,p24s,means=p24s),nRep=1,ylims=range(tzmStack[,1:6]),ylab='IU/ul')
+for(ii in unique(tzm$virPlate)){
+  thisDat<-convertIfn6(tzm[tzm$virPlate==ii,1:12,drop=FALSE])
+  thisDat$sample<-ii
+  #thisDat[,1:6]<-t(apply(thisDat[,1:6],1,function(xx)xx/xx[1]))
+  plotIfns(thisDat,concBeta6,'IFNb concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=findVresIc50,nRep=1,ylab='IU/ul')
+}
+dev.off()
+#looks like garbage
+
+
+p27<-read.csv('macaque/03.19.2020 - IC50 Beta Mac.Isol. - Macaque CD4 cells. csv .csv',stringsAsFactors=FALSE,check.names=FALSE)
+p27<-p27[,!grepl('Standard',colnames(p27))]
+p27[,grep('UT|untreat',colnames(p27))] #"not so good" cells sucked. ignoring
+p27Cols<-colnames(p27)[grep('IFN|untreat',colnames(p27))]
+p27$dil<-as.numeric(sub('1 to ','',p27$dilution))
+p27Stack<-data.frame(
+  'virus'=rep(p27$Virus,length(p27Cols)),
+  'plate'=rep(p27$Plate,length(p27Cols)),
+  'ifn'=rep(p27Cols,each=nrow(p27)),
+  'col'=rep(1:length(p27Cols),each=nrow(p27)),
+  'dil'=rep(p27$dil,length(p27Cols)),
+  'orig'=unlist(p27[,p27Cols]),
+  stringsAsFactors=FALSE
+)
+p27Stack<-p27Stack[order(p27Stack$virus,p27Stack$plate,p27Stack$col,p27Stack$dil),]
+p27Stack$p27<-as.numeric(sub('[><]','',p27Stack$orig))
+p27Stack$p27Convert<-p27Stack$p27*(p27Stack$dil)#*(1+p27Stack$dil)
+tmp<-paste(p27Stack$virus,p27Stack$ifn)
+if(any(tmp[seq(1,length(tmp),2)]!=tmp[seq(2,length(tmp),2)]))stop('Mismatch in p27')
+if(any(round(p27Stack[seq(1,length(tmp),2),'dil'],1)!=round(p27Stack[seq(2,length(tmp),2),'dil']/10,1)))stop('Mismatch in p27')
+p27Merge<-merge(p27Stack[p27Stack$dil==2.5,],p27Stack[p27Stack$dil==25,],all.x=TRUE,all.y=TRUE,by=c('virus','plate','col','ifn'),suffixes=c('_2.5','_25'))
+if(nrow(p27Merge)!=nrow(p27Stack)/2)stop('Merge problem')
+p27Merge[grepl('SL92b',p27Merge$virus),'virus']<-apply(p27Merge[grepl('SL92b',p27Merge$virus),c('virus','plate')],1,paste,collapse=' ')
+p27Merge$p27Best<-apply(cbind(p27Merge[,c('p27_2.5','p27_25','p27Convert_2.5','p27Convert_25')]),1,function(xx){
+  isHigh<-xx[1:2]>5000
+  isLow<-xx[1:2]<200
+  if(all(isLow))return(xx[3])
+  if(all(isHigh)){warning('Both high');return(xx[4])}
+  if(all(isHigh|isLow)){warning('Both high/low');return(mean(xx[3:4]))}
+  return(mean(xx[3:4][!isHigh&!isLow]))
+})
+
+virusIfn<-tapply(p27Merge$p27Best,p27Merge[,c('virus','ifn')],c)
+virusIfn[virusIfn<50]<-50
+simpleNames<-sub('\\.[0-9]+$','',colnames(virusIfn))
+conc<-as.numeric(ifelse(grepl('untreated',colnames(virusIfn)),0,sub(',','',sub('pg.*','',colnames(virusIfn)))))
+isAlpha<-grepl('IFNa2',colnames(virusIfn))
+colPos<-structure(1:length(unique(simpleNames)),.Names=unique(simpleNames[order(isAlpha,conc)]))
+pdf('out/macIc50_20200330.pdf')
+  for(ii in 1:nrow(virusIfn)){
+    plot(1,1,type='n',xlab='',xaxt='n',log='y',yaxt='n',xlim=range(colPos)+c(-.5,.5),ylim=range(virusIfn),main=rownames(virusIfn)[ii],ylab='p27 concentration',xaxs='i')
+    logAxis(las=1)
+    points(colPos[simpleNames],virusIfn[ii,],pch=21,cex=1.2,bg='#00000033')
+    axis(1,colPos,sub(' ','\n',names(colPos)),padj=1,mgp=c(3,.2,0))
+    abline(v=colPos[c(1,length(colPos))]+c(.5,-.5),lty=1,col='#00000066')
+    axis(4,exp(mean(log(virusIfn[ii,conc==0])))/c(1,2),c('UT','50%'),las=1,mgp=c(3,.2,0),tcl=0)
+    abline(h=exp(mean(log(virusIfn[ii,conc==0])))/c(1,2),lty=2)
+  }
+dev.off()
+
+pdf('out/macDilCompare.pdf')
+#plot(p27Stack[p27Stack$dil==2.5,'p27Convert'],p27Stack[p27Stack$dil==25,'p27Convert'],xlab='2.5x dilution p27',ylab='25x dilution p27')
+#abline(0,1)
+plot(p27Merge[,'p27Convert_2.5'],p27Merge[,'p27Convert_25'],xlab='2.5x dilution p27',ylab='25x dilution p27',main='1 to 2.5 = 3.5x')
+abline(0,1)
+#plot(p27Merge[,'p27Convert_2.5']/3.5*2.5,p27Merge[,'p27Convert_25']/26*25,xlab='2.5x dilution p27',ylab='25x dilution p27',main='1 to 2.5 = 2.5x')
+#abline(0,1)
+dev.off()
+
+
+
+virusIfn<-tapply(p27Merge$p27Best,list(p27Merge$virus,sub('\\.[0-9]+$','',p27Merge$ifn)),function(xx)exp(mean(log(xx))))
+virusIfn[virusIfn<50]<-50
+virusIfn<-virusIfn[,order(colnames(virusIfn)!='untreated',!grepl('IFNb',colnames(virusIfn)),as.numeric(gsub('[a-zA-Z, ]+','',colnames(virusIfn))))]
+virusIfn<-virusIfn[virusIfn[,1]>50,]
+virusIfn<-virusIfn[!grepl('4x less',rownames(virusIfn)),]
+rm<-data.frame('virus'=rownames(virusIfn),stringsAsFactors=FALSE)
+rownames(rm)<-rm$virus
+rm$control<-!grepl('^RM',rm$virus)
+rm$day<-as.numeric(sub('d','',ifelse(rm$control,NA,sapply(strsplit(rm$virus,'\\.'),'[',2))))
+rm$monkey<-ifelse(rm$control,NA,sapply(strsplit(rm$virus,'\\.'),'[',1))
+rm$source<-ifelse(rm$control,'control',sapply(strsplit(rm$virus,'\\.'),'[',3))
+rm$short<-sub('\\.375[A-Z]','',sub('SHIV\\.A?\\.?','',sub(' \\(human CD4 viral stock\\)','',rm$virus)))
+vir<-unique(read.csv('ice/2020-02-01_plateIds.csv',stringsAsFactors=FALSE)[,c('virus','animal')])
+vir$virus[vir$virus=='MT145.Q171K']<-'MT145'
+rownames(vir)<-vir$animal
+rm$input<-vir[rm$monkey,'virus']
+rm$input[grepl('BG505',rm$virus)]<-'BG505'
+rm$input[grepl('1176',rm$virus)]<-'1176'
+rm$input[is.na(rm$input)]<-sub(' \\(.*','',rm$virus[is.na(rm$input)])
+rm$note<-trimws(sub('^[^ ]+','',rm$short))
+virusIfn<-virusIfn[order(rm$input,!rm$control,rm$monkey,rm$day),]
+rm<-rm[rownames(virusIfn),]
+rm$label<-paste(ifelse(is.na(rm$day),'',rm$day),ifelse(is.na(rm$monkey),'',rm$monkey),rm$input,sep='\n')
+rm$pos<-as.numeric(factor(paste(rm$monkey,rm$day,rm$input),levels=unique(paste(rm$monkey,rm$day,rm$input))))
+
+
+
+#sourceCol<-c('PBMC'=NA,'PLAS'='#FF000099','control'=NA)
+sourceCol<-c('PBMC'='#00000033','PLAS'='#FF000033','control'='#00000033')
+#sourceCex<-c('PBMC'=1,'PLAS'=2,'control'=1)
+sourceCex<-c('PBMC'=1.5,'PLAS'=1.5,'control'=1.5)
+pdf('out/macIfns_20200406.pdf',width=18,height=6,useDingbats=FALSE)
+par(mfrow=c(2,3)) 
+par(mar=c(5,4,1,1))
+for(ii in 2:ncol(virusIfn)){
+  thisVres<-virusIfn[,ii]/virusIfn[,1]
+  plot(rm$pos,thisVres,xaxt='n',xlab='',ylab='Proportion of untreated p27',main=colnames(virusIfn)[ii],las=1,xlim=range(rm$pos)+c(-.5,.5),ylim=c(0,2.5),bg=sourceCol[rm$source],pch=21,cex=sourceCex[rm$source])
+  sapply(which(!duplicated(rm$pos)),function(xx)axis(1,rm$pos[xx],rm$label[xx],padj=1,mgp=c(3,.1,0)))
+  mtext('Day:',1,line=.7,at=dnar::convertLineToUser(-1.25,2),cex=.8,adj=1)
+  mtext('Animal:',1,line=1.7,at=dnar::convertLineToUser(-1.25,2),cex=.8,adj=1)
+  mtext('Virus:',1,line=2.7,at=dnar::convertLineToUser(-1.25,2),cex=.8,adj=1)
+  abline(h=1,lty=2)
+  abline(v=c(max(rm[rm$input=='BG505','pos']),max(rm[rm$input=='1176','pos']))+.5,lty=1)
+}
+dev.off()
+
+
+
+
