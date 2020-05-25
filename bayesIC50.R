@@ -43,6 +43,7 @@ ic50CodeWithFast<-'
     real nadirChangeMean;
     real<lower=0> nadirChangeSD;
     real fastChangeMean;
+    real postArtBeta;
   }
   transformed parameters{
     vector[nPatient] acute;
@@ -65,7 +66,7 @@ ic50CodeWithFast<-'
       }
       if(hasArt[ii]){
         if(daysBeforeArt[ii]<0){
-          expectedIC50[ii]=expectedIC50[ii]+riseChange[artIds[ii]];
+          expectedIC50[ii]=expectedIC50[ii]+riseChange[artIds[ii]]+postArtBeta*daysBeforeArt[ii];
         }else{
           if(daysBeforeArt[ii]<exp(riseTime[artIds[ii]]))expectedIC50[ii]=expectedIC50[ii]+riseChange[artIds[ii]]*(1-daysBeforeArt[ii]/exp(riseTime[artIds[ii]]));
         }
@@ -96,7 +97,8 @@ ic50CodeWithFast<-'
 
 #ic50Mod <- stan_model(model_code = ic50Code)
 
-bayesIC50<-function(mod,ic50,time,timePreArt,patient,chains=50,fastProgressors=c(),ic50Code,...){
+bayesIC50<-function(mod,ic50,time,timePreArt,patient,chains=50,nIter=30000,fastProgressors=c(),ic50Code,...){
+  #treating all postART as one group (currently only WEAU)
   patientId<-structure(1:length(unique(patient)),.Names=sort(unique(patient)))
   artId<-structure(1:length(unique(patient[!is.na(timePreArt)])),.Names=sort(unique(patient[!is.na(timePreArt)])))
   artStart<-tapply(time+timePreArt,patient,unique)
@@ -122,9 +124,12 @@ bayesIC50<-function(mod,ic50,time,timePreArt,patient,chains=50,fastProgressors=c
     hasArt=!is.na(timePreArt),
     isFast=names(patientId) %in% fastProgressors
   )
-  fit <- sampling(ic50Mod, data = dat, iter=30000, chains=chains,thin=2,control=list(adapt_delta=.99,max_treedepth=15),...)
+  fit <- sampling(ic50Mod, data = dat, iter=nIter, chains=chains,thin=2,control=list(adapt_delta=.99,max_treedepth=15),...)
   return(list('fit'=fit,pats=patientId,arts=artId,code=filledCode,artStart=artStart,sample=sampleId,dat=dat))
 }
+#fit<-withAs(xx=dat[!is.na(dat$ic50)&!dat$qvoa,],bayesIC50(ic50Mod,xx$ic50,xx$time,xx$timeBeforeArt,xx$pat,ic50Code=ic50CodeWithFast,fastProgressors=c('MM15','WEAU'),nIter=10000))
+withAs(xx=dat[!is.na(dat$ic50)&!dat$qvoa,],table(is.na(xx$CD4),xx$pat))
+withAs(xx=dat[!is.na(dat$ic50)&!dat$qvoa,],table(is.na(xx$vl),xx$pat))
 #fit<-withAs(xx=dat[!is.na(dat$ic50)&!dat$qvoa,],bayesIC50(ic50Mod,xx$ic50,xx$time,xx$timeBeforeArt,xx$pat,ic50Code=ic50CodeWithFast,fastProgressors=c('MM15','WEAU')))
 #sims<-calcSims(fit,dat)
 #pdf('test.pdf',width=4,height=8)
