@@ -49,10 +49,12 @@ ic50FitsBeta<-calcIc50s(dilutesBeta,concBeta)
 
 
 oldFiles<-list.files('ic50','xlsx?$',full.names=TRUE)
-oldDilutes<-lapply(oldFiles,function(xx){message(xx);readIfns(xx)})
+oldDilutes<-lapply(oldFiles,function(xx){message(xx);readIfns(xx,dilCol=1)})
 names(oldDilutes)<-basename(oldFiles)
 oldDilutes<-mapply(function(xx,yy){xx$sample<-sprintf('%s (%s)',xx$sample,yy);xx},oldDilutes,names(oldDilutes),SIMPLIFY=FALSE)
 oldAll<-do.call(rbind,oldDilutes)
+oldAll$dil<-sub('.*\\(dil = ([0-9:]+)\\)','\\1',oldAll$dil)
+oldAll$file<-rep(names(oldDilutes),sapply(oldDilutes,nrow))
 oldAll$id<-sub('[ _][Bb]ulk','.bulk',sub('19P4B5','19.P4B5',sub(' .*$','',sub('Bulk- ([^ ]+) ','\\1.bulk ',sub('(UK|MM) ','\\1',sub(' - ','.',oldAll$sample))))))
 #oldAll$id[grepl('^[0-9]',oldAll$id)]<-sprintf('UK%s',oldAll$id[grepl('^[0-9]',oldAll$id)])
 oldAll$id<-sub('[.-]P([0-9])','.\\1',convertUKMM(oldAll$id,mmLookup))
@@ -83,6 +85,16 @@ if(any(oldAll$isAlpha+oldAll$isBeta!=1))stop('Unclear if sample is alpha or beta
 oldAll$marvinIc50<-ifelse(oldAll$isAlpha,dat[oldAll$row,'ic50'],dat[oldAll$row,'beta'])
 oldAll$marvinVres<-ifelse(oldAll$isAlpha,dat[oldAll$row,'vres'],dat[oldAll$row,'betaVres'])
 oldAll$newId<-dat[oldAll$row,'id']
+
+write.csv(oldAll[grepl('and|amd|   |x',oldAll$dil)&!is.na(oldAll$dil),c('V1','V2','file','sample','dil')],'out/dilProblems.csv',row.names=FALSE)
+fixes<-read.csv('data/dilProblems.csv',stringsAsFactors=FALSE)
+fixes<-unique(fixes[,-1:-2])
+rownames(fixes)<-fixes$sample
+oldAll[grepl('and|amd|   |x',oldAll$dil)&!is.na(oldAll$dil),'dil']<-fixes[oldAll[grepl('and|amd|   |x',oldAll$dil)&!is.na(oldAll$dil),'sample'],'dil']
+tmp<-unique(oldAll[grepl('and|amd|   |x',oldAll$dil)|is.na(oldAll$dil),c('file','sample','dil')])
+tmp$dil<-''
+write.csv(tmp,'out/dilProblems2.csv',row.names=FALSE)
+oldAll$finalDil<-as.numeric(trimws(sub('1 to ?|1:','',oldAll$dil)))
 
 oldAlpha<-oldAll[oldAll$isAlpha,]
 oldBeta<-oldAll[oldAll$isBeta,]
@@ -204,8 +216,9 @@ if(FALSE){
 
 
 oldBasics<-rbind(
-  as.data.frame(do.call(rbind, by(oldAll[oldAll$isAlpha,],oldAll$sample[oldAll$isAlpha],function(xx){calcBasicIc50(concAlpha,xx[,1:20,drop=FALSE])}))), as.data.frame(do.call(rbind, by(oldAll[oldAll$isBeta,],oldAll$sample[oldAll$isBeta],function(xx){calcBasicIc50(concBeta,xx[,1:20,drop=FALSE])})))
+  as.data.frame(do.call(rbind, by(oldAll[oldAll$isAlpha,],oldAll$sample[oldAll$isAlpha],function(xx){calcBasicIc50(concAlpha,xx[,1:20,drop=FALSE],dil=if(any(is.na(xx$finalDil)))-1 else xx$finalDil)}))), as.data.frame(do.call(rbind, by(oldAll[oldAll$isBeta,],oldAll$sample[oldAll$isBeta],function(xx){calcBasicIc50(concBeta,xx[,1:20,drop=FALSE],dil=if(any(is.na(xx$finalDil)))-1 else xx$finalDil)})))
 )
+oldBasics[oldBasics$repCap<0,'repCap']<-NA
 oldBasics$marvinIc50<-sapply(rownames(oldBasics),function(xx)oldAll[oldAll$sample==xx,'marvinIc50'][1])
 oldBasics$marvinVres<-sapply(rownames(oldBasics),function(xx)oldAll[oldAll$sample==xx,'marvinVres'][1])
 oldBasics$newId<-sapply(rownames(oldBasics),function(xx)oldAll[oldAll$sample==xx,'newId'][1])
@@ -229,8 +242,13 @@ oldBasics[!is.na(newVres),'marvinVres']<-newVres[!is.na(newVres)]
 oldBasics$ic50Disagree<-(abs(log2(oldBasics$marvinIc50/oldBasics$ic50))>1&apply(!is.na(oldBasics[,c('ic50','marvinIc50')]),1,all))|(is.na(oldBasics$ic50)!=is.na(oldBasics$marvinIc50))
 oldBasics$vresDisagree<-(abs(oldBasics$marvinVres-oldBasics$vres)>1&apply(!is.na(oldBasics[,c('vres','marvinVres')]),1,all))|(is.na(oldBasics$marvinVres)!=is.na(oldBasics$vres))
 oldBasics$notFound<-is.na(oldBasics$newId)
-problems<-oldBasics[oldBasics$ic50Disagree|oldBasics$vresDisagree|oldBasics$notFound,]
+probs<-oldBasics$ic50Disagree|oldBasics$vresDisagree|oldBasics$notFound
+problems<-oldBasics[probs,]
 withAs(zz=problems,write.csv(zz[order(is.na(zz$newId),is.na(zz$marvinVres),is.na(zz$ic50)),],'out/oldIc50Check.csv'))
+tmp<-tapply(oldBasics[!probs,'repCap'],oldBasics[!probs,'newId'],c)
+tmp2<-tapply(rownames(oldBasics[!probs,]),oldBasics[!probs,'newId'],c)
+out<-data.frame('id'=rep(names(tmp),sapply(tmp,'length')),'repCap'=unlist(tmp),'sample'=unlist(tmp2),stringsAsFactors=FALSE)
+write.csv(out,'out/collectedRepCaps.csv',row.names=FALSE)
 
 
 newP24<-readIfns('data/p24 +vertical std. 5.31.2018 controls  test (plate 1 and plate 2_ alpha2).xls',exclude=0,firstCol=4,nameCol=2,ifnCol=1)
@@ -782,4 +800,70 @@ pdf('out/fred_20200224_ic50.pdf',width=6,height=6)
   plotIfns(fredConvert[fredConvert$isBeta,],concBeta6,'IFNb concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
 dev.off()
 
+manRaw<-read6ConcIfns('data/IC50 - A08 and Manolis - 03.23.2020.xlsx',dilCol=1)
+manRaw$sample<-trimws(sub('\\(Alpha\\)|\\(Beta\\)','',manRaw$sample))
+manRaw<-manRaw[!grepl('Standard',manRaw$sample),]
+manRaw$dilution<-as.numeric(sub('1:','',manRaw$dilution))
+manRaw$isBeta<-grepl('Beta',manRaw$sheet)
+manRaw$sampleIfn<-sprintf('%s %s',manRaw$sample,ifelse(manRaw$isBeta,'IFNa2','IFNb'))
+man<-list(
+  as.data.frame(do.call(rbind, by(manRaw[!manRaw$isBeta,],manRaw$sample[!manRaw$isBeta],function(xx) calcBasicIc50(concAlpha6,convertIfn6(xx[,1:24,drop=FALSE]),dil=as.numeric(xx[,'dilution']))))),
+  as.data.frame(do.call(rbind, by(manRaw[manRaw$isBeta,],manRaw$sample[manRaw$isBeta],function(xx) calcBasicIc50(concBeta6,convertIfn6(xx[,1:24,drop=FALSE]),dil=as.numeric(xx[,'dilution'])))))
+)
+man<-lapply(man,function(xx){xx$sample<-rownames(xx);xx})
+manOut<-merge(man[[1]],man[[2]],by.x='sample',by.y='sample',all.x=TRUE,all.y=TRUE,suffixes=c('.IFNa2','.IFNb'))
+manInfo<-read.csv('out/manolis_allIds_20200330.csv')
+rownames(manInfo)<-manInfo$flaskId
+manOut$flaskId<-sub('.*(M[0-9][0-9]).*','\\1',manOut$sample)
+manOut$flaskId[grepl('MM[0-9][0-9]',manOut$sample)]<-NA
+manOut$pat<-manInfo[manOut$flaskId,'sPat']
+manOut$day<-manInfo[manOut$flaskId,'time']
+write.csv(manOut,'out/man_20200424_ic50.csv',row.names=FALSE)
+pdf('out/manIc50.pdf')
+par(mfrow=c(2,2))
+for(ifn in c('ic50.IFNa2','ic50.IFNb')){
+for(ii in unique(manOut$pat[!is.na(manOut$pat)])){
+  withAs(xx=manOut[manOut$pat==ii&!is.na(manOut$pat),],plot(xx$day,xx[,ifn],ylim=range(manOut[,ifn]),xlim=range(manOut$day[!is.na(manOut$day)]),log='y',yaxt='n',main=ii,ylab=sub('ic50\\.','IC50 ',ifn),pch=21,bg='red',xlab='Days after detectable rebound'))
+  dnar::logAxis(las=1)
+}
+}
+dev.off()
 
+manConvert<-convertIfn6(manRaw[,1:24])
+manConvert$sample<-rep(sprintf('%s',manRaw$sample),each=2)
+manConvert$isBeta<-rep(manRaw$isBeta,each=2)
+pdf('out/man_20200424_ic50.pdf',width=6,height=6)
+  plotIfns(manConvert[!manConvert$isBeta,],concAlpha6,'IFNa concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
+  plotIfns(manConvert[manConvert$isBeta,],concBeta6,'IFNb concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
+dev.off()
+
+a08Raw<-read6ConcIfns('data/p24 04.01.2020 - A08 only.xlsx',dilCol=1,exclude=0,ifnCol=27)
+a08Raw$sample<-trimws(sub('\\(Sheet1\\)','',a08Raw$sample))
+a08Raw<-a08Raw[!grepl('^[OP]$',a08Raw$sample),]
+a08Raw$dilution<-as.numeric(sub('1 to ','',a08Raw$dilution))
+a08Raw$isBeta<-grepl('[Bb]eta',a08Raw$ifn)
+a08Raw$select<-(a08Raw$dilution==20&grepl('1E2|MM33.13',a08Raw$sample))|a08Raw$dilution==100&!grepl('1E2',a08Raw$sample)
+bak<-a08Raw
+a08Raw<-a08Raw[a08Raw$select,]
+
+a08<-list(
+  as.data.frame(do.call(rbind, by(a08Raw[!a08Raw$isBeta,],a08Raw$sample[!a08Raw$isBeta],function(xx) calcBasicIc50(concAlpha6,convertIfn6(xx[,1:24,drop=FALSE]),dil=as.numeric(xx[,'dilution']))))),
+  as.data.frame(do.call(rbind, by(a08Raw[a08Raw$isBeta,],a08Raw$sample[a08Raw$isBeta],function(xx) calcBasicIc50(concBeta6,convertIfn6(xx[,1:24,drop=FALSE]),dil=as.numeric(xx[,'dilution'])))))
+)
+a08<-lapply(a08,function(xx){xx$sample<-rownames(xx);xx})
+a08Out<-merge(a08[[1]],a08[[2]],by.x='sample',by.y='sample',all.x=TRUE,all.y=TRUE,suffixes=c('.IFNa2','.IFNb'))
+write.csv(a08Out,'out/a08_20200424_ic50.csv',row.names=FALSE)
+
+a08Convert<-convertIfn6(a08Raw[,1:24])
+a08Convert$sample<-rep(sprintf('%s',a08Raw$sample),each=2)
+a08Convert$isBeta<-rep(a08Raw$isBeta,each=2)
+pdf('out/a08_20200424_ic50.pdf',width=6,height=6)
+  plotIfns(a08Convert[!a08Convert$isBeta,],concAlpha6,'IFNa concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
+  plotIfns(a08Convert[a08Convert$isBeta,],concBeta6,'IFNb concentration (pg/ml)',condenseTechs=FALSE,findVresIc50=calculateBasicIc50)
+dev.off()
+
+#ic50s<-lapply(c('out/imc_20191105_ic50.csv','out/imc_20191115_ic50.csv'),read.csv,stringsAsFactors=FALSE,row.names=1)
+#for(ii in c('2[PFpf]4','A09r','601','9201','1A5')){
+  #message('#################',ii)
+  #print(lapply(ic50s,function(xx)xx[grep(ii,rownames(xx)),]))
+#}
