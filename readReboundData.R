@@ -1,14 +1,16 @@
 acuteCut<-30
+chronicCut<-300
 
 dat<-read.csv('out/allLongitudinal.csv',stringsAsFactors=FALSE)
-acuteChronicMM<-dat[!dat$qvoa&(dat$time<30|dat$time>=min(dat$time[dat$isYear])),]
+acuteChronicMM<-dat[dat$qvoa|(dat$time<30|dat$time>=chronicCut),]
 acuteChronicMM$study<-'MM'
 acuteChronicMM$virus<-acuteChronicMM$id
 acuteChronicMM$ic50_IFNa2<-acuteChronicMM$ic50
 acuteChronicMM$ic50_IFNb<-acuteChronicMM$beta
-acuteChronicMM$class<-ifelse(acuteChronicMM$time<=acuteCut,'Acute','Chronic')
-acuteChronicMM$displayClass<-ifelse(acuteChronicMM$isNadir,'Nadir',ifelse(acuteChronicMM$isYear,'1 Year',ifelse(acuteChronicMM$isLast,'Last',ifelse(acuteChronicMM$time<=acuteCut,'Acute',NA))))
+acuteChronicMM$class<-ifelse(acuteChronicMM$qvoa,'Outgrowth',ifelse(acuteChronicMM$time<=acuteCut,'Acute','Chronic'))
+acuteChronicMM$displayClass<-ifelse(acuteChronicMM$qvoa,'Outgrowth',ifelse(acuteChronicMM$isNadir,'Nadir',ifelse(acuteChronicMM$isLast,'Last',ifelse(acuteChronicMM$time<=acuteCut,'Acute',NA))))
 acuteChronicMM$virus<-acuteChronicMM$id
+acuteChronicMM$repCap<-acuteChronicMM$infectivity<-acuteChronicMM$p24Release<-NA
 #distinct "patient" for each time point (doesn't work because acute)
 #acuteChronicMM$pat<-acuteChronicMM$sample
 
@@ -16,6 +18,23 @@ acuteChronicMM$virus<-acuteChronicMM$id
 #voaMM$class<-'QVOA'
 #voa$study<-'MM'
 #voa$virus<-voa$id
+
+rebound2<-read.csv('data/Table S4.05.08.2020.csv',stringsAsFactors=FALSE,skip=2)
+rebound2<-rebound2[!is.na(rebound2$Isolate.ID2)&rebound2$Isolate.ID2!='',]
+rebound2<-rebound2[,!apply(is.na(rebound2),2,all)]
+studyLookup<-c('MNU-0628'='RESERVOIR','NCT00051818'='INTERRUPT','NCT02227277'='IFNa2b treatment','NCT02463227'='VRC01','NCT02588586'='3BNC117','NCT02825797'='3BNC117/10-1074')
+rebound2$study<-studyLookup[dnar::fillDown(rebound2$Study.number)]
+rebound2$pat<-sub('\\..*','',rebound2$Isolate.ID2)
+imc<-rebound2[rebound2$Type1=='IMC',]
+rebound2<-rebound2[rebound2$Type1!='IMC',]
+rebound2$displayClass<-rebound2$class<-ifelse(rebound2$Type1=='Rebound','Rebound',ifelse(grepl('Post',rebound2$Type1),'Post-ATI',ifelse(grepl('Pre|week',rebound2$Type1),'Pre-ATI','Outgrowth')))
+rebound2$virus<-rebound2$Isolate.ID2
+rebound2$ic50_IFNa2<-rebound2$IFNa2.IC50..pg.ml.5
+rebound2$ic50_IFNb<-rebound2$IFNb.IC50..pg.ml.5
+rebound2$repCap<-rebound2$Replicative.capacity.........ng.p24.ml.3
+rebound2$infectivity<-rebound2$Infectivity..IU.pg.RT.8
+rebound2$p24Release<-as.numeric(sub('%$','',ifelse(rebound2$p24.Particle.release....9=='',NA,rebound2$p24.Particle.release....9)))/100
+
 
 rebound<-read.csv('data/Data Master 2020_ReboundandQVOA_20200504.csv',stringsAsFactors=FALSE)
 rebound<-rebound[!grepl('_BE$',rebound$ID),]
@@ -32,7 +51,7 @@ pair<-read.csv('rebound/donorRecipient.csv',stringsAsFactors=FALSE)
 pair$class<-ifelse(pair$donor,'Donor','Recipient')
 pair$type<-'CHAVI cohort'
 #pair$label<-sprintf('CHAVI %s',pair$class)
-pair$displayClass<-sprintf('%s %s',ifelse(pair$class=='Donor','Chronic','Acute'),pair$class)
+pair$displayClass<-sprintf('%s %ss',ifelse(pair$class=='Donor','Chronic','Acute'),pair$class)
 pair$ic50_IFNa2<-pair$IFNa2.Pooled.Donor.cells.IC50..pg..ml
 pair$ic50_IFNb<-pair$IFNbeta.Pooled.Donor.cells.IC50..pg.ml
 #pair[,'class']<-c('Recipient'='Acute Recipient','Donor'='Chronic Donor')[pair$class]
@@ -42,16 +61,18 @@ pair[,colnames(dat)[!colnames(dat) %in% colnames(pair)]]<-NA
 pair$virus<-pair$Renamed
 pair$source<-'shilpa'
 pair$study<-'Transmission'
+pair$repCap<-pair$infectivity<-pair$p24Release<-NA
 
 #pat,simpleClass,study,ic50,class
-targetCols<-c('pat','class','study','ic50_IFNa2','ic50_IFNb','displayClass','virus')
-combined<-rbind(acuteChronicMM[,targetCols],rebound[,targetCols],pair[,targetCols])
+targetCols<-c('pat','class','study','ic50_IFNa2','ic50_IFNb','displayClass','virus','repCap','infectivity','p24Release')
+combined<-rbind(acuteChronicMM[,targetCols],rebound2[,targetCols],pair[,targetCols])
 combined$simpleClass<-ifelse(combined$class %in% c('Chronic Donor','Donor','1 Year','Nadir','Last'),'Chronic',combined$class)
 combined$simpleClass[combined$simpleClass=='Recipient']<-'Acute'
 combined$simpleClass[combined$simpleClass=='Pre-ATI']<-'Outgrowth' #may want own class
 #combined$simpleClass[combined$simpleClass=='Pre-ATI']<-'QVOA' #may want own class
 combined$simplePat<-ifelse(combined$simpleClass %in% c('Acute','Chronic','Donor','Recipient'),'',combined$pat)
 combined$label<-ifelse(combined$simplePat=='',combined$displayClass,sprintf('%s%s%s',combined$displayClass,ifelse(combined$simplePat!='',' ',''),combined$simplePat))
+combined$voaVsRebound<-ifelse(combined$class %in% c('Post-ATI','Pre-ATI','Outgrowth'),'Outgrowth',ifelse(combined$class %in% c('Rebound'),'Rebound',NA))
 combined<-combined[!is.na(combined$ic50_IFNb)|!is.na(combined$ic50_IFNa2),]
 
 fastRegex<-'MM15|WEAU'
