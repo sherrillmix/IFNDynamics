@@ -17,6 +17,7 @@ ic50_bp_mar<-'
     real ic50[nVirus];
     int<lower=0,upper=nPatient> patients[nVirus];
     vector<lower=0,upper=1>[nPatient] isFast;
+    vector<lower=0,upper=1>[nPatient] isNon;
     int<lower=0> artIds[nVirus];
     int<lower=0> days[nVirus];
     real weeks[nVirus];
@@ -43,12 +44,13 @@ ic50_bp_mar<-'
     real<lower=0> nadirChangeSD;
     real<lower=0> sigma;
     real fastChangeMean;
+    real nonChange;
     vector[nPatient] cd4BetaRaw;
     real cd4BetaMean[2];
     real<lower=0> cd4BetaSD;
-    vector[nPatient] vlBetaRaw;
-    real vlBetaMean[2];
-    real<lower=0> vlBetaSD;
+    //vector[nPatient] vlBetaRaw;
+    //real vlBetaMean[2];
+    //real<lower=0> vlBetaSD;
     real superBetaMean;
     vector[nSuper] superBetaRaw;
     real<lower=0> superBetaSD;
@@ -59,15 +61,15 @@ ic50_bp_mar<-'
     //vector<lower=0,upper=tMax>[nPatient] nadirTime;
     vector[nPatient] nadirChange;
     vector[nPatient] cd4Beta;
-    vector[nPatient] vlBeta;
+    //vector[nPatient] vlBeta;
     vector[tMax] lp;
     vector[nSuper+1] superBeta;
     superBeta[1]=0;
     superBeta[2:(nSuper+1)]=superBetaMean+superBetaRaw*superBetaSD;
-    acute=acuteMean+acuteRaw*acuteSD;
+    acute=acuteMean*(1-isNon)+acuteRaw*acuteSD+isNon*nonChange;
     nadirChange=nadirChangeMean*(1-isFast)+nadirChangeRaw*nadirChangeSD+fastChangeMean*isFast;
     cd4Beta=(cd4BetaMean[1]*(1-isFast)+cd4BetaMean[2]*isFast)+cd4BetaRaw*cd4BetaSD;
-    vlBeta=(vlBetaMean[1]*(1-isFast)+vlBetaMean[2]*isFast)+vlBetaRaw*vlBetaSD;
+    //vlBeta=(vlBetaMean[1]*(1-isFast)+vlBetaMean[2]*isFast)+vlBetaRaw*vlBetaSD;
     //nadirChange=nadirChangeMean+nadirChangeRaw*nadirChangeSD;
     //nadirTime=exp(nadirTimeMean+nadirTimeRaw*nadirTimeSD);
     for (s in 1:tMax){
@@ -75,7 +77,8 @@ ic50_bp_mar<-'
       for (ii in 1:nVirus){
         lp[s] = lp[s] + normal_lpdf(ic50[ii] | weeks[ii] < s ? 
           acute[patients[ii]]+nadirChange[patients[ii]]*weeks[ii]/s + superBeta[superId[ii]] : 
-          acute[patients[ii]]+nadirChange[patients[ii]] + superBeta[superId[ii]]+(cd4Beta[patients[ii]])*(cd4[ii]-cd4Mat[patients[ii],s])+(vlBeta[patients[ii]])*(vl[ii]-vlMat[patients[ii],s])
+          //acute[patients[ii]]+nadirChange[patients[ii]] + superBeta[superId[ii]]+(cd4Beta[patients[ii]])*(cd4[ii]-cd4Mat[patients[ii],s])+(vlBeta[patients[ii]])*(vl[ii]-vlMat[patients[ii],s])
+          acute[patients[ii]]+nadirChange[patients[ii]] + superBeta[superId[ii]]+(cd4Beta[patients[ii]])*(cd4[ii]-cd4Mat[patients[ii],s])
           ,sigma);
       }
     }
@@ -92,20 +95,21 @@ ic50_bp_mar<-'
     acuteRaw~normal(0,1);
     nadirChangeMean~normal(0,10);
     fastChangeMean~normal(0,10);
+    nonChange~normal(0,10);
     cd4BetaMean~normal(0,10);
     cd4BetaSD~gamma(1,.1);
     cd4BetaRaw~normal(0,1);
-    vlBetaMean~normal(0,10);
-    vlBetaSD~gamma(1,.1);
-    vlBetaRaw~normal(0,1);
-    superBetaMean~normal(0,10);
-    superBetaSD~gamma(1,.1);
+    //vlBetaMean~normal(0,10);
+    //vlBetaSD~gamma(1,.1);
+    //vlBetaRaw~normal(0,1);
+    //superBetaMean~normal(-nadirChangeMean,10);
+    superBetaSD~gamma(1,1);
     superBetaRaw~normal(0,1);
   }\n
 '
 ic50Mod <- stan_model(model_code = ic50_bp_mar)
 
-bayesIC50_3<-function(mod,ic50,time,timePreArt,patient,chains=50,nIter=30000,fastProgressors=c(),cd4=c(),vl=c(),baseVl=c(),meta=NULL,superTimes=NULL,...){
+bayesIC50_3<-function(mod,ic50,time,timePreArt,patient,chains=50,nIter=30000,fastProgressors=c(),cd4=c(),vl=c(),baseVl=c(),meta=NULL,superTimes=NULL,nonProgressors=FALSE,...){
   #treating all postART   as one group (currently only WEAU)
   patientId<-structure(1:length(unique(patient)),.Names=sort(unique(patient)))
   artId<-structure(1:length(unique(patient[!is.na(timePreArt)])),.Names=sort(unique(patient[!is.na(timePreArt)])))
@@ -144,6 +148,7 @@ bayesIC50_3<-function(mod,ic50,time,timePreArt,patient,chains=50,nIter=30000,fas
     daysBeforeArt=ifelse(is.na(timePreArt),9999,timePreArt),
     hasArt=!is.na(timePreArt),
     isFast=names(patientId) %in% fastProgressors,
+    isNon=names(patientId) %in% nonProgressors,
     cd4=as.numeric(cd4),
     vl=as.numeric(vl),
     baseVl=baseVl[names(patientId)],
@@ -160,8 +165,8 @@ bayesIC50_3<-function(mod,ic50,time,timePreArt,patient,chains=50,nIter=30000,fas
 baseVl<-dnar::withAs(xx=unique(meta[meta$time<365*2&meta$time>180,c('time','vl','mm')]),tapply(xx$vl,xx$mm,function(xx)mean(log(xx),na.rm=TRUE)))
 dat$week<-as.integer(round(dat$time/7))
 
-fit<-dnar::withAs(xx=dat[!is.na(dat$ic50)&!dat$qvoa,],bayesIC50_3(ic50Mod,xx$ic50,xx$time,xx$timeBeforeArt,xx$pat,fastProgressors=c('MM15','WEAU'),cd4=(xx$fillCD4)/100,vl=log(xx$fillVl),baseVl=baseVl,nIter=1000,chains=50,meta=meta,superTimes=superTimes))
-fitB<-dnar::withAs(xx=dat[!is.na(dat$beta)&!dat$qvoa,],bayesIC50_3(ic50Mod,xx$beta,xx$time,xx$timeBeforeArt,xx$pat,fastProgressors=c('MM15','WEAU'),cd4=(xx$fillCD4)/100,vl=log(xx$fillVl),baseVl=baseVl,nIter=1000,chains=50,meta=meta,superTimes=superTimes))
+fit<-dnar::withAs(xx=dat[!is.na(dat$ic50)&!dat$qvoa,],bayesIC50_3(ic50Mod,xx$ic50,xx$time,xx$timeBeforeArt,xx$pat,fastProgressors=c('MM15','WEAU'),nonProgressors=c('MM55','MM62'),cd4=(xx$fillCD4)/100,vl=log(xx$fillVl),baseVl=baseVl,nIter=300,chains=50,meta=meta,superTimes=ifelse(superTimes<50,NA,superTimes)))
+fitB<-dnar::withAs(xx=dat[!is.na(dat$beta)&!dat$qvoa,],bayesIC50_3(ic50Mod,xx$beta,xx$time,xx$timeBeforeArt,xx$pat,fastProgressors=c('MM15','WEAU'),nonProgressors=c('MM55','MM62'),cd4=(xx$fillCD4)/100,vl=log(xx$fillVl),baseVl=baseVl,nIter=1000,chains=50,meta=meta,superTimes=ifelse(superTimes<50,NA,superTimes)))
 #save(fit,file='out/bayesFit_20200602.Rdat') #CD4 marginalized
 #save(fit,file='out/bayesFit_20200602.Rdat') #CD4 marginalized
 #save(fit,file='out/bayesFit_20200602c.Rdat')# CD4+VL marginalized 2000 rep, 125 weeks
