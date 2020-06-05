@@ -29,8 +29,7 @@ ic50_bp_mar<-'
     int<lower=0> tMax;
     matrix[nPatient,tMax] vlMat;
     matrix[nPatient,tMax] cd4Mat;
-    int<lower=0> nSuper;
-    int<lower=0,upper=nSuper+1> superId[nVirus];
+    vector<lower=0,upper=1>[nVirus] isSuper;
   }
   parameters {
     vector[nPatient] acuteRaw;
@@ -51,9 +50,7 @@ ic50_bp_mar<-'
     //vector[nPatient] vlBetaRaw;
     //real vlBetaMean[2];
     //real<lower=0> vlBetaSD;
-    real superBetaMean;
-    vector[nSuper] superBetaRaw;
-    real<lower=0> superBetaSD;
+    real superBeta;
   }
   transformed parameters{
     vector[nPatient] acute;
@@ -63,9 +60,6 @@ ic50_bp_mar<-'
     vector[nPatient] cd4Beta;
     //vector[nPatient] vlBeta;
     vector[tMax] lp;
-    vector[nSuper+1] superBeta;
-    superBeta[1]=0;
-    superBeta[2:(nSuper+1)]=superBetaMean+superBetaRaw*superBetaSD;
     acute=acuteMean*(1-isNon)+acuteRaw*acuteSD+isNon*nonChange;
     nadirChange=nadirChangeMean*(1-isFast)+nadirChangeRaw*nadirChangeSD+fastChangeMean*isFast;
     cd4Beta=(cd4BetaMean[1]*(1-isFast)+cd4BetaMean[2]*isFast)+cd4BetaRaw*cd4BetaSD;
@@ -76,9 +70,8 @@ ic50_bp_mar<-'
       lp[s]=neg_binomial_2_lpmf(s|nadirTimeMean,nadirTimeMean^2/exp(nadirTimeSD));
       for (ii in 1:nVirus){
         lp[s] = lp[s] + normal_lpdf(ic50[ii] | weeks[ii] < s ? 
-          acute[patients[ii]]+nadirChange[patients[ii]]*weeks[ii]/s + superBeta[superId[ii]] : 
-          //acute[patients[ii]]+nadirChange[patients[ii]] + superBeta[superId[ii]]+(cd4Beta[patients[ii]])*(cd4[ii]-cd4Mat[patients[ii],s])+(vlBeta[patients[ii]])*(vl[ii]-vlMat[patients[ii],s])
-          acute[patients[ii]]+nadirChange[patients[ii]] + superBeta[superId[ii]]+(cd4Beta[patients[ii]])*(cd4[ii]-cd4Mat[patients[ii],s])
+          acute[patients[ii]]+nadirChange[patients[ii]]*weeks[ii]/s + superBeta*isSuper[ii] : 
+          acute[patients[ii]]+nadirChange[patients[ii]] + superBeta*isSuper[ii]+(cd4Beta[patients[ii]])*(cd4[ii]-cd4Mat[patients[ii],s])
           ,sigma);
       }
     }
@@ -102,9 +95,7 @@ ic50_bp_mar<-'
     //vlBetaMean~normal(0,10);
     //vlBetaSD~gamma(1,.1);
     //vlBetaRaw~normal(0,1);
-    //superBetaMean~normal(-nadirChangeMean,10);
-    superBetaSD~gamma(1,1);
-    superBetaRaw~normal(0,1);
+    superBeta~normal(0,10);
   }\n
 '
 ic50Mod <- stan_model(model_code = ic50_bp_mar)
@@ -120,7 +111,6 @@ bayesIC50_3<-function(mod,ic50,time,timePreArt,patient,chains=50,nIter=30000,fas
   weekMax<-tapply(round(time/7),patient,max)
   newDat<-do.call(rbind,mapply(function(xx,yy){data.frame('pat'=yy,'week'=min(round(time/7)):xx,stringsAsFactors=FALSE)},weekMax,names(weekMax),SIMPLIFY=FALSE))
   newDat$day<-newDat$week*7-3.5
-  newDat$patId<-sapply(newDat$pat,function(xx)dat$patients[names(dat$patients)==xx][1])
   newDat$vl<-newDat$cd4<-NA
   for(ii in unique(newDat$pat)){
     thisDat<-meta[meta$mm==ii&meta$time<=weekMax[ii]*7,]
@@ -134,6 +124,7 @@ bayesIC50_3<-function(mod,ic50,time,timePreArt,patient,chains=50,nIter=30000,fas
   superIds<-structure(1:(sum(!is.na(superTimes))+1),.Names=c('NA',names(superTimes)[!is.na(superTimes)]))
   superId<-ifelse(time<superTimes[patient],NA,superIds[patient])
   superId[is.na(superId)]<-1
+  newDat$isSuper<-newDat$day>=ifelse(is.na(superTimes),Inf,superTimes)[newDat$pat]
   dat=list(
     nVirus=length(ic50),
     nArt=max(artId),
@@ -157,6 +148,7 @@ bayesIC50_3<-function(mod,ic50,time,timePreArt,patient,chains=50,nIter=30000,fas
     cd4Mat=cd4Mat[names(patientId),weekOffset+1:tMax]/100,
     tMax=tMax,
     superId=superId,
+    isSuper=superId>1,
     nSuper=sum(!is.na(superTimes))
   )
   fit <- sampling(mod, data = dat, iter=nIter, chains=chains,thin=2,control=list(adapt_delta=.98,max_treedepth=12),...)
@@ -182,25 +174,17 @@ logsumexp <- function (x) {
     y = max(x)
   y + log(sum(exp(x - y)))
 }
-softmax <- function (x) {
+
     exp(x - logsumexp(x))
 }
 
 mat<-as.matrix(fit$fit)
-calcPreds<-function(mat,dat){
+calcPreds<-function(mat,dat,newDat){
+  newDat$scaleCd4<-newDat$cd4/100
+  newDat$scaleVl<-log(newDat$vl)
   weekMax<-tapply(round(dat$days/7),names(dat$patients),max)
-  newDat<-do.call(rbind,mapply(function(xx,yy){data.frame('pat'=yy,'week'=0:xx,stringsAsFactors=FALSE)},weekMax,names(weekMax),SIMPLIFY=FALSE))
-  newDat$day<-newDat$week*7-3.5
   vlCd4<-unique(data.frame('pat'=names(dat$patients),'day'=dat$days,'vl'=dat$vl,'cd4'=dat$cd4))
   newDat$patId<-sapply(newDat$pat,function(xx)dat$patients[names(dat$patients)==xx][1])
-  ###TODO PULL IN BETTER METADATA ## will be availabe from dat after TODO above is finished
-  newDat$vl<-newDat$cd4<-NA
-  for(ii in unique(vlCd4$pat)){
-    thisDat<-vlCd4[vlCd4$pat==ii,]
-    newDat[newDat$pat==ii,'vl']<-approx(thisDat$day,thisDat$vl,newDat[newDat$pat==ii,'day'])$y
-    newDat[newDat$pat==ii,'cd4']<-approx(thisDat$day,thisDat$cd4,newDat[newDat$pat==ii,'day'])$y
-  }
-  newDat<-newDat[!is.na(newDat$vl)&!is.na(newDat$cd4),]
   weeks<-outer(newDat$pat,1:dat$tMax,function(xx,yy)yy)
   isNadir<-newDat$week<weeks
   propNadir<-newDat$week/weeks
@@ -216,10 +200,10 @@ calcPreds<-function(mat,dat){
       #acutes<-xx[sprintf('acute[%d]',dat$patients)]
       #nadirs<-xx[sprintf('nadirChange[%d]',dat$patients)]
       cd4Bs<-xx[sprintf('cd4Beta[%d]',newDat$patId)]
-      vlBs<-xx[sprintf('vlBeta[%d]',newDat$patId)]
       acutes<-xx[sprintf('acute[%d]',newDat$patId)]
       nadirs<-xx[sprintf('nadirChange[%d]',newDat$patId)]
-      pred<-acutes+ifelse(isNadir,propNadir*nadirs,nadirs+(newDat$cd4-cd4Mat)*cd4Bs+(newDat$vl-vlMat)*vlBs)
+      super<-xx['superBeta']
+      pred<-acutes+ifelse(isNadir,propNadir*nadirs,nadirs+(newDat$scaleCd4-cd4Mat)*cd4Bs)+newDat$isSuper*super
       out<-apply(pred,1,function(xx)sum(xx*pS))
     })
   },mc.cores=40))
@@ -227,7 +211,7 @@ calcPreds<-function(mat,dat){
   isos<-apply(rbind(mat[,'sigma'],preds),2,function(xx)rnorm(length(xx[-1]),xx[-1],xx[1]))
   list('preds'=preds,'isos'=isos,'simData'=newDat)
 }
-predIc50<-calcPreds(mat,fit$dat)
+predIc50<-calcPreds(mat,fit$dat,fit$simDat)
 
 pdf('Rplots.pdf',width=17,height=7)
   par(mfrow=c(2,5),mar=c(3.5,4,1,.1))
