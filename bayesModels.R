@@ -5,6 +5,8 @@ options(mc.cores = parallel::detectCores())
 dat<-read.csv('out/allLongitudinal.csv',stringsAsFactors=FALSE)
 meta<-read.csv('out/allLongitudinalMeta.csv')
 
+#split out slow/fast/normal progressor VL/CD4. Just fast?
+#add superinfection term
 ic50_bp_mar<-'
   data {
     int<lower=0> nVirus;
@@ -24,6 +26,8 @@ ic50_bp_mar<-'
     int<lower=0> nSample;
     int<lower=0,upper=nSample> sample[nVirus];
     int<lower=0> tMax;
+    matrix[nPatient,tMax] vlMat;
+    matrix[nPatient,tMax] cd4Mat;
   }
   parameters {
     vector[nPatient] acuteRaw;
@@ -63,7 +67,7 @@ ic50_bp_mar<-'
       for (ii in 1:nVirus){
         lp[s] = lp[s] + normal_lpdf(ic50[ii] | weeks[ii] < s ? 
           acute[patients[ii]]+nadirChange[patients[ii]]*weeks[ii]/s : 
-          acute[patients[ii]]+nadirChange[patients[ii]]+(cd4Beta[patients[ii]])*(cd4[ii])+(vlBeta[patients[ii]])*(vl[ii])
+          acute[patients[ii]]+nadirChange[patients[ii]]+(cd4Beta[patients[ii]])*(cd4[ii]-cd4Mat[patients[ii],s])+(vlBeta[patients[ii]])*(vl[ii]-vlMat[patients[ii],s])
           ,sigma);
       }
     }
@@ -90,14 +94,33 @@ ic50_bp_mar<-'
 '
 ic50Mod <- stan_model(model_code = ic50_bp_mar)
 
-bayesIC50_3<-function(mod,ic50,time,timePreArt,patient,chains=50,nIter=30000,fastProgressors=c(),cd4=c(),vl=c(),baseVl=c(),...){
+bayesIC50_3<-function(mod,ic50,time,timePreArt,patient,chains=50,nIter=30000,fastProgressors=c(),cd4=c(),vl=c(),baseVl=c(),meta=NULL,...){
   #treating all postART as one group (currently only WEAU)
   patientId<-structure(1:length(unique(patient)),.Names=sort(unique(patient)))
   artId<-structure(1:length(unique(patient[!is.na(timePreArt)])),.Names=sort(unique(patient[!is.na(timePreArt)])))
   artStart<-tapply(time+timePreArt,patient,unique)
   sample<-paste(patient,time,sep='_')
   sampleId<-structure(1:length(unique(sample)),.Names=unique(sample[order(patient,time)]))
-  ####TODO calculate a patient by week matrix of inferred CD4 and VL
+  ####patient-week matrix of inferred CD4 and VL
+  weekMax<-tapply(round(time/7),patient,max)
+  newDat<-do.call(rbind,mapply(function(xx,yy){data.frame('pat'=yy,'week'=min(round(time/7)):xx,stringsAsFactors=FALSE)},weekMax,names(weekMax),SIMPLIFY=FALSE))
+  newDat$day<-newDat$week*7-3.5
+  newDat$patId<-sapply(newDat$pat,function(xx)dat$patients[names(dat$patients)==xx][1])
+  newDat$vl<-newDat$cd4<-NA
+  for(ii in unique(newDat$pat)){
+    thisDat<-meta[meta$mm==ii&meta$time<=weekMax[ii]*7,]
+    newDat[newDat$pat==ii,'vl']<-approx(thisDat$time,thisDat$vl,newDat[newDat$pat==ii,'day'],rule=2)$y
+    newDat[newDat$pat==ii,'cd4']<-approx(thisDat$time,thisDat$cd4,newDat[newDat$pat==ii,'day'],rule=2)$y
+  }
+  #fill<-9999e10
+  cd4Mat<-tapply(newDat$cd4,list(newDat$pat,newDat$week),c)
+  #cd4Mat[is.na(cd4Mat)]<-fill
+  vlMat<-tapply(newDat$vl,list(newDat$pat,newDat$week),c)
+  #vlMat[is.na(vlMat)]<-fill
+  #if(any(is.na(check<-apply(cbind(patient,round(time/7)),1,function(xx)vlMat[xx[1],as.numeric(xx[2])+2])))||any(check==fill))stop('Problem with VL matrix')
+  #if(any(is.na(check<-apply(cbind(patient,round(time/7)),1,function(xx)cd4Mat[xx[1],as.numeric(xx[2])+2])))||any(check==fill))stop('Problem with CD4 matrix')
+  weekOffset<-1-min(round(time/7))
+  tMax<-100
   dat=list(
     nVirus=length(ic50),
     nArt=max(artId),
@@ -116,21 +139,25 @@ bayesIC50_3<-function(mod,ic50,time,timePreArt,patient,chains=50,nIter=30000,fas
     vl=as.numeric(vl),
     baseVl=baseVl[names(patientId)],
     weeks=round(time/7),
-    tMax=125
+    vlMat=log(vlMat[names(patientId),weekOffset+1:tMax]),
+    cd4Mat=cd4Mat[names(patientId),weekOffset+1:tMax]/100,
+    tMax=tMax #MM15 ends at 103
   )
   fit <- sampling(mod, data = dat, iter=nIter, chains=chains,thin=2,control=list(adapt_delta=.98,max_treedepth=12),...)
   return(list('fit'=fit,pats=patientId,arts=artId,artStart=artStart,sample=sampleId,dat=dat))
 }
 baseVl<-dnar::withAs(xx=unique(meta[meta$time<365*2&meta$time>180,c('time','vl','mm')]),tapply(xx$vl,xx$mm,function(xx)mean(log(xx),na.rm=TRUE)))
 dat$week<-as.integer(round(dat$time/7))
-fit<-dnar::withAs(xx=dat[!is.na(dat$ic50)&!dat$qvoa,],bayesIC50_3(ic50Mod,xx$ic50,xx$time,xx$timeBeforeArt,xx$pat,fastProgressors=c('MM15','WEAU'),cd4=(xx$fillCD4-500)/100,vl=log(xx$fillVl/baseVl[xx$pat]),baseVl=baseVl,nIter=1000,chains=50))
+fit<-dnar::withAs(xx=dat[!is.na(dat$ic50)&!dat$qvoa,],bayesIC50_3(ic50Mod,xx$ic50,xx$time,xx$timeBeforeArt,xx$pat,fastProgressors=c('MM15','WEAU'),cd4=(xx$fillCD4)/100,vl=log(xx$fillVl),baseVl=baseVl,nIter=1000,chains=50,meta=meta))
+fitB<-dnar::withAs(xx=dat[!is.na(dat$beta)&!dat$qvoa,],bayesIC50_3(ic50Mod,xx$beta,xx$time,xx$timeBeforeArt,xx$pat,fastProgressors=c('MM15','WEAU'),cd4=(xx$fillCD4)/100,vl=log(xx$fillVl),baseVl=baseVl,nIter=1000,chains=50,meta=meta))
 #save(fit,file='out/bayesFit_20200602.Rdat') #CD4 marginalized
 #save(fit,file='out/bayesFit_20200602.Rdat') #CD4 marginalized
-#load(file='out/bayesFit_20200602b.Rdat')# CD4+VL marginalized
 #save(fit,file='out/bayesFit_20200602c.Rdat')# CD4+VL marginalized 2000 rep, 125 weeks
+#save(fit,file='out/bayesFit_20200604.Rdat')# CD4+VL marginalized 2000 rep, 100 weeks, setpoint
+#load(file='out/bayesFit_20200604.Rdat')
 
 #
-print(fit$fit,pars=c('nadirTimeRaw','nadirChangeRaw','expectedIC50','acuteRaw','lp'),include=FALSE)
+print(fit$fit,pars=c('nadirTimeRaw','nadirChangeRaw','expectedIC50','acuteRaw','lp','vlBetaRaw','cd4BetaRaw'),include=FALSE)
 
 softMax<-function(xx)exp(xx)/sum(exp(xx))
 logsumexp <- function (x) {
@@ -159,6 +186,8 @@ calcPreds<-function(mat,dat){
   weeks<-outer(newDat$pat,1:dat$tMax,function(xx,yy)yy)
   isNadir<-newDat$week<weeks
   propNadir<-newDat$week/weeks
+  vlMat<-dat$vlMat[newDat$pat,]
+  cd4Mat<-dat$cd4Mat[newDat$pat,]
   preds<-do.call(cbind,parallel::mclapply(split(mat,sort(rep(1:30,length.out=nrow(mat)))),function(xx,...){
     thisMat<-matrix(xx,ncol=ncol(mat))
     colnames(thisMat)<-colnames(mat)
@@ -172,10 +201,10 @@ calcPreds<-function(mat,dat){
       vlBs<-xx[sprintf('vlBeta[%d]',newDat$patId)]
       acutes<-xx[sprintf('acute[%d]',newDat$patId)]
       nadirs<-xx[sprintf('nadirChange[%d]',newDat$patId)]
-      pred<-acutes+ifelse(isNadir,propNadir*nadirs,nadirs+newDat$cd4*cd4Bs+newDat$vl*vlBs)
+      pred<-acutes+ifelse(isNadir,propNadir*nadirs,nadirs+(newDat$cd4-cd4Mat)*cd4Bs+(newDat$vl-vlMat)*vlBs)
       out<-apply(pred,1,function(xx)sum(xx*pS))
     })
-  },mc.cores=30))
+  },mc.cores=40))
   sigmas<-mat[,'sigma']
   isos<-apply(rbind(mat[,'sigma'],preds),2,function(xx)rnorm(length(xx[-1]),xx[-1],xx[1]))
   list('preds'=preds,'isos'=isos,'simData'=newDat)
@@ -207,6 +236,6 @@ pdf('Rplots.pdf',width=17,height=7)
   }
 dev.off()
 
-
+apply(mat[,grep('lp\\[',colnames(mat))],2,mean)
 pdf('Rplots.pdf',height=20,width=20);plot(apply(mat[,grep('lp\\[',colnames(mat))],2,mean));dev.off()
 pdf('Rplots.pdf',height=20,width=20);traceplot(fit$fit,'lp');dev.off()
