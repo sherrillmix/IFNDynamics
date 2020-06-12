@@ -4,6 +4,7 @@ options(mc.cores = parallel::detectCores())
 
 dat<-read.csv('out/allLongitudinal.csv',stringsAsFactors=FALSE)
 meta<-read.csv('out/allLongitudinalMeta.csv')
+artStarts<-tapply(meta$daysBeforeArt+meta$time,meta$mm,unique)
 founders<-read.csv('out/founders.csv',stringsAsFactors=FALSE,row.names=1)
 superTimes<-structure(founders$superTime,.Names=rownames(founders))
 
@@ -19,8 +20,7 @@ ic50_bp_mar<-'
     vector<lower=0,upper=1>[nPatient] isFast;
     vector<lower=0,upper=1>[nPatient] isNon;
     int<lower=0> artIds[nVirus];
-    int<lower=0> days[nVirus];
-    real weeks[nVirus];
+    int<lower=0> days[nVirus]; real weeks[nVirus];
     //real daysBeforeArt[nVirus];
     real artStart[nArt];
     real<lower=0> hasArt[nVirus];
@@ -57,7 +57,7 @@ ic50_bp_mar<-'
     vector[nPatient] nadirChange;
     vector[nPatient] cd4Beta;
     //vector[nPatient] vlBeta;
-    vector[tMax] lp;
+    matrix[nPatient,tMax] lp;
     acute=acuteMean*(1-isNon)+acuteRaw*acuteSD+isNon*nonChange;
     nadirChange=nadirChangeMean*(1-isFast)+nadirChangeRaw*nadirChangeSD+fastChangeMean*isFast;
     cd4Beta=(cd4BetaMean[1]*(1-isFast)+cd4BetaMean[2]*isFast)+cd4BetaRaw*cd4BetaSD;
@@ -65,9 +65,9 @@ ic50_bp_mar<-'
     //nadirChange=nadirChangeMean+nadirChangeRaw*nadirChangeSD;
     //nadirTime=exp(nadirTimeMean+nadirTimeRaw*nadirTimeSD);
     for (s in 1:tMax){
-      lp[s]=neg_binomial_2_lpmf(s|nadirTimeMean,nadirTimeMean^2/exp(nadirTimeSD));
+      lp[,s]=rep_vector(neg_binomial_2_lpmf(s|nadirTimeMean,nadirTimeMean^2/exp(nadirTimeSD)),nPatient);
       for (ii in 1:nVirus){
-        lp[s] = lp[s] + normal_lpdf(ic50[ii] | weeks[ii] < s ? 
+        lp[patients[ii],s] = lp[patients[ii],s] + normal_lpdf(ic50[ii] | weeks[ii] < s ? 
           acute[patients[ii]]+nadirChange[patients[ii]]*weeks[ii]/s  : 
           acute[patients[ii]]+nadirChange[patients[ii]] +(cd4Beta[patients[ii]])*(cd4[ii]-cd4Mat[patients[ii],s])
           ,sigma);
@@ -75,7 +75,7 @@ ic50_bp_mar<-'
     }
   }
   model {
-    target += log_sum_exp(lp);
+    for(ii in 1:nPatient)target += log_sum_exp(lp[ii,]);
     //ic50~normal(expectedIC50,sigma);
     sigma~gamma(1,.1);
     nadirTimeSD~normal(0,10); //gamma(1,.1);
@@ -105,14 +105,17 @@ bayesIC50_3<-function(mod,ic50,time,timePreArt,patient,chains=50,nIter=30000,fas
   sample<-paste(patient,time,sep='_')
   sampleId<-structure(1:length(unique(sample)),.Names=unique(sample[order(patient,time)]))
   ####patient-week matrix of inferred CD4 and VL
-  weekMax<-tapply(round(time/7),patient,max)
+  weekMax<-tapply(ceiling(time/7),patient,max)+1
   newDat<-do.call(rbind,mapply(function(xx,yy){data.frame('pat'=yy,'week'=min(round(time/7)):xx,stringsAsFactors=FALSE)},weekMax,names(weekMax),SIMPLIFY=FALSE))
   newDat$day<-newDat$week*7-3.5
   newDat$vl<-newDat$cd4<-NA
   for(ii in unique(newDat$pat)){
-    thisDat<-meta[meta$mm==ii&meta$time<=weekMax[ii]*7,]
+    #thisDat<-meta[meta$mm==ii&meta$time<=weekMax[ii]*7,]
+    #newDat[newDat$pat==ii,'vl']<-approx(thisDat$time,thisDat$vl,newDat[newDat$pat==ii,'day'],rule=2)$y
+    #newDat[newDat$pat==ii,'cd4']<-approx(thisDat$time,thisDat$cd4,newDat[newDat$pat==ii,'day'],rule=2)$y
+    thisDat<-unique(dat[dat$pat==ii&dat$time<=weekMax[ii]*7,c('time','CD4','vl')])
     newDat[newDat$pat==ii,'vl']<-approx(thisDat$time,thisDat$vl,newDat[newDat$pat==ii,'day'],rule=2)$y
-    newDat[newDat$pat==ii,'cd4']<-approx(thisDat$time,thisDat$cd4,newDat[newDat$pat==ii,'day'],rule=2)$y
+    newDat[newDat$pat==ii,'cd4']<-approx(thisDat$time,thisDat$CD4,newDat[newDat$pat==ii,'day'],rule=2)$y
   }
   cd4Mat<-tapply(newDat$cd4,list(newDat$pat,newDat$week),c)
   vlMat<-tapply(newDat$vl,list(newDat$pat,newDat$week),c)
@@ -154,18 +157,22 @@ bayesIC50_3<-function(mod,ic50,time,timePreArt,patient,chains=50,nIter=30000,fas
 baseVl<-dnar::withAs(xx=unique(meta[meta$time<365*2&meta$time>180,c('time','vl','mm')]),tapply(xx$vl,xx$mm,function(xx)mean(log(xx),na.rm=TRUE)))
 dat$week<-as.integer(round(dat$time/7))
 
-fit<-dnar::withAs(xx=dat[!is.na(dat$ic50)&!dat$qvoa,],bayesIC50_3(ic50Mod,xx$ic50,xx$time,xx$timeBeforeArt,xx$pat,fastProgressors=c('MM15','WEAU'),nonProgressors=c('MM55','MM62'),cd4=(xx$fillCD4)/100,vl=log(xx$fillVl),baseVl=baseVl,nIter=1000,chains=50,meta=meta,superTimes=superTimes<50))
-
-fitB<-dnar::withAs(xx=dat[!is.na(dat$beta)&!dat$qvoa,],bayesIC50_3(ic50Mod,xx$beta,xx$time,xx$timeBeforeArt,xx$pat,fastProgressors=c('MM15','WEAU'),nonProgressors=c('MM55','MM62'),cd4=(xx$fillCD4)/100,vl=log(xx$fillVl),baseVl=baseVl,nIter=1000,chains=50,meta=meta,superTimes=superTimes))
+fit<-dnar::withAs(xx=dat[!is.na(dat$ic50)&!dat$qvoa,],bayesIC50_3(ic50Mod,xx$ic50,xx$time,xx$timeBeforeArt,xx$pat,fastProgressors=c('MM15','WEAU'),nonProgressors=c('MM55','MM62'),cd4=(xx$fillCD4)/100,vl=log(xx$fillVl),baseVl=baseVl,nIter=5000,chains=50,meta=meta,superTimes=superTimes<50))
+fitB<-dnar::withAs(xx=dat[!is.na(dat$beta)&!dat$qvoa,],bayesIC50_3(ic50Mod,xx$beta,xx$time,xx$timeBeforeArt,xx$pat,fastProgressors=c('MM15','WEAU'),nonProgressors=c('MM55','MM62'),cd4=(xx$fillCD4)/100,vl=log(xx$fillVl),baseVl=baseVl,nIter=5000,chains=50,meta=meta,superTimes=superTimes))
+fitR<-dnar::withAs(xx=dat[!is.na(dat$replication)&!dat$qvoa,],bayesIC50_3(ic50Mod,xx$replication,xx$time,xx$timeBeforeArt,xx$pat,fastProgressors=c('MM15','WEAU'),nonProgressors=c('MM55','MM62'),cd4=(xx$fillCD4)/100,vl=log(xx$fillVl),baseVl=baseVl,nIter=5000,chains=50,meta=meta,superTimes=superTimes))
 #save(fit,file='out/bayesFit_20200602.Rdat') #CD4 marginalized
 #save(fit,file='out/bayesFit_20200602.Rdat') #CD4 marginalized
 #save(fit,file='out/bayesFit_20200602c.Rdat')# CD4+VL marginalized 2000 rep, 125 weeks
 #save(fit,file='out/bayesFit_20200604.Rdat')# CD4+VL marginalized 2000 rep, 100 weeks, setpoint
 #save(fit,file='out/bayesFit_20200605.Rdat')# CD4+VL (split out fast), marginalized 1000 rep, super, 100 weeks, setpoint
 #load(file='out/bayesFit_20200604.Rdat')
+#save(fit,fitB,fitR,file='out/bayesFit_20200607.Rdat')# non acute, CD4 (split out fast), marginalized 1000 rep, super, 100 weeks, setpoint
+#save(fit,fitB,fitR,file='out/bayesFit_20200609.Rdat')# non acute, CD4 (split out fast), marginalized 5000 rep, super, 100 weeks, setpoint, separate lp, heirarchical nadir
 #
 print(fit$fit,pars=c('nadirTimeRaw','nadirChangeRaw','expectedIC50','acuteRaw','lp','vlBetaRaw','cd4BetaRaw','superBetaRaw'),include=FALSE)
 print(fitB$fit,pars=c('nadirTimeRaw','nadirChangeRaw','expectedIC50','acuteRaw','lp','vlBetaRaw','cd4BetaRaw','superBetaRaw'),include=FALSE)
+print(fitR$fit,pars=c('nadirTimeRaw','nadirChangeRaw','expectedIC50','acuteRaw','lp','vlBetaRaw','cd4BetaRaw','superBetaRaw'),include=FALSE)
+
 
 softMax<-function(xx)exp(xx)/sum(exp(xx))
 logsumexp <- function (x) {
@@ -176,8 +183,7 @@ softmax <- function (x) {
     exp(x - logsumexp(x))
 }
 
-mat<-as.matrix(fit$fit)
-matB<-as.matrix(fitB$fit)
+meanCrI<-function(xx)c(mean(xx,na.rm=TRUE),quantile(xx,c(.025,.975),na.rm=TRUE))
 calcPreds<-function(mat,dat,newDat){
   newDat$scaleCd4<-newDat$cd4/100
   newDat$scaleVl<-log(newDat$vl)
@@ -189,11 +195,11 @@ calcPreds<-function(mat,dat,newDat){
   propNadir<-newDat$week/weeks
   vlMat<-dat$vlMat[newDat$pat,]
   cd4Mat<-dat$cd4Mat[newDat$pat,]
-  preds<-do.call(cbind,parallel::mclapply(split(mat,sort(rep(1:30,length.out=nrow(mat)))),function(xx,...){
+  preds<-do.call(cbind,lapply(split(mat,sort(rep(1:30,length.out=nrow(mat)))),function(xx,...){
     thisMat<-matrix(xx,ncol=ncol(mat))
     colnames(thisMat)<-colnames(mat)
     apply(thisMat,1,function(xx){
-      pS<-softmax(xx[grep('lp\\[',names(xx))])    
+      pS<-do.call(rbind,lapply(1:dat$nPatient,function(pat)softmax(xx[grep(sprintf('lp\\[%d,',pat),names(xx))])))
       #cd4Bs<-xx[sprintf('cd4Beta[%d]',dat$patients)]
       #vlBs<-xx[sprintf('vlBeta[%d]',dat$patients)]
       #acutes<-xx[sprintf('acute[%d]',dat$patients)]
@@ -202,15 +208,18 @@ calcPreds<-function(mat,dat,newDat){
       acutes<-xx[sprintf('acute[%d]',newDat$patId)]
       nadirs<-xx[sprintf('nadirChange[%d]',newDat$patId)]
       pred<-acutes+ifelse(isNadir,propNadir*nadirs,nadirs+(newDat$scaleCd4-cd4Mat)*cd4Bs)
-      out<-apply(pred,1,function(xx)sum(xx*pS))
+      out<-apply(pred*pS[newDat$patId,],1,sum)
     })
   },mc.cores=40))
   sigmas<-mat[,'sigma']
   isos<-apply(rbind(mat[,'sigma'],preds),2,function(xx)rnorm(length(xx[-1]),xx[-1],xx[1]))
-  list('preds'=preds,'isos'=isos,'simData'=newDat)
+  crI<-cbind(t(apply(preds,1,meanCrI)),t(apply(isos,1,meanCrI))[,-1])
+  colnames(crI)<-c('mean','lower','upper','predL','predU')
+  list('preds'=preds,'isos'=isos,'simData'=newDat,'crI'=crI)
 }
-predIc50<-calcPreds(mat,fit$dat,fit$simDat)
-predIc50B<-calcPreds(matB,fitB$dat,fitB$simDat)
+predIc50<-calcPreds(as.matrix(fit$fit),fit$dat,fit$simDat)
+predIc50B<-calcPreds(as.matrix(fitB$fit),fitB$dat,fitB$simDat)
+predIc50R<-calcPreds(as.matrix(fitR$fit),fitR$dat,fitR$simDat)
 
 plotIfn<-function(fit,predIc50,ylab='IFNa2 IC50'){
   for(ii in sort(unique(names(fit$dat$patients)))){
@@ -232,18 +241,136 @@ pdf('Rplots.pdf',width=17,height=7)
   par(mfrow=c(2,5),mar=c(3.5,4,1,.1))
   plotIfn(fit,predIc50)
   plotIfn(fitB,predIc50B,'IFNb IC50')
+  plotIfn(fitR,predIc50R,'Replicative capacity')
   for(ii in sort(unique(names(fit$dat$patients)))){
     selector2<-predIc50$simData$pat==ii
-    plot(predIc50$simData[selector2,'day'],(predIc50$simData[selector2,'cd4']/100),xlim=range(fit$dat$days),ylim=range((fit$dat$cd4)),main=ii,xlab='DFOSx',ylab='CD4',mgp=c(1.8,.5,0),tcl=-.3)
+    plot(predIc50$simData[selector2,'day'],(predIc50$simData[selector2,'cd4']),xlim=range(fit$dat$days),ylim=range((fit$dat$cd4)*100),main=ii,xlab='DFOSx',ylab='CD4',mgp=c(1.8,.5,0),tcl=-.3)
     abline(v=superTimes[ii],col='red')
   }
   for(ii in sort(unique(names(fit$dat$patients)))){
     selector2<-predIc50$simData$pat==ii
-    plot(predIc50$simData[selector2,'day'],log(predIc50$simData[selector2,'vl']),xlim=range(fit$dat$days),ylim=range((fit$dat$vl)),main=ii,xlab='DFOSx',ylab='VL',mgp=c(1.8,.5,0),tcl=-.3)
+    plot(predIc50$simData[selector2,'day'],(predIc50$simData[selector2,'vl']),xlim=range(fit$dat$days),ylim=range(exp(fit$dat$vl)),main=ii,xlab='DFOSx',ylab='VL',mgp=c(1.8,.5,0),tcl=-.3,log='y',yaxt='n')
     abline(v=superTimes[ii],col='red')
+    dnar::logAxis(las=1)
   }
 dev.off()
 
 apply(mat[,grep('lp\\[',colnames(mat))],2,mean)
 pdf('Rplots.pdf',height=20,width=20);plot(apply(mat[,grep('lp\\[',colnames(mat))],2,mean));dev.off()
 pdf('Rplots.pdf',height=20,width=20);traceplot(fit$fit,'lp');dev.off()
+
+
+source('functions.R')
+plotPointsLine<-function(dat,ic50,ii,ylab,addTitle=TRUE,sims=NULL,addFit=TRUE,filterAfter=TRUE,superTimes=NULL,artStart=NULL){
+  plot(dat$time/7,ic50,yaxt='n',log='y',bg=patCols[dat$pat],pch=21,type='n',xlab='',ylab=ylab,xaxt='n',cex=1.4)
+  if(addTitle)title(ii,line=-1)
+  thisDat<-dat[dat$pat==ii,]
+  thisIc50<-ic50[dat$pat==ii]
+  if(sum(!is.na(thisIc50))==0)return()
+  if(addFit){
+    if(is.null(sims)){
+      thisFit<-lm(I(log(thisIc50))~time+time2,dat=thisDat)
+      fakeDays<-(min(thisDat$time)):(max(thisDat$time)+50)
+      fakeDf<-data.frame('time'=fakeDays,'time2'=fakeDays^2,'logTime'=log(fakeDays),'logTime2'=log(fakeDays)^2,'logTime3'=log(fakeDays)^3,'logTime4'=log(fakeDays)^4)
+      predIc50<-predict(thisFit,fakeDf,interval='confidence')
+      lines(fakeDays/7,exp(predIc50[,'fit']),col=patCols[ii])
+      polygon(c(fakeDays/7,rev(fakeDays)/7),c(exp(predIc50[,'lwr']),rev(exp(predIc50[,'upr']))),col=patCols2[ii],border=NA)
+      predIc50<-predict(thisFit,fakeDf,interval='prediction')
+      polygon(c(fakeDays/7,rev(fakeDays)/7),c(exp(predIc50[,'lwr']),rev(exp(predIc50[,'upr']))),col=patCols3[ii],border=NA)
+    }else{
+      if(is.list(sims)&&all(names(sims)==c('preds','isos','simData','crI'))){
+        selector2<-sims$simData$pat==ii
+        lines(sims$simData[selector2,'day']/7,exp(sims$crI[selector2,'mean']),col=patCols[ii])
+        polygon(c(sims$simData[selector2,'day'],rev(sims$simData[selector2,'day']))/7,exp(c(sims$crI[selector2,'lower'],rev(sims$crI[selector2,'upper']))),,col=patCols2[ii],border=NA)
+        polygon(c(sims$simData[selector2,'day'],rev(sims$simData[selector2,'day']))/7,exp(c(sims$crI[selector2,'predL'],rev(sims$crI[selector2,'predU']))),,col=patCols3[ii],border=NA)
+        if(!is.null(artStarts)&&!is.na(artStarts[ii]))abline(v=artStarts[ii]/7,lty=ifelse(ii=='WEAU',3,2))
+      }else{
+        sim<-sims[[ii]][,sims[[ii]]['time',]<ifelse(is.na(artStart[ii])||!filterAfter,Inf,artStart[ii])]
+        polygon(c(sim['time',],rev(sim['time',]))/7,exp(c(sim['lowCI',],rev(sim['highCI',]))),border=NA,col=patCols2[ii])
+        polygon(c(sim['time',],rev(sim['time',]))/7,exp(c(sim['lowPred',],rev(sim['highPred',]))),border=NA,col=patCols3[ii])
+        lines(sim['time',]/7,exp(sim['mean',]),col=patCols[ii])
+        if(ii!='WEAU'||!filterAfter)abline(v=artStart[ii]/7,lty=2) #MAGIC NUMBER. SUPPRESSING WEAU VERTICAL LINE SINCE DIFFERS FROM OTHERS
+      }
+    }
+  }
+  if(!is.null(superTimes) && !is.na(superTimes[ii])){
+    baseY<-10^(par('usr')[3]+diff(par('usr')[3:4])*.02)
+    topY<-10^(par('usr')[3]+diff(par('usr')[3:4])*.09)
+    segments(rep(superTimes[ii]/7,3)+c(-7,0,7),c(topY,baseY,topY),rep(superTimes[ii]/7,3)+c(0,7,-7),c(baseY,topY,topY),lwd=1.2)
+  }
+  points(thisDat$time/7,thisIc50,pch=21+thisDat$bulk,bg=patCols[ii])
+}
+plotCondenseIfn<-function(dat,ic50,ylab,showLegend=TRUE,sims=NULL,addFit=TRUE,filterAfter=TRUE,subplotLetters=LETTERS[1:3],superTimes=superTimes,artStarts=NULL){
+  par(mar=c(0,0,0,0))
+  layout(lay2,width=c(.4,rep(1,2),.01),height=c(.15,c(1,1,1,.2,1,.2,1),ifelse(showLegend,1.3,.32)))
+  counter<-1
+  for(ii in patOrder){
+    plotPointsLine(dat,ic50,ii,ylab,sims=sims,addFit=addFit,filterAfter=filterAfter,superTimes=superTimes)
+    if(counter>4)axis(1,seq(0,6,2)*100,cex.axis=1.2,mgp=c(2.75,.4,0),tcl=-.3)
+    if(counter>4)axis(1,seq(1:3)*100,rep('',3),cex.axis=1.2,mgp=c(2.75,.7,0),tcl=-.3)
+    if(counter%%2==1)logAxis(2,las=1,cex.axis=1.1,mgp=c(3,.7,0))
+    labCex<-1.7
+    if(counter==5)text(par('usr')[1]-.33*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),ylab,srt=90,xpd=NA,cex=labCex)
+    if(counter==9)text(max(par('usr')[1:2]),10^(par('usr')[3]-.25*diff(par('usr')[3:4])),'Weeks from onset of symptoms',xpd=NA,cex=labCex)
+    if(counter==9&showLegend)legend(par('usr')[1]-diff(par('usr')[1:2])*.3,10^(par('usr')[3]-diff(par('usr')[3:4])*.45),c(ifelse(is.null(sims),'Quadratic regression','Bayesian model'),ifelse(is.null(sims),'95% confidence interval','95% credible interval'),'95% prediction interval','Limiting dilution isolate','Bulk isolate'),col=c(patCols[1],NA,NA,'black','black'),pt.bg=c(NA,patCols2[1],patCols3[1],patCols[1],patCols[1]),lty=c(1,NA,NA,NA,NA),pch=c(NA,22,22,21,22),border=NA,pt.cex=c(3.2,3.2,3.2,1.4,1.4),cex=1.1,xjust=0,yjust=1,xpd=NA)
+    if(counter==1)text(grconvertX(-.27,from='npc'),grconvertY(1.10,from='npc'),subplotLetters[1],xpd=NA,adj=c(0,1),cex=2.5)
+    if(counter==7)text(grconvertX(-.27,from='npc'),grconvertY(1.10,from='npc'),subplotLetters[2],xpd=NA,adj=c(0,1),cex=2.5)
+    if(counter==9)text(grconvertX(-.27,from='npc'),grconvertY(1.10,from='npc'),subplotLetters[3],xpd=NA,adj=c(0,1),cex=2.5)
+    counter<-counter+1
+  }
+}
+for(showLegend in c(TRUE,FALSE)){
+pdf(sprintf('out/bayesFit2%s.pdf',ifelse(showLegend,'_legend','')),width=4,height=8)
+noQvoa<-dat#dat[!dat$qvoa,]
+plotCondenseIfn(noQvoa,noQvoa$ic50,ylab=expression('IFN'*alpha*'2 IC'[50]*' (pg/ml)'),sims=predIc50,filterAfter=TRUE,showLegend=showLegend,superTimes=superTimes)
+  #text(grconvertX(.01,from='ndc'),grconvertY(.99,from='ndc'),'A',xpd=NA,adj=c(0,1),cex=2.5)
+plotCondenseIfn(noQvoa,noQvoa$beta,ylab=expression('IFN'*beta*' IC'[50]*' (pg/ml)'),sims=predIc50B,filterAfter=TRUE,subplotLetters=LETTERS[4:6],showLegend=showLegend,superTimes=superTimes)
+  #text(grconvertX(.01,from='ndc'),grconvertY(.99,from='ndc'),'B',xpd=NA,adj=c(0,1),cex=2.5)
+#plotCondenseIfn(noQvoa,noQvoa$replication,ylab='Replicative capacity (day 7 p24 ng/ml)',sims=simsR)
+plotCondenseIfn(noQvoa,noQvoa$replication,ylab='Replicative capacity (day 7 p24 ng/ml)',sims=predIc50R,filterAfter=TRUE,subplotLetters=LETTERS[1:3],showLegend=showLegend,superTimes=superTimes)
+dev.off()
+}
+
+mat<-as.matrix(fit$fit)
+nadirDays<-apply(mat[,grep('lp\\[',colnames(mat))],1,function(xx)sum(softMax(xx)*1:length(xx)))
+      pS<-softmax(xx[grep('lp\\[',names(xx))])    
+pdf('out/cd4_vs_ic50.pdf')
+plot(1,1,type='n',ylim=range(dat$ic50),xlim=range(dat$fillCD4))
+#points
+dev.off()
+
+
+mat<-as.matrix(fit$fit)
+matB<-as.matrix(fitB$fit)
+message('Acute')
+print(exp(meanCrI(mat[,'acuteMean'])))
+print(exp(meanCrI(matB[,'acuteMean'])))
+message('Non progressor acute')
+print(exp(meanCrI(mat[,'nonChange'])))
+print(exp(meanCrI(matB[,'nonChange'])))
+message('Nadir change')
+print(exp(-meanCrI(mat[,'nadirChangeMean'])))
+print(exp(-meanCrI(matB[,'nadirChangeMean'])))
+message('Nadir change')
+print(exp(-meanCrI(mat[,'nadirChangeMean'])))
+print(exp(-meanCrI(matB[,'nadirChangeMean'])))
+message('CD4 change')
+print(exp(-meanCrI(mat[,'cd4BetaMean[1]'])))
+print(exp(-meanCrI(matB[,'cd4BetaMean[1]'])))
+message('Nadir time')
+print((meanCrI(mat[,'nadirTimeMean']))*7)
+print((meanCrI(matB[,'nadirTimeMean']))*7)
+message('Fast nadir change')
+print(exp(-meanCrI(mat[,'fastChangeMean'])))
+print(exp(-meanCrI(matB[,'fastChangeMean'])))
+message('Fast vs normal nadir change')
+print(exp(-meanCrI(mat[,'nadirChangeMean']-mat[,'fastChangeMean'])))
+print(exp(-meanCrI(matB[,'nadirChangeMean']-matB[,'fastChangeMean'])))
+message('CD4 change normal')
+print(exp(-meanCrI(mat[,'cd4BetaMean[1]'])))
+print(exp(-meanCrI(matB[,'cd4BetaMean[1]'])))
+message('CD4 change fast')
+print(exp(-meanCrI(mat[,'cd4BetaMean[2]'])))
+print(exp(-meanCrI(matB[,'cd4BetaMean[2]'])))
+
+print(fit$fit,pars=c('nadirTimeRaw','nadirChangeRaw','expectedIC50','acuteRaw','lp','vlBetaRaw','cd4BetaRaw','superBetaRaw'),include=FALSE)
