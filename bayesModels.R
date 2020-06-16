@@ -42,7 +42,6 @@ ic50_bp_mar<-'
     real<lower=0> nadirChangeSD;
     real<lower=0> sigma;
     real fastChangeMean;
-    real nonChange;
     vector[nPatient] cd4BetaRaw;
     real cd4BetaMean[2];
     real<lower=0> cd4BetaSD;
@@ -58,7 +57,7 @@ ic50_bp_mar<-'
     vector[nPatient] cd4Beta;
     //vector[nPatient] vlBeta;
     matrix[nPatient,tMax] lp;
-    acute=acuteMean*(1-isNon)+acuteRaw*acuteSD+isNon*nonChange;
+    acute=acuteMean+acuteRaw*acuteSD;
     nadirChange=nadirChangeMean*(1-isFast)+nadirChangeRaw*nadirChangeSD+fastChangeMean*isFast;
     cd4Beta=(cd4BetaMean[1]*(1-isFast)+cd4BetaMean[2]*isFast)+cd4BetaRaw*cd4BetaSD;
     //vlBeta=(vlBetaMean[1]*(1-isFast)+vlBetaMean[2]*isFast)+vlBetaRaw*vlBetaSD;
@@ -86,7 +85,6 @@ ic50_bp_mar<-'
     acuteRaw~normal(0,1);
     nadirChangeMean~normal(0,10);
     fastChangeMean~normal(0,10);
-    nonChange~normal(0,10);
     cd4BetaMean~normal(0,10);
     cd4BetaSD~gamma(1,.1);
     cd4BetaRaw~normal(0,1);
@@ -168,6 +166,7 @@ fitR<-dnar::withAs(xx=dat[!is.na(dat$replication)&!dat$qvoa,],bayesIC50_3(ic50Mo
 #load(file='out/bayesFit_20200604.Rdat')
 #save(fit,fitB,fitR,file='out/bayesFit_20200607.Rdat')# non acute, CD4 (split out fast), marginalized 1000 rep, super, 100 weeks, setpoint
 #save(fit,fitB,fitR,file='out/bayesFit_20200609.Rdat')# non acute, CD4 (split out fast), marginalized 5000 rep, super, 100 weeks, setpoint, separate lp, heirarchical nadir
+save(fit,fitB,fitR,file='out/bayesFit_20200612.Rdat')# remove non-progressor acute
 #
 print(fit$fit,pars=c('nadirTimeRaw','nadirChangeRaw','expectedIC50','acuteRaw','lp','vlBetaRaw','cd4BetaRaw','superBetaRaw'),include=FALSE)
 print(fitB$fit,pars=c('nadirTimeRaw','nadirChangeRaw','expectedIC50','acuteRaw','lp','vlBetaRaw','cd4BetaRaw','superBetaRaw'),include=FALSE)
@@ -345,9 +344,6 @@ matB<-as.matrix(fitB$fit)
 message('Acute')
 print(exp(meanCrI(mat[,'acuteMean'])))
 print(exp(meanCrI(matB[,'acuteMean'])))
-message('Non progressor acute')
-print(exp(meanCrI(mat[,'nonChange'])))
-print(exp(meanCrI(matB[,'nonChange'])))
 message('Nadir change')
 print(exp(-meanCrI(mat[,'nadirChangeMean'])))
 print(exp(-meanCrI(matB[,'nadirChangeMean'])))
