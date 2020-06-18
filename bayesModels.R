@@ -41,10 +41,13 @@ ic50_bp_mar<-'
     real nadirChangeMean;
     real<lower=0> nadirChangeSD;
     real<lower=0> sigma;
-    real fastChangeMean;
     vector[nPatient] cd4BetaRaw;
     real cd4BetaMean[2];
     real<lower=0> cd4BetaSD;
+    real fastAcute;
+    real fastChangeMean;
+    real nonAcute;
+    real nonChangeMean;
     //vector[nPatient] vlBetaRaw;
     //real vlBetaMean[2];
     //real<lower=0> vlBetaSD;
@@ -57,8 +60,9 @@ ic50_bp_mar<-'
     vector[nPatient] cd4Beta;
     //vector[nPatient] vlBeta;
     matrix[nPatient,tMax] lp;
-    acute=acuteMean+acuteRaw*acuteSD;
-    nadirChange=nadirChangeMean*(1-isFast)+nadirChangeRaw*nadirChangeSD+fastChangeMean*isFast;
+    //acute=acuteMean+acuteRaw*acuteSD;
+    acute=acuteMean+acuteRaw*acuteSD+isNon*nonAcute+isFast*fastAcute;
+    nadirChange=nadirChangeMean+nadirChangeRaw*nadirChangeSD+fastChangeMean*isFast+nonChangeMean*isNon;
     cd4Beta=(cd4BetaMean[1]*(1-isFast)+cd4BetaMean[2]*isFast)+cd4BetaRaw*cd4BetaSD;
     //vlBeta=(vlBetaMean[1]*(1-isFast)+vlBetaMean[2]*isFast)+vlBetaRaw*vlBetaSD;
     //nadirChange=nadirChangeMean+nadirChangeRaw*nadirChangeSD;
@@ -85,7 +89,10 @@ ic50_bp_mar<-'
     acuteRaw~normal(0,1);
     nadirChangeMean~normal(0,10);
     fastChangeMean~normal(0,10);
+    fastAcute~normal(0,10);
     cd4BetaMean~normal(0,10);
+    nonChangeMean~normal(0,10);
+    nonAcute~normal(0,10);
     cd4BetaSD~gamma(1,.1);
     cd4BetaRaw~normal(0,1);
     //vlBetaMean~normal(0,10);
@@ -117,6 +124,9 @@ bayesIC50_3<-function(mod,ic50,time,timePreArt,patient,chains=50,nIter=30000,fas
   }
   cd4Mat<-tapply(newDat$cd4,list(newDat$pat,newDat$week),c)
   vlMat<-tapply(newDat$vl,list(newDat$pat,newDat$week),c)
+  # no data beyond last point so presumably shouldn't affect (careful if CD4 data ends far before IC50)
+  cd4Mat<-t(apply(cd4Mat,1,dnar::fillDown))
+  vlMat<-t(apply(vlMat,1,dnar::fillDown))
   weekOffset<-1-min(round(time/7))
   tMax<-100 #MM15 ends at 103
   superIds<-structure(1:(sum(!is.na(superTimes))+1),.Names=c('NA',names(superTimes)[!is.na(superTimes)]))
@@ -166,7 +176,8 @@ fitR<-dnar::withAs(xx=dat[!is.na(dat$replication)&!dat$qvoa,],bayesIC50_3(ic50Mo
 #load(file='out/bayesFit_20200604.Rdat')
 #save(fit,fitB,fitR,file='out/bayesFit_20200607.Rdat')# non acute, CD4 (split out fast), marginalized 1000 rep, super, 100 weeks, setpoint
 #save(fit,fitB,fitR,file='out/bayesFit_20200609.Rdat')# non acute, CD4 (split out fast), marginalized 5000 rep, super, 100 weeks, setpoint, separate lp, heirarchical nadir
-save(fit,fitB,fitR,file='out/bayesFit_20200612.Rdat')# remove non-progressor acute
+#save(fit,fitB,fitR,file='out/bayesFit_20200612.Rdat')# remove non-progressor acute
+#save(fit,fitB,fitR,file='out/bayesFit_20200615.Rdat')#  non-progressor acute and nadirChange
 #
 print(fit$fit,pars=c('nadirTimeRaw','nadirChangeRaw','expectedIC50','acuteRaw','lp','vlBetaRaw','cd4BetaRaw','superBetaRaw'),include=FALSE)
 print(fitB$fit,pars=c('nadirTimeRaw','nadirChangeRaw','expectedIC50','acuteRaw','lp','vlBetaRaw','cd4BetaRaw','superBetaRaw'),include=FALSE)
@@ -194,7 +205,7 @@ calcPreds<-function(mat,dat,newDat){
   propNadir<-newDat$week/weeks
   vlMat<-dat$vlMat[newDat$pat,]
   cd4Mat<-dat$cd4Mat[newDat$pat,]
-  preds<-do.call(cbind,lapply(split(mat,sort(rep(1:30,length.out=nrow(mat)))),function(xx,...){
+  preds<-do.call(cbind,parallel::mclapply(split(mat,sort(rep(1:30,length.out=nrow(mat)))),function(xx,...){
     thisMat<-matrix(xx,ncol=ncol(mat))
     colnames(thisMat)<-colnames(mat)
     apply(thisMat,1,function(xx){
@@ -208,6 +219,7 @@ calcPreds<-function(mat,dat,newDat){
       nadirs<-xx[sprintf('nadirChange[%d]',newDat$patId)]
       pred<-acutes+ifelse(isNadir,propNadir*nadirs,nadirs+(newDat$scaleCd4-cd4Mat)*cd4Bs)
       out<-apply(pred*pS[newDat$patId,],1,sum)
+      out
     })
   },mc.cores=40))
   sigmas<-mat[,'sigma']
@@ -278,7 +290,7 @@ plotPointsLine<-function(dat,ic50,ii,ylab,addTitle=TRUE,sims=NULL,addFit=TRUE,fi
       polygon(c(fakeDays/7,rev(fakeDays)/7),c(exp(predIc50[,'lwr']),rev(exp(predIc50[,'upr']))),col=patCols3[ii],border=NA)
     }else{
       if(is.list(sims)&&all(names(sims)==c('preds','isos','simData','crI'))){
-        selector2<-sims$simData$pat==ii
+        selector2<-sims$simData$pat==ii&sims$simData$day>0
         lines(sims$simData[selector2,'day']/7,exp(sims$crI[selector2,'mean']),col=patCols[ii])
         polygon(c(sims$simData[selector2,'day'],rev(sims$simData[selector2,'day']))/7,exp(c(sims$crI[selector2,'lower'],rev(sims$crI[selector2,'upper']))),,col=patCols2[ii],border=NA)
         polygon(c(sims$simData[selector2,'day'],rev(sims$simData[selector2,'day']))/7,exp(c(sims$crI[selector2,'predL'],rev(sims$crI[selector2,'predU']))),,col=patCols3[ii],border=NA)
@@ -311,9 +323,7 @@ plotCondenseIfn<-function(dat,ic50,ylab,showLegend=TRUE,sims=NULL,addFit=TRUE,fi
     labCex<-1.7
     if(counter==5)text(par('usr')[1]-.33*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),ylab,srt=90,xpd=NA,cex=labCex)
     if(counter==9)text(max(par('usr')[1:2]),10^(par('usr')[3]-.25*diff(par('usr')[3:4])),'Weeks from onset of symptoms',xpd=NA,cex=labCex)
-    if(counter==9&showLegend)legend(par('usr')[1]-diff(par('usr')[1:2])*.3,10^(par('usr')[3]-diff(par('usr')[3:4])*.45),c(ifelse(is.null(sims),'Quadratic regression','Bayesian model'),ifelse(is.null(sims),'95% confidence interval','95% credible interval'),'95% prediction interval','Limiting dilution isolate','Bulk isolate'),col=c(patCols[1],NA,NA,'black','black'),pt.bg=c(NA,patCols2[1],patCols3[1],patCols[1],patCols[1]),lty=c(1,NA,NA,NA,NA),pch=c(NA,22,22,21,22),border=NA,pt.cex=c(3.2,3.2,3.2,1.4,1.4),cex=1.1,xjust=0,yjust=1,xpd=NA)
-    if(counter==1)text(grconvertX(-.27,from='npc'),grconvertY(1.10,from='npc'),subplotLetters[1],xpd=NA,adj=c(0,1),cex=2.5)
-    if(counter==7)text(grconvertX(-.27,from='npc'),grconvertY(1.10,from='npc'),subplotLetters[2],xpd=NA,adj=c(0,1),cex=2.5)
+    if(counter==9&showLegend)legend(par('usr')[1]-diff(par('usr')[1:2])*.3,10^(par('usr')[3]-diff(par('usr')[3:4])*.45),c(ifelse(is.null(sims),'Quadratic regression','Bayesian model'),ifelse(is.null(sims),'95% confidence interval','95% credible interval'),'95% prediction interval','Limiting dilution isolate','Bulk isolate'),col=c(patCols[1],NA,NA,'black','black'),pt.bg=c(NA,patCols2[1],patCols3[1],patCols[1],patCols[1]),lty=c(1,NA,NA,NA,NA),pch=c(NA,22,22,21,22),border=NA,pt.cex=c(3.2,3.2,3.2,1.4,1.4),cex=1.1,xjust=0,yjust=1,xpd=NA) if(counter==1)text(grconvertX(-.27,from='npc'),grconvertY(1.10,from='npc'),subplotLetters[1],xpd=NA,adj=c(0,1),cex=2.5) if(counter==7)text(grconvertX(-.27,from='npc'),grconvertY(1.10,from='npc'),subplotLetters[2],xpd=NA,adj=c(0,1),cex=2.5)
     if(counter==9)text(grconvertX(-.27,from='npc'),grconvertY(1.10,from='npc'),subplotLetters[3],xpd=NA,adj=c(0,1),cex=2.5)
     counter<-counter+1
   }
@@ -329,14 +339,98 @@ plotCondenseIfn(noQvoa,noQvoa$beta,ylab=expression('IFN'*beta*' IC'[50]*' (pg/ml
 plotCondenseIfn(noQvoa,noQvoa$replication,ylab='Replicative capacity (day 7 p24 ng/ml)',sims=predIc50R,filterAfter=TRUE,subplotLetters=LETTERS[1:3],showLegend=showLegend,superTimes=superTimes)
 dev.off()
 }
+system('pdftk out/bayesFit2.pdf cat 1 2 output tmp.pdf')
+system('pdfjam tmp.pdf --nup 1x2 --outfile out/Fig2.pdf')
 
-mat<-as.matrix(fit$fit)
-nadirDays<-apply(mat[,grep('lp\\[',colnames(mat))],1,function(xx)sum(softMax(xx)*1:length(xx)))
-      pS<-softmax(xx[grep('lp\\[',names(xx))])    
-pdf('out/cd4_vs_ic50.pdf')
-plot(1,1,type='n',ylim=range(dat$ic50),xlim=range(dat$fillCD4))
-#points
+ps<-dnar::withAs(mat=as.matrix(fit$fit),do.call(rbind,parallel::mclapply(1:fit$dat$nPatient,function(pat)apply(apply(mat[,grep(sprintf('lp\\[%d,',pat),colnames(mat))],1,softmax),1,mean),mc.cores=10)))
+psB<-dnar::withAs(mat=as.matrix(fitB$fit),do.call(rbind,parallel::mclapply(1:fitB$dat$nPatient,function(pat)apply(apply(mat[,grep(sprintf('lp\\[%d,',pat),colnames(mat))],1,softmax),1,mean),mc.cores=10)))
+pdf('out/nadirTimes.pdf',width=14,height=4)
+par(mfrow=c(2,5))
+for(ii in 1:nrow(ps)){
+  plot(1:100,ps[ii,],main=names(fit$pats)[ii],type='l')
+}
+for(ii in 1:nrow(ps)){
+  plot(1:100,psB[ii,],main=names(fit$pats)[ii],type='l')
+}
 dev.off()
+
+maxNadirTimes<-apply(ps,1,function(xx)sum(1:100*xx))
+maxNadirTimesB<-apply(psB,1,function(xx)sum(1:100*xx))
+names(maxNadirTimes)<-names(fit$pats)
+names(maxNadirTimesB)<-names(fitB$pats)
+pdf('out/cd4_vs_ic50_test.pdf',width=8,height=4)
+for(jj in c('ic50','beta')){
+par(mfrow=c(1,2),mar=c(3,3,1,3))
+for(ii in sort(unique(dat$pat))){
+  thisDat<-dat[dat$pat==ii&!dat$qvoa,]
+  thisTime<-ifelse(jj=='beta',maxNadirTimesB[ii],maxNadirTimes[ii])*7
+  plot(1,1,type='n',xlab='CD4 count (cells/ul)',ylab=ifelse(jj=='beta','IFNb IC50','IFNa2 IC50'),log='yx',yaxt='n',xlim=range(thisDat$fillCD4),ylim=range(dat[,jj],na.rm=TRUE),main=ii)
+  xx<-data.frame('ic50'=tapply(thisDat[,jj],thisDat$time,function(xx)exp(mean(log(xx),na.rm=TRUE))),
+    'cd4'=tapply(thisDat$fillCD4,thisDat$time,unique))
+  xx$time<-as.numeric(rownames(xx))
+  points(xx$cd4,xx$ic50,pch=21,bg=ifelse(xx$time<=thisTime,'#FF000033','blue'),col=ifelse(xx$time<=thisTime,'#00000033','#000000'))
+  segments(xx$cd4[-nrow(xx)],xx$ic50[-nrow(xx)],xx$cd4[-1],xx$ic50[-1])
+  dnar::logAxis(las=1)
+  #
+  plot(1,1,type='n',xlab='Time',ylab=ifelse(jj=='beta','IFNb IC50','IFNa2 IC50'),log='y',yaxt='n',xlim=range(dat$time),ylim=range(dat[,jj],na.rm=TRUE),main=ii,mgp=c(2.5,1,0))
+  xx$time<-as.numeric(rownames(xx))
+  points(xx$time,xx$ic50,pch=21,bg=ifelse(xx$time<=thisTime,'#FF000033','blue'),col=ifelse(xx$time<=thisTime,'#00000033','#000000'))
+  segments(xx$time[-nrow(xx)],xx$ic50[-nrow(xx)],xx$time[-1],xx$ic50[-1])
+  dnar::logAxis(las=1)
+  cd4Range<-c(0,1500)
+  xx$convertCd4<-10^(par('usr')[3]+xx$cd4/1500*diff(par('usr')[3:4]))
+  lines(xx$time,xx$convertCd4)
+  abline(v=thisTime,lty=2)
+}
+par(mfrow=c(3,2),mar=c(0,0,0,0))
+for(ii in sort(unique(dat$pat[!dat$pat %in% c("WEAU",'MM55','MM62','MM15')]))){
+  thisDat<-dat[dat$pat==ii&!dat$qvoa,]
+  plot(1,1,type='n',xlab='CD4 count (cells/ul)',ylab=ifelse(jj=='beta','IFNb IC50','IFNa2 IC50'),log='y',yaxt='n',xlim=c(-550,350),ylim=10^c(-3,0))
+  xx<-data.frame('ic50'=tapply(thisDat[,jj],thisDat$time,function(xx)exp(mean(log(xx),na.rm=TRUE))),
+    'cd4'=tapply(thisDat$fillCD4,thisDat$time,unique))
+  xx$time<-as.numeric(rownames(xx))
+  xx$cd4<-xx$cd4-fit$dat$cd4Mat[ii,maxNadirTimes[ii]]*100
+  thisDat$cd4<-thisDat$CD4-fit$dat$cd4Mat[ii,maxNadirTimes[ii]]*100
+  points(thisDat$cd4,thisDat$ic50,pch=21,bg=ifelse(thisDat$time<=maxNadirTimes[ii]*7,patCols2[ii],patCols[ii]),col=ifelse(thisDat$time<=maxNadirTimes[ii]*7,'#00000033','#000000'))
+  segments(xx$cd4[-nrow(xx)],xx$ic50[-nrow(xx)],xx$cd4[-1],xx$ic50[-1],col=ifelse(xx$time[-nrow(xx)]<maxNadirTimes[ii]*7,'#00000022','#000000'))
+  dnar::logAxis(las=1)
+  #print(dnar::withAs(xx=xx[xx$time>maxNadirTimes[ii],],cor.test(log(thisDat$ic50),thisDat$cd4)))
+}
+}
+dev.off()
+
+pdf('out/cd4_vs_ic50.pdf',width=4,height=8)
+for(jj in c('ic50','beta')){
+par(mfrow=c(5,2),mar=c(3,3.5,1,4.5))
+for(ii in patOrder){
+  thisDat<-dat[dat$pat==ii&!dat$qvoa,]
+  thisTime<-ifelse(jj=='beta',maxNadirTimesB[ii],maxNadirTimes[ii])
+  plot(1,1,type='n',xlab='',ylab=ifelse(jj=='beta','IFNb IC50','IFNa2 IC50'),log='y',yaxt='n',xlim=range(thisDat$time)/7,ylim=range(dat[,jj],na.rm=TRUE),main=ii,mgp=c(2.6,1,0))
+  xx<-data.frame('ic50'=tapply(thisDat[,jj],thisDat$time,function(xx)exp(mean(log(xx),na.rm=TRUE))),
+    'cd4'=tapply(thisDat$fillCD4,thisDat$time,unique))
+  xx$time<-as.numeric(rownames(xx))/7
+  #thisDat$cd4<-thisDat$CD4-fit$dat$cd4Mat[ii,thisTime]*100
+  #xx$cd4<-xx$cd4-fit$dat$cd4Mat[ii,thisTime]*100
+  thisDat$cd4<-thisDat$CD4
+  #points(xx$time,xx$ic50,pch=21,bg=ifelse(xx$time<=thisTime,patCols3[ii],patCols[ii]),col=ifelse(xx$time<=thisTime,'#00000033','#000000'))
+  points(thisDat$time/7,thisDat[,jj],pch=21,bg=ifelse(thisDat$time/7<=thisTime,patCols3[ii],patCols[ii]),col=ifelse(thisDat$time/7<=thisTime,'#00000033','#000000'))
+  segments(xx$time[-nrow(xx)],xx$ic50[-nrow(xx)],xx$time[-1],xx$ic50[-1])
+  dnar::logAxis(las=1)
+  #cd4Range<-c(0,max(xx$cd4)*1.1)
+  cd4Range<-c(0,1200)
+  convertY<-function(xx,cd4,usr)10^(usr[1]+(xx-cd4[1])/diff(cd4)*diff(usr))
+  xx$convertCd4<-convertY(xx$cd4,cd4Range,par('usr')[3:4])
+  axis(4,convertY(pretty(cd4Range),cd4Range,par('usr')[3:4]),pretty(cd4Range),las=1,col='blue',col.axis='blue')
+  lines(xx$time,xx$convertCd4/1.01,col='white')
+  lines(xx$time,xx$convertCd4,col='blue')
+  text(par('usr')[2]+.52*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),'CD4 count',srt=-90,xpd=NA,col='blue',cex=1.2)
+  box()
+  abline(v=thisTime,h=convertY(0,cd4Range,par('usr')[3:4]),lty=2)
+}
+}
+dev.off()
+
+
 
 
 mat<-as.matrix(fit$fit)
