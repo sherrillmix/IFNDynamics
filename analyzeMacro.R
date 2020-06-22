@@ -53,7 +53,8 @@ macro$bak<-macro$virus
 macro$virus<-macro$fix
 
 auc<-function(xx,yy,low=min(xx),high=max(xx)){
-  integrate(approxfun(xx,yy),low,high)
+  condense<-tapply(yy,xx,function(xx)exp(mean(log(xx))))
+  integrate(approxfun(as.numeric(names(condense)),condense),low,high)
 }
 area<-do.call(rbind,lapply(structure(unique(macro$virus),.Names=unique(macro$virus)),function(vir)sapply(structure(unique(macro$donor),.Names=unique(macro$donor)),function(don){thisDat<-macro[macro$virus==vir&macro$donor==don,];if(nrow(thisDat)==0)return(NA);auc(thisDat$day,thisDat$p24,low=2,high=20)$value})))
 
@@ -107,6 +108,33 @@ dnar::withAs(virDf=virDf[virDf$type2=='Rebound',],plot(exp(virDf$auc),virDf$ic50
 dnar::withAs(virDf=virDf[virDf$type2=='Rebound',],plot(rank(virDf$auc),rank(virDf$ic50_IFNb,na.last='keep'),log='y',xlab='Macrophage replication (p24 AUC)',ylab='IFNb IC50',pch=21,bg=c('VOA'='#0000FF55','Rebound'='#FF000055')[virDf$type2],las=1))
 dev.off()
 
+check<-read.csv('data/Table S5..csv',stringsAsFactors=FALSE,skip=4)
+bak<-check
+check$virus<-sub('QVOA','VOA',sub('[*]+$','',check$ID))
+check<-check[check$Type!='',]
+check[!check$virus %in% macro$virus ,'virus']
+endPoint<-dnar::withAs(macro=macro[macro$day==20,],tapply(macro$p24,list(macro$virus,toupper(macro$donor)),mean))
+zb<-colnames(check)[grep('ZB',colnames(check))]
+endPoint[,]<-ifelse(is.na(endPoint),'',ifelse(endPoint>.5,'yes','no'))
+which(!check[,zb]==endPoint[check$virus,zb],arr.ind=TRUE)
+aucCheck<-area[check$virus,tolower(zb)]
+min(aucCheck[check[,zb]=='yes'],na.rm=TRUE)
+aucCheck[,]<-ifelse(is.na(aucCheck),'',ifelse(aucCheck>9,'yes','no'))
+which(!check[,zb]==aucCheck,arr.ind=TRUE)
+tmp<-area[,tolower(zb)]
+fixLabs<-sub('QVOA','VOA',sub('[*]+$','',bak$ID))
+miss<-c(unique(fixLabs[!fixLabs %in% rownames(tmp)]),'FILL__')
+fill<-area[1:length(miss),];fill[,]<-NA
+rownames(fill)<-miss
+tmp<-rbind(tmp,fill)
+tmp<-round(tmp,2)
+tmp[tmp<9&!is.na(tmp)]<-'---'
+tmp[is.na(tmp)]<-''
+colnames(tmp)<-sprintf('AUC_%s',toupper(colnames(tmp)))
+bak<-cbind(bak,tmp[sub('^$','FILL__',sub('QVOA','VOA',sub('[*]+$','',bak$ID))),])
+if(any((bak[,grep("AUC",colnames(bak))]=='')!=(bak[,zb]=='')))stop('Missing AUC')
+write.csv(bak,'out/TableS5_update.csv',row.names=FALSE)
+
 pdf('out/ic50_vs_macro_logLog.pdf')
 #dnar::withAs(virDf=virDf[virDf$type2 %in% c('Rebound','VOA'),],plot(exp(virDf$auc),virDf$ic50_IFNb,log='xy',xlab='Macrophage replication (p24 AUC)',ylab='IFNb IC50',pch=21,bg=c('VOA'='#0000FF55','Rebound'='#FF000055')[virDf$type2],las=1))
 dnar::withAs(virDf=virDf[virDf$type2=='Rebound',],plot(exp(virDf$auc),virDf$ic50_IFNb,log='xy',xlab='Macrophage replication (p24 AUC)',ylab='IFNb IC50',pch=21,bg=c('VOA'='#0000FF55','Rebound'='#FF000055')[virDf$type2],las=1))
@@ -129,7 +157,7 @@ dnar::withAs(virDf=virDf[!virDf$isPos&virDf$type2 %in% c('TF','Chronic'),],wilco
 dnar::withAs(virDf=virDf[!virDf$isPos&virDf$type2 %in% c('Rebound','VOA'),],wilcox.test(exp(virDf$auc)~virDf$type2))
 
 pdf('out/macroRep.pdf',width=20,height=3.5)
-  par(mfrow=c(1,length(unique(macro$donor))),mar=c(4.4,4,7.3,4))
+  par(mfrow=c(1,length(unique(macro$donor))),mar=c(4.4,4,9.3,4))
   ylim<-range(macro$p24)
   for(ii in unique(macro$donor)){
     plot(1,1,type='n',ylim=ylim,ylab='',yaxt='n',xlim=range(macro$day),xlab='Day',log='y',mgp=c(1.75,.5,0),tcl=-.3,main=ii)
@@ -147,13 +175,13 @@ pdf('out/macroRep.pdf',width=20,height=3.5)
     #nClust<-ave(clusters,clusters,FUN=length)
     #probs<-nClust>1
     thisLast$newPos<-thisLast$p24
-    for(ii in 2:nrow(thisLast))if(thisLast$newPos[ii]/thisLast$newPos[ii-1]<1.2)thisLast$newPos[ii]<-thisLast$newPos[ii-1]*1.2
+    for(kk in 2:nrow(thisLast))if(thisLast$newPos[kk]/thisLast$newPos[kk-1]<1.2)thisLast$newPos[kk]<-thisLast$newPos[kk-1]*1.3
     if(max(thisLast$newPos)>10^par('usr')[4])thisLast$newPos<-thisLast$newPos
     #probAdjust<-thisLast[probs,'p24']*1.15^ave(clusters[probs],clusters[probs],FUN=function(xx)1:length(xx)-length(xx)/2-.5)
     #axis(4,thisLast$p24[!probs],thisLast$virus[!probs],las=1,cex.axis=.4,tcl=-.1,mgp=c(1,.2,0))
     #axis(4,thisLast$p24[probs],rep('',sum(probs)),las=1,cex.axis=.4,tcl=-.1,mgp=c(1,.2,0))
     axis(4,thisLast$p24,rep('',nrow(thisLast)),las=1,cex.axis=.4,tcl=-.1,mgp=c(1,.2,0))
-    axis(4,thisLast$newPos,thisLast[,'virus'],las=1,cex.axis=.4,tcl=-.1,mgp=c(1,.5,0),xpd=NA,tick=FALSE)
+    for(kk in 1:nrow(thisLast))axis(4,thisLast$newPos[kk],thisLast[,'virus'][kk],las=1,cex.axis=.4,tcl=-.1,mgp=c(1,.5,0),xpd=NA,tick=FALSE)
     segments(dnar::convertLineToUser(.1,4),thisLast[,'p24'],dnar::convertLineToUser(.5,4),thisLast$newPos,xpd=NA,lwd=.5)
   }
   par(mfrow=c(4,ceiling(length(unique(macro$virus))/4)),mar=c(0,0,0,0))
@@ -172,17 +200,55 @@ pdf('out/macroRep.pdf',width=20,height=3.5)
       for(kk in seq(1,sum(thisDat$donor==jj),7))lines(thisDat[thisDat$donor==jj,'day'][kk+0:6],thisDat[thisDat$donor==jj,'p24'][kk+0:6]*ifelse(thisDat[thisDat$donor==jj,'p24'][kk+0:6]==.01,donorOffset[jj],1),col=donorCol[jj])
     }
   }
-  plot(1,1,type='n',xlab='',ylab='',xaxt='n',yaxt='n',bty='n')
+  #plot(1,1,type='n',xlab='',ylab='',xaxt='n',yaxt='n',bty='n')
   legend('right',inset=.07,names(donorCol),col=donorCol,lty=1,cex=.5)
 dev.off()
 
+pdf('out/macroRep2.pdf',width=7,height=40)
+  nVir<-length(unique(macro$virus))
+  nDonor<-length(unique(macro$donor))
+  layout(rbind(rep(0,nDonor+2),cbind(rep(0,nVir),matrix(1:c(nVir*nDonor),nrow=nVir,byrow=TRUE),rep(0,nVir)),rep(0,nDonor+2)),height=c(.3,rep(1,nVir),.75),width=c(.82,rep(1,nDonor),.95))
+  par(mar=c(0,0,0,0))
+  ylim<-range(macro$p24)*c(.5,2)
+  virOrder<-sort(unique(macro$virus))
+  donorOrder<-sort(unique(macro$donor))
+  virOrder<-virOrder[order(coef[virOrder],decreasing=TRUE)]
+  for(ii in virOrder){
+    for(jj in donorOrder){
+    #title(ylab='p24 concentration (ng/ml)',mgp=c(2.75,1,0))
+    #dnar::logAxis(las=1)
+    #thisDat<-thisDat[order(thisDat$donor,thisDat$day),]
+      plot(1,1,type='n',ylim=ylim,ylab='',yaxt='n',xlim=c(0,22),xlab='Day',log='y',mgp=c(1.75,.5,0),tcl=-.3,xaxt='n')
+      if(jj==donorOrder[1])dnar::logAxis(las=1,axisMax=max(macro$p24),axisMin=min(macro$p24),axisVals=c(-2,0,2))
+      if(ii==virOrder[nVir])axis(1,c(2,10,20))
+      if(ii==virOrder[ceiling(nVir/2)]&jj==donorOrder[1])mtext('p24 concentration (ng/ml)',2,3)
+      if(jj==donorOrder[floor(nDonor/2)]&ii==virOrder[nVir])mtext('Days after infection',1,2.6)
+      if(ii==virOrder[1])mtext(toupper(jj),3,cex=.7)
+      if(jj==donorOrder[nDonor])text(par('usr')[2]+1,10^mean(par('usr')[3:4]),sub('VOA','QVOA',ii),cex=.7,xpd=NA,adj=0)
+      mtext(paste(sub('VOA','QVOA',ii),toupper(jj)),3,line=-1,cex=.35)
+      abline(h=.500,lty=2)
+      thisDat<-macro[macro$virus==ii&macro$donor==jj,]
+      if(nrow(thisDat)==0)next()
+      #hard coding 7 days
+      #for(kk in seq(1,sum(thisDat$donor==jj),7))lines(thisDat[thisDat$donor==jj,'day'][kk+0:6],thisDat[thisDat$donor==jj,'p24'][kk+0:6]*ifelse(thisDat[thisDat$donor==jj,'p24'][kk+0:6]==.01,donorOffset[jj],1),col=ifelse(thisDat[thisDat$donor==jj,'p24'][kk+6]>.5,'red','blue'))
+      means<-tapply(thisDat[thisDat$donor==jj,'p24'],thisDat[thisDat$donor==jj,'day'],function(xx)exp(mean(log(xx))))
+      #ifelse(tail(means,1)>.5,'red','blue')
+      lines(as.numeric(names(means)),means,col=ifelse(area[ii,jj]>9,'red','blue'))
+    }
+  }
+dev.off()
+file.copy('out/macroRep2.pdf','out/Fig._S8.pdf',overwrite=TRUE)
+c('pdftk out/macroAucHeat.pdf cat 1 output out/Fig._S8.pdf')
 
 
 pdf('out/macroAucHeat.pdf',height=12,width=7)
   par(mar=c(3.8,4,.1,.1))
-  plotFunc<-function(area,log=TRUE){
-    if(log)breaks<-exp(seq(min(log(area),na.rm=TRUE)*.99,max(log(area),na.rm=TRUE)*1.01,length.out=101))
+  plotFunc<-function(area,log=TRUE,cutoff=9){
+    #if(log)breaks<-exp(seq(min(log(area),na.rm=TRUE)*.99,max(log(area),na.rm=TRUE)*1.01,length.out=101))
+    if(log)breaks<-c(min(area,na.rm=TRUE)*.99,exp(seq(log(cutoff),max(log(area),na.rm=TRUE)*1.01,length.out=100)))
     else breaks<-seq(min(area,na.rm=TRUE)*.99,max(area,na.rm=TRUE)*1.01,length.out=101)
+    #if(log)cols<-c('white',rev(heat.colors(109))[-1:-10])
+    #else cols<-rev(heat.colors(100))
     cols<-rev(heat.colors(100))
     image(1:ncol(area),1:nrow(area),t(area),col=cols,breaks=breaks,xaxt='n',yaxt='n',xlab='',ylab='')
     nas<-which(is.na(area),arr.ind=TRUE)
@@ -190,22 +256,29 @@ pdf('out/macroAucHeat.pdf',height=12,width=7)
     abline(v=2:ncol(area)-.5,h=2:nrow(area)-.5,col='#777777')
     box()
     axis(1,1:ncol(area),toupper(colnames(area)),tcl=-.25,mgp=c(1,.3,0))
-    axis(2,1:nrow(area),rownames(area),las=1,cex.axis=.5,mgp=c(1,.5,0),tcl=-.3)
+    axis(2,1:nrow(area),sub('VOA','QVOA',rownames(area)),las=1,cex.axis=.5,mgp=c(1,.5,0),tcl=-.3)
     #axis(4,1:nrow(area),sprintf('%.02f',exp(coef[rownames(area)])),las=1,cex.axis=.5)
-    if(log)dnar::insetScale(log10(breaks),cols,insetPos=c(.015,.06,.0225,.35),at=0:3,labels=sapply(0:3,function(xx)as.expression(bquote(10^.(xx)))),main='Macrophage replication (p24 AUC)')
-    else dnar::insetScale(breaks,cols,insetPos=c(.015,.06,.0225,.35),main='Macrophage replication (p24 AUC)')
+    if(log){
+      #addCol<-c(cols[1],'black',cols[-1])
+      #addBreak<-c(breaks[1],8.5,breaks[-1])
+      #dnar::insetScale(ifelse(1:length(breaks)==1,log(cutoff*.9),log10(breaks)),cols,insetPos=c(.015,.06,.0225,.35),at=c(log10(cutoff),1:3),labels=c(sprintf('<%d',cutoff),sapply(1:3,function(xx)as.expression(bquote(10^.(xx))))),main='Macrophage replication (p24 AUC)',labYOffset=c(-.3,0,0,0))
+      dnar::insetScale(ifelse(1:length(breaks)==1,log(cutoff*.9),log10(breaks)),cols,insetPos=c(.015,.06,.0225,.35),at=c(1:3),labels=c(sapply(1:3,function(xx)as.expression(bquote(10^.(xx))))),main='Macrophage replication (p24 AUC)')
+    }else{
+      dnar::insetScale(breaks,cols,insetPos=c(.015,.06,.0225,.35),main='Macrophage replication (p24 AUC)')
+    }
   }
   #plotFunc(area)
-  plotFunc(area[order(coef[rownames(area)]),])
-  plotFunc(area[order(coef[rownames(area)]),],log=FALSE)
+  plotFunc(area[order(coef[rownames(area)]),sort(colnames(area))])
+  plotFunc(area[order(coef[rownames(area)]),sort(colnames(area))],log=FALSE)
 dev.off()
 system('pdftk out/macroAucHeat.pdf cat 2 output out/macroAucHeat_linear.pdf')
+system('pdftk out/macroAucHeat.pdf cat 1 output out/Fig._S8.pdf')
 
 
 pdf('out/macroCompare.pdf',width=5,height=3)
   par(mar=c(2.1,4,.1,.1))
   #xPos<-structure(1:length(unique(virDf$type2)),.Names=unique(virDf$type2))
-  xPos<-c('TF'=1,'Chronic'=2,'Rebound'=3,'VOA'=4)
+  xPos<-c('TF'=3,'Chronic'=4,'Rebound'=1,'VOA'=2)
   if(any(!virDf$type2 %in% names(xPos)))stop('Extra type')
   #posOffset<-ave(virDf$auc,virDf$type2,FUN=function(xx)seq(-.1,.1,length.out=length(xx)))
   #plot(xPos[as.character(virDf$type2)]+posOffset,exp(virDf$auc),yaxt='n',xaxt='n',log='y',ylab='Inferred p24 AUC',xlab='',pch=21,bg=ifelse(is.na(virDf$tropism),NA,ifelse(virDf$tropism=='R5','#FF000033','#0000FF33')),type='n')
@@ -214,17 +287,18 @@ pdf('out/macroCompare.pdf',width=5,height=3)
   #points(xPos[as.character(virDf$type2)]+posOffset,exp(virDf$auc),pch=ifelse(virDf$isPos,8,21),col=ifelse(virDf$isPos,ifelse(virDf$tropism=='R5','#FF000077','#0000FF77'),'black'),bg=ifelse(is.na(virDf$tropism),NA,ifelse(virDf$tropism=='R5','#FF000033','#0000FF33')))
   points(xPos[as.character(virDf$type2[!virDf$isPos])]+posOffset[!virDf$isPos],exp(virDf$auc[!virDf$isPos]),pch=21,bg=ifelse(is.na(virDf$tropism[!virDf$isPos]),NA,ifelse(virDf$tropism[!virDf$isPos]=='R5','#FF000033','#0000FF33')))
   points(xPos[as.character(virDf$type2[virDf$isPos])]+posOffset[virDf$isPos],exp(virDf$auc[virDf$isPos]),pch='*',col=ifelse(virDf$tropism[virDf$isPos]=='R5','#FF000077','#0000FF77'),cex=1.5)
-  #abline(h=.2,lty=2)
+  abline(h=.2,lty=2)
   dnar::logAxis(las=1)
   axis(1,xPos,names(xPos),mgp=c(2,.7,0))
   legend('bottomleft',inset=c(-.16,-.203),c('R5','X4/Dual'),pch=21,pt.bg=c('#FF000033','#0000FF33'),xpd=NA,bty='n',y.intersp=.8)
+  #abline(h=9,lty=2)
   plot(xPos[as.character(virDf$type2)],exp(virDf$auc),xaxt='n',ylab='Macrophage replication (p24 AUC)',xlab='',type='n',xlim=range(xPos)+c(-.5,.5),las=1,mgp=c(3,.4,0),tcl=-.2)
   posOffset<-ave(exp(virDf$auc),virDf$type2,FUN=function(xx)beeswarm::swarmx(rep(0,length(xx)),xx,cex=.8)$x)
   points(xPos[as.character(virDf$type2[!virDf$isPos])]+posOffset[!virDf$isPos],exp(virDf$auc[!virDf$isPos]),pch=21,bg=ifelse(is.na(virDf$tropism[!virDf$isPos]),NA,ifelse(virDf$tropism[!virDf$isPos]=='R5','#FF000033','#0000FF33')))
   points(xPos[as.character(virDf$type2[virDf$isPos])]+posOffset[virDf$isPos],exp(virDf$auc[virDf$isPos]),pch='*',col=ifelse(virDf$tropism[virDf$isPos]=='R5','#FF000077','#0000FF77'),cex=1.5)
-  axis(1,xPos,names(xPos),mgp=c(2,.7,0))
+  axis(1,xPos,sub('VOA','QVOA',names(xPos)),mgp=c(2,.7,0))
   legend('bottomleft',inset=c(-.17,-.203),c('R5','X4/Dual'),pch=21,pt.bg=c('#FF000033','#0000FF33'),xpd=NA,bty='n',y.intersp=.8)
-  abline(h=500,lty=2)
+  #abline(h=9,lty=2)
   #tmp<-virDf[virDf$tropism=='R5'&!is.na(virDf$tropism),]
   #xPos<-structure(1:length(levels(tmp$type2)),.Names=levels(tmp$type2))
   #posOffset<-ave(tmp$auc,tmp$type2,FUN=function(xx)seq(-.05,.05,length.out=length(xx)))
@@ -234,9 +308,12 @@ pdf('out/macroCompare.pdf',width=5,height=3)
   #axis(1,xPos,names(xPos))
 dev.off()
 system('pdftk out/macroCompare.pdf cat 2 output out/macroCompare_linear.pdf')
+system('pdftk out/macroCompare.pdf cat 2 output out/Fig._7.pdf')
 
 
 pdf('out/macPredHeat.pdf')
+  breaks<-seq(min(area,na.rm=TRUE)*.99,max(area,na.rm=TRUE)*1.01,length.out=101)
+  cols<-rev(heat.colors(100))
   image(1:ncol(area),1:nrow(area),exp(t(predMat)),col=cols,breaks=breaks,xaxt='n',yaxt='n',xlab='',ylab='')
   axis(1,1:ncol(area),colnames(area),tcl=-.3,mgp=c(1,.4,0))
   axis(2,1:nrow(area),rownames(area),las=1,cex.axis=.5)
@@ -247,75 +324,77 @@ pdf('out/macPredHeat.pdf')
   dnar::insetScale(log10(breaks),cols,insetPos=c(.0175,.01,.025,.3),at=0:3,labels=sapply(0:3,function(xx)as.expression(bquote(10^.(xx)))),main='p24 AUC')
 dev.off()
 
-#virDf$virus %in% seqs$name
-seqs<-dnar::read.fa('a08Seqs/AlignSeq.nt.fasta')
-seqs$trim<-substring(seqs$seq,6500,8500)
-pdf('test.pdf')
-dnaplotr::plotDNA(seqs$seq)
-dnaplotr::plotDNA(seqs$trim)
-dev.off()
-dists<-levenR::leven(seqs$trim[-1],nThreads=3)
-seqSplit<-do.call(rbind,strsplit(seqs$trim,''))
-dists2<-do.call(rbind,lapply(2:nrow(seqSplit),function(xx)sapply(2:nrow(seqSplit),function(yy)sum(seqSplit[xx,]!=seqSplit[yy,]))))
-rownames(dists2)<-seqs$name[-1]
-tree<-phangorn::NJ(dists2)
+if(FALSE){
+  #virDf$virus %in% seqs$name
+  seqs<-dnar::read.fa('a08Seqs/AlignSeq.nt.fasta')
+  seqs$trim<-substring(seqs$seq,6500,8500)
+  pdf('test.pdf')
+  dnaplotr::plotDNA(seqs$seq)
+  dnaplotr::plotDNA(seqs$trim)
+  dev.off()
+  dists<-levenR::leven(seqs$trim[-1],nThreads=3)
+  seqSplit<-do.call(rbind,strsplit(seqs$trim,''))
+  dists2<-do.call(rbind,lapply(2:nrow(seqSplit),function(xx)sapply(2:nrow(seqSplit),function(yy)sum(seqSplit[xx,]!=seqSplit[yy,]))))
+  rownames(dists2)<-seqs$name[-1]
+  tree<-phangorn::NJ(dists2)
 
-a08<-virDf[grep('A08',virDf$virus),]
-a08$id<-sapply(strsplit(sub('_(BE|UT)$','',sub('[ _]293T.*','',a08$virus)),'[ _.-]'),tail,1)
-hits<-sapply(a08$id,grep,seqs$name)
-names(hits)<-a08$virus
-hits[['Reb. A08.21-7C1']]<-grep('21[._-]7C1',seqs$name)
-hits[['Reb. A08.21-7D3']]<-grep('21[._-]7D3',seqs$name)
-hits[sapply(hits,length)!=1]
-if(any(sapply(hits,length)>1))stop('Multi hit')
-a08$seqId<-seqs$name[sapply(hits,function(xx)if(length(xx)==0) NA else xx)]
-probs<-is.na(a08$ic50)
-hits2<-sapply(a08[probs,'id'],function(xx)which(grepl('A08',s3$Isolate.ID)&grepl(xx,s3$Isolate.ID)))
-if(any(sapply(hits2,length)>1))stop('Multi hit')
-a08[probs,'ic50']<-sapply(hits2,function(xx)if(length(xx)==1)s3[xx,'IFN.b.IC50..pg.ml.'] else NA)
-a08$isRebound<-grepl('Reb',a08$virus)
-aucs<-sapply(tree$tip.label,function(xx)if(any(tmp<-a08$seqId==xx&!is.na(a08$seqId)))a08[tmp,'auc'] else NA)
-trops<-sapply(tree$tip.label,function(xx)if(any(tmp<-a08$seqId==xx&!is.na(a08$seqId)))a08[tmp,'tropism'] else NA)
-ics<-sapply(tree$tip.label,function(xx)if(any(tmp<-a08$seqId==xx&!is.na(a08$seqId)))a08[tmp,'ic50'] else NA)
-rebound<-sapply(tree$tip.label,function(xx)if(any(tmp<-a08$seqId==xx&!is.na(a08$seqId)))a08[tmp,'isRebound'] else NA)
+  a08<-virDf[grep('A08',virDf$virus),]
+  a08$id<-sapply(strsplit(sub('_(BE|UT)$','',sub('[ _]293T.*','',a08$virus)),'[ _.-]'),tail,1)
+  hits<-sapply(a08$id,grep,seqs$name)
+  names(hits)<-a08$virus
+  hits[['Reb. A08.21-7C1']]<-grep('21[._-]7C1',seqs$name)
+  hits[['Reb. A08.21-7D3']]<-grep('21[._-]7D3',seqs$name)
+  hits[sapply(hits,length)!=1]
+  if(any(sapply(hits,length)>1))stop('Multi hit')
+  a08$seqId<-seqs$name[sapply(hits,function(xx)if(length(xx)==0) NA else xx)]
+  probs<-is.na(a08$ic50)
+  hits2<-sapply(a08[probs,'id'],function(xx)which(grepl('A08',s3$Isolate.ID)&grepl(xx,s3$Isolate.ID)))
+  if(any(sapply(hits2,length)>1))stop('Multi hit')
+  a08[probs,'ic50']<-sapply(hits2,function(xx)if(length(xx)==1)s3[xx,'IFN.b.IC50..pg.ml.'] else NA)
+  a08$isRebound<-grepl('Reb',a08$virus)
+  aucs<-sapply(tree$tip.label,function(xx)if(any(tmp<-a08$seqId==xx&!is.na(a08$seqId)))a08[tmp,'auc'] else NA)
+  trops<-sapply(tree$tip.label,function(xx)if(any(tmp<-a08$seqId==xx&!is.na(a08$seqId)))a08[tmp,'tropism'] else NA)
+  ics<-sapply(tree$tip.label,function(xx)if(any(tmp<-a08$seqId==xx&!is.na(a08$seqId)))a08[tmp,'ic50'] else NA)
+  rebound<-sapply(tree$tip.label,function(xx)if(any(tmp<-a08$seqId==xx&!is.na(a08$seqId)))a08[tmp,'isRebound'] else NA)
 
 
 
-breaks<-exp(seq(min(aucs,na.rm=TRUE)-.01,max(aucs,na.rm=TRUE)+.01,length.out=101))
-aucCut<-cut(exp(aucs),breaks)
-aucCols<-dnar::rainbow.lab(100)
-breaks2<-exp(seq(min(log(s3$IFN.b.IC50..pg.ml.),na.rm=TRUE)-.01,max(log(s3$IFN.b.IC50..pg.ml.),na.rm=TRUE)+.01,length.out=101))
-icCut<-cut(ics,breaks2)
-icCols<-rev(heat.colors(120))[-1:-20]
+  breaks<-exp(seq(min(aucs,na.rm=TRUE)-.01,max(aucs,na.rm=TRUE)+.01,length.out=101))
+  aucCut<-cut(exp(aucs),breaks)
+  aucCols<-dnar::rainbow.lab(100)
+  breaks2<-exp(seq(min(log(s3$IFN.b.IC50..pg.ml.),na.rm=TRUE)-.01,max(log(s3$IFN.b.IC50..pg.ml.),na.rm=TRUE)+.01,length.out=101))
+  icCut<-cut(ics,breaks2)
+  icCols<-rev(heat.colors(120))[-1:-20]
 
-tropCols<-c('X4'='#0000FF','R5'='#FF0000','Dual'='#880088')
-library(ggtree)
-pdf('out/A08MacroTree.pdf')
-  out<-ggtree(tree)+#,size=.2,ladderize=FALSE)
-    geom_tiplab(color=tropCols[trops],size=min(7.5,1500/length(tree$tip.label)),label='-',vjust=.35)+
-    geom_tiplab(color=aucCols[as.numeric(aucCut)],size=min(7.5,1500/length(tree$tip.label)),label='  -',vjust=.35)+
-    geom_tiplab(color=icCols[as.numeric(icCut)],size=min(7.5,1500/length(tree$tip.label)),label='    -',vjust=.35)+
-    geom_tiplab(size=5,label=ifelse(!is.na(rebound)&rebound,'         *',''),vjust=.8)+
-    geom_tiplab(size=2,label=ifelse(grepl('M[0-9]+$',tree$tip.label),sprintf('%s',sub('^.*(M[0-9]+)$','\\1',tree$tip.label)),''),vjust=.4)+
-    geom_treescale(offset=-5,fontsize=2.5,x=.01,y=-.05*length(tree$tip.label))
-  #print(out)
-  vp<-grid::viewport()
-  par(mar=c(0,0,0,0))
-  plot(1,1,type='n',xaxt='n',yaxt='n',xlab='',ylab='',bty='n')
-  print(out,vp=vp)
-  ticks<-log10(c(.2,.5,1,2,4))
-  ticks<-ticks[10^ticks>min(breaks)&10^ticks<max(breaks)]
-  legend(grconvertX(.175,'npc','user'),grconvertY(.05,'npc','user'),names(tropCols),fill=tropCols,cex=.65,yjust=.4,bty='n')
-  #dnar::insetScale(log(breaks),aucCols,main='Macrophage growth (AUC)',insetPos =c(0.05, 0.3, 0.07, 0.5),at=log(10^ticks),lab=sapply(ticks,function(xx)as.expression(bquote(10^.(xx)))),cex=.7)
-  dnar::insetScale(log(breaks),aucCols,main='Macrophage growth (AUC)',insetPos =c(0.05, 0.3, 0.07, 0.5),at=log(10^ticks),lab=10^ticks,cex=.7)
-  ticks2<-pretty(log10(breaks2))
-  ticks2<-ticks2[10^ticks2>min(breaks2)&10^ticks2<max(breaks2)]
-  dnar::insetScale(log(breaks2),icCols,main='IFNb IC50 (pg/ml)',insetPos =c(0.05, 0.55, 0.07, 0.75),at=log(10^ticks2),lab=sapply(ticks2,function(xx)as.expression(bquote(10^.(xx)))),cex=.7)
-  legend(grconvertX(.8,'npc','user'),grconvertY(.05,'npc','user'),'Rebound',pch='*',pt.cex=1,cex=.7,yjust=.4,bty='n')
-dev.off()
+  tropCols<-c('X4'='#0000FF','R5'='#FF0000','Dual'='#880088')
+  library(ggtree)
+  pdf('out/A08MacroTree.pdf')
+    out<-ggtree(tree)+#,size=.2,ladderize=FALSE)
+      geom_tiplab(color=tropCols[trops],size=min(7.5,1500/length(tree$tip.label)),label='-',vjust=.35)+
+      geom_tiplab(color=aucCols[as.numeric(aucCut)],size=min(7.5,1500/length(tree$tip.label)),label='  -',vjust=.35)+
+      geom_tiplab(color=icCols[as.numeric(icCut)],size=min(7.5,1500/length(tree$tip.label)),label='    -',vjust=.35)+
+      geom_tiplab(size=5,label=ifelse(!is.na(rebound)&rebound,'         *',''),vjust=.8)+
+      geom_tiplab(size=2,label=ifelse(grepl('M[0-9]+$',tree$tip.label),sprintf('%s',sub('^.*(M[0-9]+)$','\\1',tree$tip.label)),''),vjust=.4)+
+      geom_treescale(offset=-5,fontsize=2.5,x=.01,y=-.05*length(tree$tip.label))
+    #print(out)
+    vp<-grid::viewport()
+    par(mar=c(0,0,0,0))
+    plot(1,1,type='n',xaxt='n',yaxt='n',xlab='',ylab='',bty='n')
+    print(out,vp=vp)
+    ticks<-log10(c(.2,.5,1,2,4))
+    ticks<-ticks[10^ticks>min(breaks)&10^ticks<max(breaks)]
+    legend(grconvertX(.175,'npc','user'),grconvertY(.05,'npc','user'),names(tropCols),fill=tropCols,cex=.65,yjust=.4,bty='n')
+    #dnar::insetScale(log(breaks),aucCols,main='Macrophage growth (AUC)',insetPos =c(0.05, 0.3, 0.07, 0.5),at=log(10^ticks),lab=sapply(ticks,function(xx)as.expression(bquote(10^.(xx)))),cex=.7)
+    dnar::insetScale(log(breaks),aucCols,main='Macrophage growth (AUC)',insetPos =c(0.05, 0.3, 0.07, 0.5),at=log(10^ticks),lab=10^ticks,cex=.7)
+    ticks2<-pretty(log10(breaks2))
+    ticks2<-ticks2[10^ticks2>min(breaks2)&10^ticks2<max(breaks2)]
+    dnar::insetScale(log(breaks2),icCols,main='IFNb IC50 (pg/ml)',insetPos =c(0.05, 0.55, 0.07, 0.75),at=log(10^ticks2),lab=sapply(ticks2,function(xx)as.expression(bquote(10^.(xx)))),cex=.7)
+    legend(grconvertX(.8,'npc','user'),grconvertY(.05,'npc','user'),'Rebound',pch='*',pt.cex=1,cex=.7,yjust=.4,bty='n')
+  dev.off()
 
-pdf('out/A08_ic50_vs_macro.pdf',height=5,width=5)
-par(mar=c(4,4,.3,.5))
-plot(a08$ic50,exp(ifelse(a08$auc<log(.15),log(.15),a08$auc)),bg=sprintf('%s66',tropCols[a08$tropism]),pch=21,ylab='Macrophage replication (AUC)',log='xy',las=1,xaxt='n',xlab='IFNb IC50 (pg/ml)')
-dnar::logAxis(1)
-dev.off()
+  pdf('out/A08_ic50_vs_macro.pdf',height=5,width=5)
+  par(mar=c(4,4,.3,.5))
+  plot(a08$ic50,exp(ifelse(a08$auc<log(.15),log(.15),a08$auc)),bg=sprintf('%s66',tropCols[a08$tropism]),pch=21,ylab='Macrophage replication (AUC)',log='xy',las=1,xaxt='n',xlab='IFNb IC50 (pg/ml)')
+  dnar::logAxis(1)
+  dev.off()
+}
