@@ -67,7 +67,7 @@ plotVlCd4<-function(thisMeta,main,xlim,cd4Lim,vlLim,xAxis=TRUE,vlAxis=TRUE,cd4Ax
   #abline(h=c(350),col='orange',lty=3)
   #abline(v=less350Time[thisMeta$mm[1]]/7,col='orange')
   thisDat<-unique(thisMeta[!is.na(thisMeta$vl),c('time','vl')])
-  if(cd4Axis)axis(4,pretty(compiledMeta$cd4,n=5),las=1,col.axis='blue',cex.axis=1.1)
+  if(cd4Axis)axis(4,pretty(compiledMeta$cd4,n=5),las=1,col.axis='blue',cex.axis=1.1,mgp=c(3,.6,0),tcl=-.3)
   par(new=TRUE)
   plot(thisDat$time/7,thisDat$vl,type='n',log='y',yaxt='n',xlab='',ylab='',xlim=xlim,ylim=vlLim,xaxt='n',col='red',lwd=2)
   reduceDat<-thisDat[c(TRUE,!sapply(2:(nrow(thisDat)-1),function(zz)all(thisDat[zz+-1:1,'vl']<=50)),TRUE),]
@@ -75,9 +75,75 @@ plotVlCd4<-function(thisMeta,main,xlim,cd4Lim,vlLim,xAxis=TRUE,vlAxis=TRUE,cd4Ax
   isDashed<-(reduceDat$vl[-nrow(reduceDat)]<=lowerP24Limit&reduceDat$vl[-1]<=lowerP24Limit)|(reduceDat$vl[-1]<=lowerP24Limit&reduceDat$time[-1]-reduceDat$time[-nrow(reduceDat)]>120)
   segments(reduceDat$time[-nrow(reduceDat)]/7,reduceDat$vl[-nrow(reduceDat)],reduceDat$time[-1]/7,reduceDat$vl[-1],col='red',lwd=ifelse(isDashed,1.5,2),lty=ifelse(isDashed,3,1))
   if(xAxis)axis(1,pretty(xlim),cex.axis=1.2,tcl=-.3,mgp=c(3,.5,0))
-  if(vlAxis)logAxis(2,mgp=c(3,1,0),las=1,col.axis='red',cex.axis=1.3)
+  if(vlAxis)logAxis(2,mgp=c(3,.8,0),las=1,col.axis='red',cex.axis=1.3)
 }
-
+for(showLegend in c(TRUE,FALSE)){
+pdf(sprintf('out/subjects_condense_new%s.pdf',ifelse(showLegend,'_legend','')),width=3.54,height=8)
+  par(mar=c(0,0,0,0))
+  layout(lay2,width=c(.47,rep(1,2),.53),height=c(.13,c(1,1,1,.2,1,.2,1),ifelse(showLegend,.8,.28)))
+  #layout(lay,width=c(.5,rep(1,2),.5),height=c(.01,rep(1,5),.35))
+  counter<-1
+  xlim<-range(c(dat$time/7,lastDfosx/7))
+  for(ii in patOrder){
+    plotVlCd4(compiledMeta[compiledMeta$mm==ii,],ii,xlim,range(compiledMeta$cd4,na.rm=TRUE),range(compiledMeta$vl,na.rm=TRUE),counter>4,counter%%2==1,counter%%2==0)
+    #if(counter>=5&counter<9)axis(1,pretty(xlim),rep('',length(pretty(xlim))))
+    #title(sprintf('%s %s',ii,ifelse(ii %in% rownames(founders),sprintf(' (%s)',founders[ii,'tf']),'')),line=-1)
+    labCex<-1.7
+    if(counter==6)text(par('usr')[2]+.41*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),expression(paste('CD4 count (cells/mm'^3,')')),srt=-90,xpd=NA,col='blue',cex=labCex)
+    if(counter==5)text(par('usr')[1]-.38*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),'Viral load (copies/ml)',srt=90,xpd=NA,col='red',cex=labCex)
+    par(lheight=.7)
+    if(counter==9)text(max(par('usr')[1:2]),10^(par('usr')[3]-ifelse(showLegend,.33,.22)*diff(par('usr')[3:4])),ifelse(showLegend,'Weeks from onset\nof symptoms','Weeks from onset of symptoms'),xpd=NA,cex=labCex)
+    if(counter==10&showLegend){
+      xRight<-grconvertX(.785,'ndc','user')
+      annotWidth<-grconvertX(.99,'ndc','user')-grconvertX(.96,'ndc','user')
+      annotYPos<-rev(grconvertY(seq(.012,.082,length.out=6),'ndc','user'))
+      yStep<-abs(diff(log10(annotYPos[2:3])))
+      segments(xRight-annotWidth,annotYPos[1:2],xRight,annotYPos[1:2],xpd=NA,col=c('red','blue'))
+      #VOA
+      segments(rep(xRight-annotWidth/2,3),rep(annotYPos[3],3)/10^(yStep*.4),rep(xRight-annotWidth/2,3)+c(-6,0,6),rep(annotYPos[3],3)*c(1.7,10^(yStep*.8),1.7)/10^(yStep*.4),lwd=1.2,col='purple',xpd=NA)
+      #Super
+      segments(rep(xRight-annotWidth/2,3)+c(-9,0,9),rep(annotYPos[4],3)*10^c(yStep*.7,0,yStep*.7)/10^(yStep*.35),rep(xRight-annotWidth/2,3)+c(0,9,-9),rep(annotYPos[4],3)*10^c(0,yStep*.7,yStep*.7)/10^(yStep*.35),lwd=1.2,xpd=NA)
+      #ARTs
+      rect(xRight-annotWidth,annotYPos[c(5:6,6)]/10^(yStep*.3),xRight,c(annotYPos[5:6],annotYPos[6]/10^(yStep*.3))*10^(yStep*.3),xpd=NA,border=NA,col=c('#00000022','#00000011'))
+      text(xRight+annotWidth/5,annotYPos,c('Viral load','CD4 count','VOA isolation','Superinfection','cART treatment','AZT treatment'),xpd=NA,adj=0)
+      rect(xRight-annotWidth-24,min(annotYPos)/10^(yStep*.7),grconvertX(.995,'ndc','user'),max(annotYPos)*10^(yStep*.7),xpd=NA,border='#00000099')
+    }
+    if(counter==1)text(grconvertX(-.31,from='npc'),grconvertY(1.1,from='npc'),'A',xpd=NA,adj=c(0,1),cex=2.5)
+    if(counter==7)text(grconvertX(-.31,from='npc'),grconvertY(1.12,from='npc'),'B',xpd=NA,adj=c(0,1),cex=2.5)
+    if(counter==9)text(grconvertX(-.31,from='npc'),grconvertY(1.12,from='npc'),'C',xpd=NA,adj=c(0,1),cex=2.5)
+    counter<-counter+1
+    #thisLast<-lastDfosx[ii]
+    thisLast<-max(compiledMeta[compiledMeta$mm==ii&(!is.na(compiledMeta$cd4)|!is.na(compiledMeta$vl)),'time'])
+    if(ii %in% names(artDfosx)&&!is.na(artDfosx[ii])){
+      rect(artDfosx[ii]/7,10^par('usr')[3],thisLast/7,10^par('usr')[4],col='#00000011',border=NA)
+      #text(mean(c(artDfosx[ii]/7,par('usr')[2])),10^(par('usr')[4]-diff(par('usr')[3:4])*.3),'ART treatment',xpd=NA)
+    }
+    if(!is.na(thisSuper<-founders[ii,'superTime'])){
+      superTime<-compiledMeta[compiledMeta$mm==ii&compiledMeta$time==thisSuper,]
+      baseY<-20
+      segments(rep(thisSuper/7,3)+c(-9,0,9),rep(baseY,3)*c(6,2,6),rep(thisSuper/7,3)+c(0,9,-9),rep(baseY,3)*c(2,6,6),lwd=1.2)
+    }
+    if(nrow(thisVoa<-dat[dat$pat==ii&dat$qvoa,])>0){
+      baseY<-6e5 #superTime$vl*3
+      for(jj in 1:nrow(thisVoa)){
+        segments(rep(thisVoa$time[jj]/7,3),rep(baseY,3),rep(thisVoa$time[jj]/7,3)+c(-7,0,7),rep(baseY,3)*c(2,6,2),lwd=1.2,col='purple')
+      }
+    }
+    if(ii %in% names(aztDfosx)){
+      thisAzt<-aztDfosx[[ii]]
+      #abline(v=thisAzt[1]/7,lty=2)
+      nRects<-31
+      vertBreaks<-seq(par('usr')[3],par('usr')[4],length.out=nRects+1)
+      rect(thisAzt[1]/7,10^vertBreaks[seq(1,nRects,2)],thisAzt[2]/7,10^vertBreaks[seq(2,nRects+1,2)],col='#00000008',border=NA)
+      rect(thisAzt[1]/7,10^vertBreaks[1],thisAzt[2]/7,10^vertBreaks[nRects+1],col='#00000004',border=NA)
+      #abline(v=thisAzt[1]/7,lty='F1',col='#999999')
+      #points(rep(thisAzt[1]/7,30),10^seq(par('usr')[3],par('usr')[4],length.out=30),pch=21,col=NA,bg='#00000055',cex=.5)
+    }
+    abline(v=thisLast/7,lty=2,col='#00000099')
+  }
+dev.off()
+}
+file.copy('out/subjects_condense_new.pdf','out/Fig._1.pdf',overwrite=TRUE)
 
 pdf('out/weau_cd4Vl_alpha_beta.pdf',width=3*1.1,height=5,useDingbats=FALSE)
   par(mar=c(0,0,0,0))
@@ -97,73 +163,6 @@ pdf('out/weau_cd4Vl_alpha_beta.pdf',width=3*1.1,height=5,useDingbats=FALSE)
   logAxis(2,las=1,cex.axis=1.1,mgp=c(3,.7,0))
   mtext('Weeks after onset of symptoms',1,1.9,cex=.75)
 dev.off()
-
-
-
-for(showLegend in c(TRUE,FALSE)){
-pdf(sprintf('out/subjects_condense_new%s.pdf',ifelse(showLegend,'_legend','')),width=4,height=8)
-  par(mar=c(0,0,0,0))
-  layout(lay2,width=c(.47,rep(1,2),.55),height=c(.15,c(1,1,1,.2,1,.2,1),ifelse(showLegend,.8,.48)))
-  #layout(lay,width=c(.5,rep(1,2),.5),height=c(.01,rep(1,5),.35))
-  counter<-1
-  xlim<-range(c(dat$time/7,lastDfosx/7))
-  for(ii in patOrder){
-    plotVlCd4(compiledMeta[compiledMeta$mm==ii,],ii,xlim,range(compiledMeta$cd4,na.rm=TRUE),range(compiledMeta$vl,na.rm=TRUE),counter>4,counter%%2==1,counter%%2==0)
-    #if(counter>=5&counter<9)axis(1,pretty(xlim),rep('',length(pretty(xlim))))
-    #title(sprintf('%s %s',ii,ifelse(ii %in% rownames(founders),sprintf(' (%s)',founders[ii,'tf']),'')),line=-1)
-    labCex<-1.7
-    if(counter==6)text(par('usr')[2]+.45*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),expression(paste('CD4 count (cells/mm'^3,')')),srt=-90,xpd=NA,col='blue',cex=labCex)
-    if(counter==5)text(par('usr')[1]-.38*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),'Viral load (copies/ml)',srt=90,xpd=NA,col='red',cex=labCex)
-    par(lheight=.7)
-    if(counter==9)text(max(par('usr')[1:2]),10^(par('usr')[3]-.33*diff(par('usr')[3:4])),'Weeks after onset\nof symptoms',xpd=NA,cex=labCex)
-    if(counter==10&showLegend){
-      xRight<-grconvertX(.785,'ndc','user')
-      annotWidth<-grconvertX(.99,'ndc','user')-grconvertX(.96,'ndc','user')
-      annotYPos<-rev(grconvertY(seq(.012,.082,length.out=6),'ndc','user'))
-      yStep<-abs(diff(log10(annotYPos[2:3])))
-      segments(xRight-annotWidth,annotYPos[1:2],xRight,annotYPos[1:2],xpd=NA,col=c('red','blue'))
-      #VOA
-      segments(rep(xRight-annotWidth/2,3),rep(annotYPos[3],3)/10^(yStep*.4),rep(xRight-annotWidth/2,3)+c(-6,0,6),rep(annotYPos[3],3)*c(1.7,10^(yStep*.8),1.7)/10^(yStep*.4),lwd=1.2,col='purple',xpd=NA)
-      #Super
-      segments(rep(xRight-annotWidth/2,3)+c(-9,0,9),rep(annotYPos[4],3)*10^c(yStep*.7,0,yStep*.7)/10^(yStep*.35),rep(xRight-annotWidth/2,3)+c(0,9,-9),rep(annotYPos[4],3)*10^c(0,yStep*.7,yStep*.7)/10^(yStep*.35),lwd=1.2,xpd=NA)
-      #ARTs
-      rect(xRight-annotWidth,annotYPos[c(5:6,6)]/10^(yStep*.3),xRight,c(annotYPos[5:6],annotYPos[6]/10^(yStep*.3))*10^(yStep*.3),xpd=NA,border=NA,col=c('#00000022','#00000011'))
-      text(xRight+annotWidth/5,annotYPos,c('Viral load','CD4 count','VOA isolation','Superinfection','cART treatment','AZT treatment'),xpd=NA,adj=0)
-      rect(xRight-annotWidth-24,min(annotYPos)/10^(yStep*.7),grconvertX(.995,'ndc','user'),max(annotYPos)*10^(yStep*.7),xpd=NA,border='#00000099')
-    }
-    if(counter==1)text(grconvertX(-.29,from='npc'),grconvertY(1.12,from='npc'),'A',xpd=NA,adj=c(0,1),cex=2.5)
-    if(counter==7)text(grconvertX(-.29,from='npc'),grconvertY(1.12,from='npc'),'B',xpd=NA,adj=c(0,1),cex=2.5)
-    if(counter==9)text(grconvertX(-.29,from='npc'),grconvertY(1.12,from='npc'),'C',xpd=NA,adj=c(0,1),cex=2.5)
-    counter<-counter+1
-    #thisLast<-lastDfosx[ii]
-    thisLast<-max(compiledMeta[compiledMeta$mm==ii&(!is.na(compiledMeta$cd4)|!is.na(compiledMeta$vl)),'time'])
-    if(ii %in% names(artDfosx)&&!is.na(artDfosx[ii])){
-      rect(artDfosx[ii]/7,10^par('usr')[3],thisLast/7,10^par('usr')[4],col='#00000022',border=NA)
-      #text(mean(c(artDfosx[ii]/7,par('usr')[2])),10^(par('usr')[4]-diff(par('usr')[3:4])*.3),'ART treatment',xpd=NA)
-    }
-    if(!is.na(thisSuper<-founders[ii,'superTime'])){
-      superTime<-compiledMeta[compiledMeta$mm==ii&compiledMeta$time==thisSuper,]
-      baseY<-20
-      segments(rep(thisSuper/7,3)+c(-9,0,9),rep(baseY,3)*c(6,2,6),rep(thisSuper/7,3)+c(0,9,-9),rep(baseY,3)*c(2,6,6),lwd=1.2)
-    }
-    if(nrow(thisVoa<-dat[dat$pat==ii&dat$qvoa,])>0){
-      baseY<-6e5 #superTime$vl*3
-      for(jj in 1:nrow(thisVoa)){
-        segments(rep(thisVoa$time[jj]/7,3),rep(baseY,3),rep(thisVoa$time[jj]/7,3)+c(-7,0,7),rep(baseY,3)*c(2,6,2),lwd=1.2,col='purple')
-      }
-    }
-    if(ii %in% names(aztDfosx)){
-      thisAzt<-aztDfosx[[ii]]
-      #abline(v=thisAzt[1]/7,lty=2)
-      nRects<-31
-      vertBreaks<-seq(par('usr')[3],par('usr')[4],length.out=nRects+1)
-      rect(thisAzt[1]/7,10^vertBreaks[seq(1,nRects,2)],thisAzt[2]/7,10^vertBreaks[seq(2,nRects+1,2)],col='#00000011',border=NA)
-      rect(thisAzt[1]/7,10^vertBreaks[1],thisAzt[2]/7,10^vertBreaks[nRects+1],col='#00000011',border=NA)
-    }
-    abline(v=thisLast/7,lty=2,col='#00000099')
-  }
-dev.off()
-}
 
 pdf('out/subjects_condense_new_noArt.pdf',width=4,height=8.5)
   par(mar=c(0,0,0,0))
