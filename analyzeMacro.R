@@ -62,7 +62,7 @@ area<-do.call(rbind,lapply(structure(unique(macro$virus),.Names=unique(macro$vir
 stackArea<-data.frame('virus'=rep(rownames(area),ncol(area)),'donor'=rep(colnames(area),each=nrow(area)),'auc'=as.vector(area),row.names=NULL,stringsAsFactors=FALSE)
 baseDonor<-'zb725'
 stackArea$donor<- factor(stackArea$donor,levels=c(baseDonor,unique(stackArea$donor[stackArea$donor!=baseDonor])))
-summary(mod<-lm(I(log(auc))~virus+donor+0,data=stackArea[!is.na(stackArea$auc),]))
+mod<-lm(I(log(auc))~virus+donor+0,data=stackArea[!is.na(stackArea$auc),])
 noNa<-stackArea[!is.na(stackArea$auc),]
 plot(noNa[,'auc'],exp(predict(mod)),log='xy')
 abline(0,1)
@@ -72,8 +72,11 @@ pred<-predict(mod)
 predMat<-do.call(rbind,lapply(structure(rownames(area),.Names=rownames(area)),function(vir)sapply(structure(colnames(area),.Names=colnames(area)),function(don){if(any(tmp<-noNa$virus==vir&noNa$donor==don))pred[tmp]else NA})))
 
 
+
+
 s3<-read.csv('out/S3Update_20200226.csv',stringsAsFactors=FALSE)
 rownames(s3)<-s3$Isolate.ID
+
 
 virDf<-data.frame('virus'=rownames(predMat),'rebound'=grepl('[rR]eb',rownames(predMat)),'beta'=grepl('[_. -]BE',rownames(predMat)),stringsAsFactors=FALSE)
 virDf$bak<-sapply(virDf$virus,function(xx)macro[macro$virus==xx,'bak'][1])
@@ -88,6 +91,7 @@ virDf$type2<-classes[virDf$bak,'class']
 virDf$auc<-coef[virDf$virus]
 virDf$tropism<-sapply(virDf$virus,function(xx)finalNames[finalNames$ID==xx,'Virus.Tropism'])
 virDf$isPos<-sapply(virDf$virus,function(xx)finalNames[finalNames$ID==xx,'isPos'])
+rownames(virDf)<-virDf$virus
 #Reb..A08.2F5_293T.stock from email
 #virDf$tropism[virDf$virus %in% c('CH470TF 293T','CH58TF 293T','Reb. 9201_293T stock','Reb. 601r1_293T stock','Reb. A09-1A2_293T stock','Reb. A08-2F5_293T stock','Reb. A08-2F5_293T stock','CH492 P51A3 293T')]<-'R5'
 #virDf$tropism[virDf$virus %in% c('Reb. A08-1A5_293T stock','A08 UT P7C1','A08 BE P4E6','A08 UT P5E2')]<-'X4'
@@ -111,11 +115,82 @@ dnar::withAs(virDf=virDf[virDf$type2=='Rebound',],plot(exp(virDf$auc),virDf$ic50
 dnar::withAs(virDf=virDf[virDf$type2=='Rebound',],plot(rank(virDf$auc),rank(virDf$ic50_IFNb,na.last='keep'),log='y',xlab='Macrophage replication (p24 AUC)',ylab='IFNb IC50',pch=21,bg=c('VOA'='#0000FF55','Rebound'='#FF000055')[virDf$type2],las=1))
 dev.off()
 
+#Bayesian fit
+library('rstan')
+rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores())
+mac<-'
+  data {
+    int<lower=0> nVirus;
+    int<lower=0> nDonor;
+    int<lower=0> nObs;
+    real auc[nObs];
+    int<lower=0,upper=nDonor> donor[nObs];
+    int<lower=0,upper=nVirus> virus[nObs];
+    real censorBelow;
+  }
+  parameters {
+    vector[nVirus] virusBeta;
+    vector[nDonor] donorBeta;
+    real<lower=0> obsSd;
+    real<lower=0> donorSd;
+    //matrix[nVirus,nDonor] virusDonorBeta;
+  }
+  transformed parameters{
+    vector[nObs] predAuc;
+    for(ii in 1:nObs)predAuc[ii]=virusBeta[virus[ii]]+donorBeta[donor[ii]];//+virusDonorBeta[virus[ii],donor[ii]];
+  }
+  model {
+    for(ii in 1:nObs){
+      if(auc[ii]>censorBelow)auc[ii]~normal(predAuc[ii],obsSd);
+      else target += normal_lcdf(censorBelow|predAuc[ii],obsSd);
+    }
+    donorBeta~normal(0,donorSd);
+    virusBeta~normal(0,10);
+    obsSd~gamma(1,.1);
+    donorSd~gamma(1,.1);
+    //for(ii in 1:nVirus)virusDonorBeta[ii,]~double_exponential(0,1);
+  }\n
+'
+macMod <- stan_model(model_code = mac)
+areaDf<-do.call(rbind,lapply(structure(unique(macro$virus),.Names=unique(macro$virus)),function(vir){
+  do.call(rbind,lapply(structure(unique(macro$donor),.Names=unique(macro$donor)),function(don){
+      thisDat<-macro[macro$virus==vir&macro$donor==don,]
+      if(nrow(thisDat)==0)return(NULL)
+      auc<-sapply(1:(nrow(thisDat)/7),function(xx)auc(thisDat$day[1:7+7*(xx-1)],thisDat$p24[1:7+7*(xx-1)],low=2,high=20)$value)
+      out<-data.frame('virus'=vir,'donor'=don,'auc'=auc,stringsAsFactors=FALSE)
+  }))
+})) 
+donorId<-structure(1:length(unique(areaDf$donor)),.Names=sort(unique(areaDf$donor)))
+virusId<-structure(1:length(unique(areaDf$virus)),.Names=unique(areaDf$virus))
+dat=list(
+  nVirus=length(unique(areaDf$virus)),
+  nDonor=length(unique(areaDf$donor)),
+  nObs=nrow(areaDf),
+  auc=log(areaDf$auc),
+  donor=donorId[areaDf$donor],
+  virus=virusId[areaDf$virus],
+  censorBelow=log(9)
+)
+fit <- sampling(macMod, data = dat, iter=8000, chains=40)
+print(fit,c('predAuc','virusDonorBeta'),include=FALSE)
+
+mat<-as.matrix(fit)
+zz<-apply(mat[,grep('virusBeta',colnames(mat))],2,mean)
+names(zz)<-names(virusId)
+virDf$bayes<-zz[virDf$virus]
+preds<-apply(mat[,grep('predAuc',colnames(mat))],2,mean)
+pdf('test.pdf');plot(virDf$auc,ifelse(virDf$bayes<2.197,2.197,virDf$bayes));abline(0,1);plot(dat$auc,preds);abline(0,1);hist(dat$auc[dat$auc>log(9)]-preds[dat$auc>log(9)],breaks=20);plot(log(stackArea$auc[!is.na(stackArea$auc)]),pred);abline(0,1);dev.off()
+
+
+
+
 check<-read.csv('data/Table S5..csv',stringsAsFactors=FALSE,skip=4)
 bak<-check
 check$virus<-sub('QVOA','VOA',sub('[*]+$','',check$ID))
 check<-check[check$Type!='',]
-check[!check$virus %in% macro$virus ,'virus']
+if(any(!check$virus %in% macro$virus))stop('Missing virus')
+if(any(!check$virus %in% rownames(virDf)))stop('Missing virus')
 endPoint<-dnar::withAs(macro=macro[macro$day==20,],tapply(macro$p24,list(macro$virus,toupper(macro$donor)),mean))
 zb<-colnames(check)[grep('ZB',colnames(check))]
 endPoint[,]<-ifelse(is.na(endPoint),'',ifelse(endPoint>.5,'yes','no'))
@@ -125,17 +200,21 @@ min(aucCheck[check[,zb]=='yes'],na.rm=TRUE)
 aucCheck[,]<-ifelse(is.na(aucCheck),'',ifelse(aucCheck>9,'yes','no'))
 which(!check[,zb]==aucCheck,arr.ind=TRUE)
 tmp<-area[,tolower(zb)]
+tmp<-cbind(tmp,'average'=exp(virDf[rownames(tmp),'bayes']))
 fixLabs<-sub('QVOA','VOA',sub('[*]+$','',bak$ID))
 miss<-c(unique(fixLabs[!fixLabs %in% rownames(tmp)]),'FILL__')
-fill<-area[1:length(miss),];fill[,]<-NA
+fill<-cbind(area[1:length(miss),,drop=FALSE],'average'=NA);fill[,]<-NA
 rownames(fill)<-miss
 tmp<-rbind(tmp,fill)
 tmp<-round(tmp,2)
-tmp[tmp<9&!is.na(tmp)]<-'---'
+tmp[tmp<9&!is.na(tmp)]<-'<9'
 tmp[is.na(tmp)]<-''
 colnames(tmp)<-sprintf('AUC_%s',toupper(colnames(tmp)))
-bak<-cbind(bak,tmp[sub('^$','FILL__',sub('QVOA','VOA',sub('[*]+$','',bak$ID))),])
-if(any((bak[,grep("AUC",colnames(bak))]=='')!=(bak[,zb]=='')))stop('Missing AUC')
+expandTmp<-tmp[sub('^$','FILL__',sub('QVOA','VOA',sub('[*]+$','',bak$ID))),]
+rownames(expandTmp)<-NULL
+bak<-cbind(bak,expandTmp)
+if(any((bak[,!grepl("AVERAGE",colnames(bak))&grepl("AUC",colnames(bak))]=='')!=(bak[,zb]=='')))stop('Missing AUC')
+if(any(bak$ID %in% rownames(virDf)))
 write.csv(bak,'out/TableS5_update.csv',row.names=FALSE)
 
 pdf('out/ic50_vs_macro_logLog.pdf')
@@ -318,19 +397,20 @@ dev.off()
 system('pdftk out/macroCompare.pdf cat 2 output out/macroCompare_linear.pdf')
 
 virDf$type3<-ifelse(virDf$isPos,'Pos',virDf$type2)
-virDf$censor<-ifelse(exp(virDf$auc)<9,9,exp(virDf$auc))
-pdf('out/macroComparePlusExample.pdf',width=3.5,height=6)
+virDf$censor<-ifelse(exp(virDf$bayes)<9,9,exp(virDf$bayes))
+virDf$uncensor<-exp(virDf$bayes)
+pdf('out/macroComparePlusExample.pdf',width=3.5,height=5)
   for(logY in c('','y')){
-  layout(matrix(1:2,nrow=2),height=c(4,4))
-  cols<-c('Rebound'=unname(classCol['rebound']),'VOA'=unname(classCol['qvoa']),'TF'='#CCCCCC','Chronic'='#CCCCCC','Pos'='#000000')
+  layout(matrix(1:2,nrow=2),height=c(4,3))
+  cols<-c('Rebound'=unname(classCol['rebound']),'VOA'=unname(classCol['qvoa']),'TF'='#CCCCCC','Chronic'='#CCCCCC','Pos'='#333333')
   #
   selectExamples<-c('YU2','UG021','TYBE','601.REB.r1','A09.REB.1A2','9244.REB.9E6','9244.VOA.K2','9244.VOA.P11','9244.VOA.12J17','A08.REB.6D6','A08.REB.7C1','A08.VOA.1B5')
   thisDat<-macro[macro$virus %in% selectExamples&macro$donor=='zb31',]
   thisAvg<-tapply(thisDat$p24,list(thisDat$virus,thisDat$day),function(xx)exp(mean(log(xx))))
-  par(mar=c(3.5,3.2,.1,3.4))
-  plot(thisDat$day,thisDat$p24,type='n',log='y',yaxt='n',xlab='',ylab='p24 (ng/ml)',bty='l',mgp=c(2.3,.3,0),tcl=-.3,xlim=c(0,max(thisDat$day)))
+  par(mar=c(3.5,3.,.1,3.4))
+  plot(thisDat$day,thisDat$p24,type='n',log='y',yaxt='n',xlab='',ylab='p24 (ng/ml)',bty='l',mgp=c(2.15,.3,0),tcl=-.3,xlim=c(0,max(thisDat$day)))
   title(xlab='Days after infection',mgp=c(1.3,1,0))
-  dnar::logAxis(las=1,mgp=c(1,.8,0))
+  dnar::logAxis(las=1,mgp=c(1,.6,0))
   thisTypes<-sapply(structure(rownames(thisAvg),.Names=rownames(thisAvg)),function(xx)virDf[virDf$virus==xx,'type3'])
   thisTrop<-sapply(structure(rownames(thisAvg),.Names=rownames(thisAvg)),function(xx)virDf[virDf$virus==xx,'tropism'])
   for(ii in selectExamples){
@@ -345,25 +425,25 @@ pdf('out/macroComparePlusExample.pdf',width=3.5,height=6)
   for(kk in 1:length(thisLast))axis(4,lastPos[kk],names(thisLast)[kk],las=1,cex.axis=.4,mgp=c(1,.2,0),xpd=NA,tick=FALSE,col.axis=cols[thisTypes[names(thisLast)[kk]]],cex.axis=.5)
   #,col=cols[thisTypes[names(thisLast)]])
   segments(20.54,thisLast,dnar::convertLineToUser(.15,4),lastPos,xpd=NA,lwd=1,col='#999999')
-  par(mar=c(1.05,3.2,.8,0.6))
+  par(mar=c(1.05,3.6,.8,0.6),lheight=.8)
   ###
-  xPos<-c('TF'=3,'Chronic'=4,'Rebound'=1,'VOA'=2)
+  xPos<-c('TF'=3.1,'Chronic'=3.9,'Rebound'=1,'VOA'=2.2)
   if(any(!virDf$type2 %in% names(xPos)))stop('Extra type')
-  plot(xPos[as.character(virDf$type2)],if(logY=='y')virDf$censor else exp(virDf$auc),xaxt='n',ylab='Macrophage replication (p24 AUC)',xlab='',type='n',xlim=range(xPos)+c(-.45,.2),las=1,mgp=c(2.3,.4,0),tcl=-.2,bty='l',log=logY,yaxt='n')
+  plot(xPos[as.character(virDf$type2)],if(logY=='y')virDf$censor else virDf$uncensor,xaxt='n',ylab='Macrophage replication\n(average p24 AUC)',xlab='',type='n',xlim=range(xPos)+c(-.4,.25),las=1,mgp=c(1.95,.4,0),tcl=-.2,bty='l',log=logY,yaxt='n')
   if(logY=='y'){
     logAxis(las=1,mgp=c(1,.8,0))
   }else{
-    axis(2,las=1,mgp=c(1,.3,0),tcl=-.2)
+    axis(2,las=1,mgp=c(1,.25,0),tcl=-.15)
   }
   #posOffset<-ave(virDf$censor,virDf$type2,FUN=function(xx)beeswarm::swarmx(rep(0,length(xx)),xx,cex=ifelse(logY=='y',.85,.78))$x)
-  posOffset<-ave(if(logY=='y')virDf$censor else exp(virDf$auc),virDf$type2,FUN=function(xx)beeswarm::swarmx(rep(0,length(xx)),xx,cex=ifelse(logY=='y',.71,.76))$x)
+  posOffset<-ave(if(logY=='y')virDf$censor else virDf$uncensor,virDf$type2,FUN=function(xx)beeswarm::swarmx(rep(0,length(xx)),xx,cex=ifelse(logY=='y',.7,.8))$x)
   tmp<-cbind(virDf,posOffset)
-  dnar::withAs(xx=tmp[order(posOffset),],points(xPos[as.character(xx$type2)]+xx$posOffset,if(logY=='y')xx$censor else exp(xx$auc),pch=ifelse(xx$tropism=='R5',21,22),bg=cols[xx$type3],cex=1,lwd=ifelse(xx$virus %in% selectExamples,2.5,1)))
+  dnar::withAs(xx=tmp[order(posOffset),],points(xPos[as.character(xx$type2)]+xx$posOffset,if(logY=='y')xx$censor else xx$uncensor,pch=ifelse(xx$tropism=='R5',21,22),bg=cols[xx$type3],cex=1,lwd=ifelse(xx$virus %in% selectExamples,2.5,1)))
   for(ii in 1:length(xPos))axis(1,xPos[ii],sub('VOA','QVOA',names(xPos[ii])),mgp=c(2,.18,0),tcl=-.2)
   #legend('bottomleft',inset=c(-.25,-.215),c('R5','X4/Dual'),pch=c(21,22),xpd=NA,bty='n',y.intersp=.8,pt.cex=1.2)
-  legend('topright',inset=c(-0.03,-.11),c('R5','X4/Dual'),pch=c(21,22),xpd=NA,bty='',y.intersp=.8,pt.cex=1.05,cex=.9)
-  text(grconvertX(0.001,from='nfc'),grconvertY(1.06,from='nfc'),'B',xpd=NA,adj=c(0,1),cex=2)
+  legend('topright',inset=c(-0.03,-.27),c('R5','X4/Dual'),pch=c(21,22),xpd=NA,bty='',y.intersp=.8,pt.cex=1.05,cex=.9)
   abline(h=9,lty=2)
+  text(grconvertX(0.001,from='nfc'),grconvertY(1.09,from='nfc'),'B',xpd=NA,adj=c(0,1),cex=2)
   }
 dev.off()
 system('pdftk out/macroComparePlusExample.pdf cat 1 output out/Fig._5.pdf')
@@ -458,3 +538,6 @@ if(FALSE){
   dnar::logAxis(1)
   dev.off()
 }
+
+
+
