@@ -8,9 +8,11 @@ acuteChronicMM$virus<-acuteChronicMM$id
 acuteChronicMM$ic50_IFNa2<-acuteChronicMM$ic50
 acuteChronicMM$ic50_IFNb<-acuteChronicMM$beta
 acuteChronicMM$class<-ifelse(acuteChronicMM$qvoa,'Outgrowth',ifelse(acuteChronicMM$time<=acuteCut,'Acute','Chronic'))
-acuteChronicMM$displayClass<-ifelse(acuteChronicMM$qvoa,'Outgrowth',ifelse(acuteChronicMM$isNadir,'Nadir',ifelse(acuteChronicMM$isLast,'Last',ifelse(acuteChronicMM$time<=acuteCut,'Acute',NA))))
+#acuteChronicMM$displayClass<-ifelse(acuteChronicMM$qvoa,'Outgrowth',ifelse(acuteChronicMM$isNadir,'Nadir',ifelse(acuteChronicMM$isLast,'Last',ifelse(acuteChronicMM$time<=acuteCut,'Acute',NA))))
+acuteChronicMM$displayClass<-ifelse(acuteChronicMM$qvoa,'Outgrowth',ifelse(acuteChronicMM$time<=acuteCut,'Acute','Chronic'))
 acuteChronicMM$virus<-acuteChronicMM$id
-acuteChronicMM$repCap<-acuteChronicMM$infectivity<-acuteChronicMM$p24Release<-NA
+acuteChronicMM$repCap<-acuteChronicMM$replication
+acuteChronicMM$infectivity<-acuteChronicMM$p24Release<-NA
 #distinct "patient" for each time point (doesn't work because acute)
 #acuteChronicMM$pat<-acuteChronicMM$sample
 
