@@ -20,8 +20,8 @@ acuteChronicMM$infectivity<-acuteChronicMM$p24Release<-NA
 #voaMM$class<-'QVOA'
 #voa$study<-'MM'
 #voa$virus<-voa$id
-
-rebound2<-read.csv('data/Table S4.05.08.2020.csv',stringsAsFactors=FALSE,skip=2)
+#rebound2<-read.csv('data/Table S4.05.08.2020.csv',stringsAsFactors=FALSE,skip=2)
+rebound2<-read.csv('data/TableS4_062720.csv',stringsAsFactors=FALSE,skip=2)
 rebound2<-rebound2[!is.na(rebound2$Isolate.ID2)&rebound2$Isolate.ID2!='',]
 rebound2<-rebound2[,!apply(is.na(rebound2),2,all)]
 studyLookup<-c('MNU-0628'='RESERVOIR','NCT00051818'='INTERRUPT','NCT02227277'='IFNa2b treatment','NCT02463227'='VRC01','NCT02588586'='3BNC117','NCT02825797'='3BNC117/10-1074')
@@ -34,8 +34,8 @@ rebound2$virus<-rebound2$Isolate.ID2
 rebound2$ic50_IFNa2<-rebound2$IFNa2.IC50..pg.ml.5
 rebound2$ic50_IFNb<-rebound2$IFNb.IC50..pg.ml.5
 rebound2$repCap<-rebound2$Replicative.capacity.........ng.p24.ml.3
-rebound2$infectivity<-rebound2$Infectivity..IU.pg.RT.8
-rebound2$p24Release<-as.numeric(sub('%$','',ifelse(rebound2$p24.Particle.release....9=='',NA,rebound2$p24.Particle.release....9)))/100
+rebound2$infectivity<-NA #rebound2$Infectivity..IU.pg.RT.8
+rebound2$p24Release<-NA #as.numeric(sub('%$','',ifelse(rebound2$p24.Particle.release....9=='',NA,rebound2$p24.Particle.release....9)))/100
 
 
 rebound<-read.csv('data/Data Master 2020_ReboundandQVOA_20200504.csv',stringsAsFactors=FALSE)
