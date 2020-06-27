@@ -1,41 +1,43 @@
 plotQvoa2<-function(ic50,label,pos,class,study,speed,ylab='IFNa2 IC50 (pg/ml)',mar=c(6.9,4,.1,3.9),cex.axis=1.25,startDown=FALSE,pats=NULL,classCols,labelXAxis=TRUE,log='y',ylim=range(ic50)){
-  speedPch<-c('Fast'=8,'Slow'=21,'Standard'=21,'Other'=21)
+  speedPch<-c('Fast'=22,'Slow'=21,'Standard'=21,'Other'=21)
   speedCex<-c('Fast'=1,'Slow'=1,'Standard'=1,'Other'=1)
   deemphasize<-c("Acute","6 Month","Donor","Nadir","Last","Acute Recipients","Chronic Donors","Acute Recipient","Chronic Donor",'1 Year','Acute','Chronic')
-  spread<-offsetX(log10(ic50),label,width=.5)
+  spread<-vipor::offsetX(log10(ic50),label,width=.45)
   ii<-'all'
   marSpace<-0
   if(ii!='all')selector<-label %in% subsets[[ii]]
   else selector<-rep(TRUE,length(label))
   par(mar=mar)
   plot(pos[label[selector]]+spread[selector],ic50[selector],log=log,yaxt='n',ylab=ylab,xlab='',xaxt='n',type='n',cex.lab=1.2,ylim=ylim,mgp=c(2.4,1,0),xlim=range(pos)+c(-1,1),xaxs='i')
-  spread2<-ave(ic50,label,FUN=function(xx)beeswarm::swarmx(rep(0,length(xx)),xx,cex=.6,priority=ifelse(length(xx)>2,'density','ascending'))$x)
-  spread<-ifelse(ave(ic50,label,FUN=length)>20,spread,spread2)
+  spread2<-ave(ic50,label,FUN=function(xx)beeswarm::swarmx(rep(0,length(xx)),xx,cex=.5,priority=ifelse(length(xx)>2,'density','ascending'))$x)
+  spread<-ifelse(ave(ic50,label,FUN=length)>5,spread,spread2)
   if(ii=='all'&exists('subsets'))marSpaces<-sapply(subsets,function(xx)diff(convertUserToLine(1:0,2))*sum(!names(pos) %in% xx))
   if(!is.null(pats)){
     ranges<-tapply(pos[label],pats,range)
     #print(ranges[sapply(ranges,diff)>0.1])
     axFunc<-if(log=='y')function(xx)10^xx else function(xx)xx
-    lapply(ranges[!is.na(sapply(ranges,diff))&sapply(ranges,diff)>0.1&!grepl('MM|^$',names(ranges))],function(xx)rect(min(xx)-.4,axFunc(par('usr')[3]),max(xx)+.4,axFunc(par('usr')[4]),col='#00000033',border=NA))
+    lapply(ranges[!is.na(sapply(ranges,diff))&sapply(ranges,diff)>0.1&!grepl('MM|^$',names(ranges))],function(xx)rect(min(xx)-.4,axFunc(par('usr')[3]),max(xx)+.4,axFunc(par('usr')[4]),col='#00000014',border=NA))
   }
   slantSelect<-!grepl('Outgrowth|VOA',names(pos)) &grepl('VOA MM|Outgrowth MM|Acute|6 Month|1 Year|Nadir|Last|Chronic',names(pos))
   #textOffsets<-c('Acute'=-.2,'6 Month'=-.2,'Nadir'=0,'Last'=.2,'Acute Recipients'=-.3,'Chronic Donors'=.3)[names(pos)[slantSelect]]
   if(any(slantSelect)){
-    textOffsets<-c('Acute'=0,'6 Month'=0,'Nadir'=0,'Last'=0,'Acute Recipients'=-.3,'Chronic Donors'=.3)[names(pos)[slantSelect]]
+    textOffsets<-c('Acute'=0.3,'6 Month'=0,'Nadir'=0,'Last'=0,'Chronic'=.3,'Acute Recipients'=.1,'Chronic Donors'=.1)[names(pos)[slantSelect]]
     textOffsets[is.na(textOffsets)]<-0
     slantAxis(1,pos[slantSelect],names(pos)[slantSelect],srt=-45,cex=cex.axis,location=.8,xpd=NA,textOffsets=textOffsets)
   }
   if(log=='y'){
-    if(diff(par('usr')[3:4])>2.5)logAxis(las=1)
+    if(diff(par('usr')[3:4])>1)logAxis(las=1,mgp=c(1,.7,0))
     else axis(2,las=1,mgp=c(3,.5,0),tcl=-.3)
   }else{
     axis(2,las=1,mgp=c(3,.5,0),tcl=-.3)
   }
   abline(v=pos,col='#00000055',lty=3)
   points(pos[label[selector]]+spread[selector],ic50[selector],pch=speedPch[speed[selector]],bg=classCols[class[selector]],col=ifelse(speedPch[speed[selector]]>20,ifelse(class[selector] %in% deemphasize,'#00000066','#000000CC'),classCols[class[selector]]),lwd=ifelse(class[selector]=='Rebound',1,1),cex=ifelse(class[selector]=='QVOA',max(speedCex),speedCex[speed[selector]]))
-  abline(v=pos['Acute Recipients']-(pos['Acute Recipients']-pos[which(names(pos)=='Acute Recipients')-1])/2,lty=2,col='#00000099')
-  abline(v=pos['Outgrowth MM14']-(pos['Outgrowth MM14']-pos[which(names(pos)=='Outgrowth MM14')-1])/2,lty=1,col='#00000099')
-  abline(v=pos['VOA MM14']-(pos['VOA MM14']-pos[which(names(pos)=='VOA MM14')-1])/2,lty=1,col='#00000099')
+  abline(v=pos['Acute Recipients']-(pos['Acute Recipients']-pos[which(names(pos)=='Acute Recipients')-1])/2,lty=1,col='#000000')
+  #abline(v=pos['Acute']-(pos['Acute']-pos[which(names(pos)=='Acute')-1])/2,lty=1,col='#000000')
+  #abline(v=pos['Outgrowth MM14']-(pos['Outgrowth MM14']-pos[which(names(pos)=='Outgrowth MM14')-1])/2,lty=1,col='#00000099')
+  #abline(v=pos['Outgrowth MM14']-(pos['Outgrowth MM14']-pos[which(names(pos)=='Outgrowth MM14')-1])/2,lty=1,col='#00000099')
+  #abline(v=pos['VOA MM14']-(pos['VOA MM14']-pos[which(names(pos)=='VOA MM14')-1])/2,lty=1,col='#000000')
   cols<-c('#00000033','#00000000')
   studyOrder<-unique(sapply(names(pos),function(xx)study[label==xx][1]))
   studyOrder<-studyOrder[studyOrder!='Transmission'&!is.na(studyOrder)]
@@ -59,7 +61,7 @@ plotQvoa2<-function(ic50,label,pos,class,study,speed,ylab='IFNa2 IC50 (pg/ml)',m
 }
 
 plotStudies<-function(study,label,ic50,pat,speed,class,ylab='IFNa2 IC50 (pg/ml)'){
-spread<-offsetX(log10(ic50),label,width=.4,varwidth=TRUE)
+spread<-vipor::offsetX(log10(ic50),label,width=.4,varwidth=TRUE)
 for(ii in sort(unique(study))){
   message(ii)
   selector<-study==ii
