@@ -431,5 +431,34 @@ for(ii in 2:ncol(virusIfn)){
 dev.off()
 
 
+virus<-c( "SL92b", "SHIV.A.BG505.375Y", "RM10N011.d56.PLAS.C7", "RM10N011.d942.PLAS.E5", "RM10N011.d942.PLAS.F4", "RM6563.d1065.PBMC.D7", "RM6563.d1456.PBMC.C7")
+p27<-read.csv('data/p27 ResMac beta IC50 06.19.2020.csv',stringsAsFactors=FALSE,check.names=FALSE,nrow=7)
+ifns<-c( "untreated", "0.044pg IFNb", "4.4pg IFNb", "4,400pg IFNb", "440,000pg IFNb", "5.5pg IFNa2")
+p27Stack<-data.frame(
+  'virus'=rep(virus,12),
+  'ifn'=rep(rep(ifns,2),each=nrow(p27)),
+  'orig'=unlist(p27[,2:13]),
+  stringsAsFactors=FALSE
+)
+p27Stack$p27<-as.numeric(sub('[><]','',p27Stack$orig))
+p27Stack$censor<-p27Stack$p27
+p27Stack$censor[p27Stack$censor<50]<-50
+colPos<-structure(1:length(unique(ifns)),.Names=ifns)
+pdf('out/macIc50_20200624.pdf',height=8,width=18)
+par(mfrow=c(2,4))
+  for(ii in virus){
+    thisDat<-p27Stack[p27Stack$virus==ii,]
+    thisDat<-thisDat[order(thisDat$ifn),]
+    repCap<-exp(mean(log(thisDat[thisDat$ifn=='untreated'&thisDat$censor>50,'p27'])))*200/1000
+    plot(1,1,type='n',xlab='',xaxt='n',log='y',yaxt='n',xlim=range(colPos)+c(-.5,.5),ylim=range(p27Stack$censor),main=sprintf('%s\nRep cap: %0.1f',ii,repCap),ylab='p27 concentration',xaxs='i')
+    dnar::logAxis(las=1)
+    points(colPos[thisDat$ifn]+c(-.05,.05),thisDat$censor,pch=21,cex=1.2,bg='#00000033')
+    axis(1,colPos,sub(' ','\n',names(colPos)),padj=1,mgp=c(3,.2,0))
+    abline(v=colPos[c(1,length(colPos))]+c(.5,-.5),lty=1,col='#00000066')
+    axis(4,exp(mean(log(thisDat[thisDat$ifn=='untreated'&thisDat$censor>50,'p27'])))/c(1,2),c('UT','50%'),las=1,mgp=c(3,.2,0),tcl=0)
+    abline(h=exp(mean(log(thisDat[thisDat$ifn=='untreated'&thisDat$censor>50,'p27'])))/c(1,2),lty=2)
+    abline(h=50,lty=3)
+  }
+dev.off()
 
 
