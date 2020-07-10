@@ -350,6 +350,7 @@ compiledMeta$daysBeforeArt<-compiledMeta$artDay-as.numeric(compiledMeta$time)
 founders<-read.csv('founder.csv',stringsAsFactors=FALSE,row.names=1)
 superDate<-ymd(founders$superDate)
 founders$superTime<-superDate-ymd(startDates[rownames(founders)])
+write.csv(founders,'out/founders.csv')
 
 less350Time<-by(compiledMeta[!is.na(compiledMeta$cd4),],compiledMeta[!is.na(compiledMeta$cd4),'mm'],function(xx){
   lastInfect<-ifelse(is.na(founders[xx$mm[1],'superTime']),1,founders[xx$mm[1],'superTime'])
@@ -361,6 +362,7 @@ less350Time<-by(compiledMeta[!is.na(compiledMeta$cd4),],compiledMeta[!is.na(comp
 })
 compiledMeta$day350<-less350Time[compiledMeta$mm]
 compiledMeta$daysBefore350<-compiledMeta$day350-as.numeric(compiledMeta$time)
+write.csv(compiledMeta,'out/allLongitudinalMeta.csv')
 
 if(FALSE){
 comboMeta[which(!paste(comboMeta$mm,comboMeta$rDate) %in% paste(compiledMeta$mm,compiledMeta$rDate) & !is.na(comboMeta$mm)&(!is.na(comboMeta$vl)|!is.na(comboMeta$cd4))),c('mm','date','rDate','time','vl','cd4','source')]
