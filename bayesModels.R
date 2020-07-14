@@ -37,13 +37,15 @@ ic50_bp_mar<-'
     real<lower=0> acuteSD;
     //vector[nPatient] nadirTimeRaw;
     real<lower=0,upper=tMax> nadirTimeMean;
+    real nadirTimeFast;
+    real nadirTimeNon;
     real<lower=0> nadirTimePhi;
     vector[nPatient] nadirChangeRaw;
     real nadirChangeMean;
     real<lower=0> nadirChangeSD;
     real<lower=0> sigma;
     vector[nPatient] cd4BetaRaw;
-    real cd4BetaMean[2];
+    real cd4BetaMean[3];
     real<lower=0> cd4BetaSD;
     real fastAcute;
     real fastChangeMean;
@@ -64,9 +66,12 @@ ic50_bp_mar<-'
     //acute=acuteMean+acuteRaw*acuteSD;
     acute=acuteMean+acuteRaw*acuteSD+isNon*nonAcute+isFast*fastAcute;
     nadirChange=nadirChangeMean+nadirChangeRaw*nadirChangeSD+fastChangeMean*isFast+nonChangeMean*isNon;
-    cd4Beta=(cd4BetaMean[1]*(1-isFast)+cd4BetaMean[2]*isFast)+cd4BetaRaw*cd4BetaSD;
+    //cd4Beta=(cd4BetaMean[1]*(1-isFast)+cd4BetaMean[2]*isFast)+cd4BetaRaw*cd4BetaSD;
+    //cd4Beta=(cd4BetaMean[1]+cd4BetaMean[2]*isFast+cd4BetaMean[3]*isNon)+cd4BetaRaw*cd4BetaSD;
+    cd4Beta=(cd4BetaMean[1]*(1-isFast).*(1-isNon)+cd4BetaMean[2]*isFast+cd4BetaMean[3]*isNon)+cd4BetaRaw*cd4BetaSD;
     for (s in 1:tMax){
-      lp[,s]=rep_vector(neg_binomial_2_lpmf(s|nadirTimeMean,nadirTimePhi),nPatient);
+      //lp[,s]=rep_vector(neg_binomial_2_lpmf(s|nadirTimeMean,nadirTimePhi),nPatient);
+      for(jj in 1:nPatient)lp[jj,s]=neg_binomial_2_lpmf(s|nadirTimeMean*exp(isFast[jj]*nadirTimeFast)*exp(isNon[jj]*nadirTimeNon),nadirTimePhi);
       //lp[,s]=rep_vector(log(normal_cdf(s+.5,nadirTimeMean,nadirTimeSD)-normal_cdf(s-.5,nadirTimeMean,nadirTimeSD)),nPatient);
       for (ii in 1:nVirus){
         lp[patients[ii],s] = lp[patients[ii],s] + normal_lpdf(ic50[ii] | weeks[ii] < s ? 
@@ -94,6 +99,8 @@ ic50_bp_mar<-'
     nonAcute~normal(0,10);
     cd4BetaSD~gamma(1,.1);
     cd4BetaRaw~normal(0,1);
+    nadirTimeFast~normal(0,10);
+    nadirTimeNon~normal(0,10);
     //vlBetaMean~normal(0,10);
     //vlBetaSD~gamma(1,.1);
     //vlBetaRaw~normal(0,1);
@@ -177,7 +184,9 @@ fitB<-dnar::withAs(xx=dat[!is.na(dat$beta)&!dat$qvoa,],bayesIC50_3(ic50Mod,xx$be
 #save(fit,fitB,fitR,file='out/bayesFit_20200612.Rdat')# remove non-progressor acute
 #save(fit,fitB,fitR,file='out/bayesFit_20200615.Rdat')#  non-progressor acute and nadirChange
 #save(fit,fitB,file='out/bayesFit_20200623.Rdat')#  neg binom time back in 
-load(file='out/bayesFit_20200623.Rdat')
+#save(fit,fitB,file='out/bayesFit_20200711.Rdat')# seperate cd4 beta for typ and non
+#save(fit,fitB,file='out/bayesFit_20200714.Rdat')# seperate nadir times
+#load(file='out/bayesFit_20200623.Rdat')
 #
 print(fit$fit,pars=c('nadirTimeRaw','nadirChangeRaw','expectedIC50','acuteRaw','lp','vlBetaRaw','cd4BetaRaw','superBetaRaw'),include=FALSE)
 print(fitB$fit,pars=c('nadirTimeRaw','nadirChangeRaw','expectedIC50','acuteRaw','lp','vlBetaRaw','cd4BetaRaw','superBetaRaw'),include=FALSE)
@@ -232,44 +241,6 @@ calcPreds<-function(mat,dat,newDat){
 predIc50<-calcPreds(as.matrix(fit$fit),fit$dat,fit$simDat)
 predIc50B<-calcPreds(as.matrix(fitB$fit),fitB$dat,fitB$simDat)
 #predIc50R<-calcPreds(as.matrix(fitR$fit),fitR$dat,fitR$simDat)
-
-plotIfn<-function(fit,predIc50,ylab='IFNa2 IC50'){
-  for(ii in sort(unique(names(fit$dat$patients)))){
-    plot(1,1,type='n',xlim=range(fit$dat$days),ylim=range(exp(fit$dat$ic50))*c(.8,1),main=ii,xlab='DFOSx',ylab='',log='y',yaxt='n',mgp=c(1.8,.5,0),tcl=-.3)
-    mtext(ylab,2,line=2.9,cex=.83)
-    selector<-names(fit$dat$patients)==ii
-    points(fit$dat$days[selector],exp(fit$dat$ic50[selector]))
-    dnar::logAxis(las=1)
-    selector2<-predIc50$simData$pat==ii
-    lines(predIc50$simData[selector2,'day'],exp(apply(predIc50$preds[selector2,],1,mean)))
-    quants<-(apply(predIc50$preds[selector2,],1,quantile,c(.025,.975),na.rm=TRUE))
-    quants2<-(apply(predIc50$isos[selector2,],1,quantile,c(.025,.975),na.rm=TRUE))
-    polygon(c(predIc50$simData[selector2,'day'],rev(predIc50$simData[selector2,'day'])),exp(c(quants[1,],rev(quants[2,]))),col='#00000033',border=NA)
-    polygon(c(predIc50$simData[selector2,'day'],rev(predIc50$simData[selector2,'day'])),exp(c(quants2[1,],rev(quants2[2,]))),col='#00000033',border=NA)
-    abline(v=superTimes[ii],col='red')
-  }
-}
-pdf('Rplots.pdf',width=17,height=7)
-  par(mfrow=c(2,5),mar=c(3.5,4,1,.1))
-  plotIfn(fit,predIc50)
-  plotIfn(fitB,predIc50B,'IFNb IC50')
-  #plotIfn(fitR,predIc50R,'Replicative capacity')
-  for(ii in sort(unique(names(fit$dat$patients)))){
-    selector2<-predIc50$simData$pat==ii
-    plot(predIc50$simData[selector2,'day'],(predIc50$simData[selector2,'cd4']),xlim=range(fit$dat$days),ylim=range((fit$dat$cd4)*100),main=ii,xlab='DFOSx',ylab='CD4',mgp=c(1.8,.5,0),tcl=-.3)
-    abline(v=superTimes[ii],col='red')
-  }
-  for(ii in sort(unique(names(fit$dat$patients)))){
-    selector2<-predIc50$simData$pat==ii
-    plot(predIc50$simData[selector2,'day'],(predIc50$simData[selector2,'vl']),xlim=range(fit$dat$days),ylim=range(exp(fit$dat$vl)),main=ii,xlab='DFOSx',ylab='VL',mgp=c(1.8,.5,0),tcl=-.3,log='y',yaxt='n')
-    abline(v=superTimes[ii],col='red')
-    dnar::logAxis(las=1)
-  }
-dev.off()
-
-apply(mat[,grep('lp\\[',colnames(mat))],2,mean)
-pdf('Rplots.pdf',height=20,width=20);plot(apply(mat[,grep('lp\\[',colnames(mat))],2,mean));dev.off()
-pdf('Rplots.pdf',height=20,width=20);traceplot(fit$fit,'lp');dev.off()
 
 
 source('functions.R')
@@ -489,30 +460,30 @@ exampleB<-exampleCurve(fitB$fit,times=times)
 exampleFastB<-exampleCurve(fitB$fit,type='fast',times=times)
 exampleSlowB<-exampleCurve(fitB$fit,type='non',times=times)
 
+plotExample<-function(typical,fast,non,ylab='IFNa2 IC50',dat,ifnCol='ic50',addPat=FALSE){
+  plotSub<-function(example,col,ylim,time=NULL,ic50=NULL,yAxis=TRUE){
+    plot(1,1,type='n',xlim=c(0,85),ylim=ylim,las=1,log='y',yaxt='n',ylab='',xlab='',mgp=c(2.6,.7,0))
+    if(yAxis){
+      logAxis(las=1)
+    }
+    #points(time,ic50,bg=sprintf('%s55',col),cex=.5,pch=21,col='#00000099')
+    polygon(c(times,rev(times))/7,exp(c(example$mean[,'lower'],rev(example$mean[,'upper']))),col=sprintf('%s33',col),border=NA)#,border=sprintf('%s66',col),lty=2)
+    if(addPat)polygon(c(times,rev(times))/7,exp(c(example$pat[,'lower'],rev(example$pat[,'upper']))),col=sprintf('%s33',col),border=NA)#,border=sprintf('%s66',col),lty=3)
+    polygon(c(times,rev(times))/7,exp(c(example$iso[,'lower'],rev(example$iso[,'upper']))),col=sprintf('%s33',col),border=NA)#,border=sprintf('%s11',col))
+    lines(times/7,exp(example$mean[,'mean']),col=col)
+  }
+  withAs(xx=dat[dat$pat %in% c('MM14','MM23','MM33','MM34','MM39','MM40'),],plotSub(typical,classCol['typical'],ylim=exp(range(typical$mean)),time=xx$time/7,ic50=xx[,ifnCol]))
+  title(main='Typical',line=-1)
+  title(ylab=ylab,xpd=NA,mgp=c(2.9,1,0),cex.lab=1.3)
+  withAs(xx=dat[dat$pat %in% c('MM55','MM62'),],plotSub(non,classCol['slow'],ylim=exp(range(typical$mean)),yAxis=FALSE,time=xx$time/7,ic50=xx[,ifnCol]))
+  title(xlab='Weeks from onset of symptoms',mgp=c(2.,.7,0),xpd=NA,cex.lab=1.3)
+  title(main='Non',line=-1)
+  withAs(xx=dat[dat$pat %in% c('MM15','WEAU'),],plotSub(fast,classCol['fast'],ylim=exp(range(typical$mean)),yAxis=FALSE,time=xx$time/7,ic50=xx[,ifnCol]))
+  title(main='Fast',line=-1)
+}
 pdf('out/bayesExample.pdf',width=8,height=3)
   layout(matrix(c(0,1:3,0,4:6,0),nrow=1),width=c(.42,1,1,1,.5,1,1,1,.01))
   #drops
-  plotExample<-function(typical,fast,non,ylab='IFNa2 IC50',dat,ifnCol='ic50',addPat=FALSE){
-    plotSub<-function(example,col,ylim,time=NULL,ic50=NULL,yAxis=TRUE){
-      plot(1,1,type='n',xlim=c(0,85),ylim=ylim,las=1,log='y',yaxt='n',ylab='',xlab='',mgp=c(2.6,.7,0))
-      if(yAxis){
-        logAxis(las=1)
-      }
-      #points(time,ic50,bg=sprintf('%s55',col),cex=.5,pch=21,col='#00000099')
-      polygon(c(times,rev(times))/7,exp(c(example$mean[,'lower'],rev(example$mean[,'upper']))),col=sprintf('%s33',col),border=NA)#,border=sprintf('%s66',col),lty=2)
-      if(addPat)polygon(c(times,rev(times))/7,exp(c(example$pat[,'lower'],rev(example$pat[,'upper']))),col=sprintf('%s33',col),border=NA)#,border=sprintf('%s66',col),lty=3)
-      polygon(c(times,rev(times))/7,exp(c(example$iso[,'lower'],rev(example$iso[,'upper']))),col=sprintf('%s33',col),border=NA)#,border=sprintf('%s11',col))
-      lines(times/7,exp(example$mean[,'mean']),col=col)
-    }
-    withAs(xx=dat[dat$pat %in% c('MM14','MM23','MM33','MM34','MM39','MM40'),],plotSub(typical,classCol['typical'],ylim=exp(range(typical$mean)),time=xx$time/7,ic50=xx[,ifnCol]))
-    title(main='Typical',line=-1)
-    title(ylab=ylab,xpd=NA,mgp=c(2.9,1,0),cex.lab=1.3)
-    withAs(xx=dat[dat$pat %in% c('MM55','MM62'),],plotSub(non,classCol['slow'],ylim=exp(range(typical$mean)),yAxis=FALSE,time=xx$time/7,ic50=xx[,ifnCol]))
-    title(xlab='Weeks from onset of symptoms',mgp=c(2.,.7,0),xpd=NA,cex.lab=1.3)
-    title(main='Non',line=-1)
-    withAs(xx=dat[dat$pat %in% c('MM15','WEAU'),],plotSub(fast,classCol['fast'],ylim=exp(range(typical$mean)),yAxis=FALSE,time=xx$time/7,ic50=xx[,ifnCol]))
-    title(main='Fast',line=-1)
-  }
   par(mar=c(3,0,0.1,0))
   plotExample(example,exampleFast,exampleSlow,dat=dat)
   text(grconvertX(.001,from='ndc'),grconvertY(.99,from='ndc'),'A',xpd=NA,adj=c(0,1),cex=2)
@@ -541,7 +512,6 @@ calcCd4Curve<-function(fit,fakeCd4=seq(-600,500,length.out=200)){
 }
 cd4Curve<-calcCd4Curve(fit)
 cd4CurveB<-calcCd4Curve(fitB)
-
 calcDayProbs<-function(fit,days=-50:4000){
   mat<-as.matrix(fit$fit)
   preds<-lapply(fit$pats,function(ii){
@@ -683,5 +653,49 @@ print(exp(-meanCrI(matB[,'cd4BetaMean[1]'])))
 message('CD4 change fast')
 print(exp(-meanCrI(mat[,'cd4BetaMean[2]'])))
 print(exp(-meanCrI(matB[,'cd4BetaMean[2]'])))
+message('CD4 change slow')
+print(exp(-meanCrI(mat[,'cd4BetaMean[2]'])))
+print(exp(-meanCrI(matB[,'cd4BetaMean[2]'])))
 
 print(fit$fit,pars=c('nadirTimeRaw','nadirChangeRaw','expectedIC50','acuteRaw','lp','vlBetaRaw','cd4BetaRaw','superBetaRaw'),include=FALSE)
+
+if(FALSE){
+plotIfn<-function(fit,predIc50,ylab='IFNa2 IC50'){
+  for(ii in sort(unique(names(fit$dat$patients)))){
+    plot(1,1,type='n',xlim=range(fit$dat$days),ylim=range(exp(fit$dat$ic50))*c(.8,1),main=ii,xlab='DFOSx',ylab='',log='y',yaxt='n',mgp=c(1.8,.5,0),tcl=-.3)
+    mtext(ylab,2,line=2.9,cex=.83)
+    selector<-names(fit$dat$patients)==ii
+    points(fit$dat$days[selector],exp(fit$dat$ic50[selector]))
+    dnar::logAxis(las=1)
+    selector2<-predIc50$simData$pat==ii
+    lines(predIc50$simData[selector2,'day'],exp(apply(predIc50$preds[selector2,],1,mean)))
+    quants<-(apply(predIc50$preds[selector2,],1,quantile,c(.025,.975),na.rm=TRUE))
+    quants2<-(apply(predIc50$isos[selector2,],1,quantile,c(.025,.975),na.rm=TRUE))
+    polygon(c(predIc50$simData[selector2,'day'],rev(predIc50$simData[selector2,'day'])),exp(c(quants[1,],rev(quants[2,]))),col='#00000033',border=NA)
+    polygon(c(predIc50$simData[selector2,'day'],rev(predIc50$simData[selector2,'day'])),exp(c(quants2[1,],rev(quants2[2,]))),col='#00000033',border=NA)
+    abline(v=superTimes[ii],col='red')
+  }
+}
+pdf('Rplots.pdf',width=17,height=7)
+  par(mfrow=c(2,5),mar=c(3.5,4,1,.1))
+  plotIfn(fit,predIc50)
+  plotIfn(fitB,predIc50B,'IFNb IC50')
+  #plotIfn(fitR,predIc50R,'Replicative capacity')
+  for(ii in sort(unique(names(fit$dat$patients)))){
+    selector2<-predIc50$simData$pat==ii
+    plot(predIc50$simData[selector2,'day'],(predIc50$simData[selector2,'cd4']),xlim=range(fit$dat$days),ylim=range((fit$dat$cd4)*100),main=ii,xlab='DFOSx',ylab='CD4',mgp=c(1.8,.5,0),tcl=-.3)
+    abline(v=superTimes[ii],col='red')
+  }
+  for(ii in sort(unique(names(fit$dat$patients)))){
+    selector2<-predIc50$simData$pat==ii
+    plot(predIc50$simData[selector2,'day'],(predIc50$simData[selector2,'vl']),xlim=range(fit$dat$days),ylim=range(exp(fit$dat$vl)),main=ii,xlab='DFOSx',ylab='VL',mgp=c(1.8,.5,0),tcl=-.3,log='y',yaxt='n')
+    abline(v=superTimes[ii],col='red')
+    dnar::logAxis(las=1)
+  }
+dev.off()
+
+apply(mat[,grep('lp\\[',colnames(mat))],2,mean)
+pdf('Rplots.pdf',height=20,width=20);plot(apply(mat[,grep('lp\\[',colnames(mat))],2,mean));dev.off()
+pdf('Rplots.pdf',height=20,width=20);traceplot(fit$fit,'lp');dev.off()
+}
+
