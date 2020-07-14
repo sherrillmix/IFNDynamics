@@ -1,4 +1,5 @@
 library(ggtree)
+library(ggplot2)
 library(phangorn)
 library(dnar)
 library(ape)
@@ -221,7 +222,8 @@ dev.off()
 
 censorLength<-.15
 noCensor<-c('MM23')
-recomb<-data.frame('Sequence'=NULL)
+#recomb<-data.frame('Sequence'=NULL)
+recomb<-read.csv('lindsey/recombinant.csv',stringsAsFactors=FALSE)
 reroot<-c('MM14'='MM14.PLAS.ISO.00040.001.01','MM15'='MM15.PLAS.SGS.00027.001.01')
 #rotate<-list('MM39'=c(99,76))
 maxDepth<-apply(do.call(rbind,lapply(list.files('trees/10trees','\\.txt$',full.name=TRUE),function(xx){
@@ -282,14 +284,15 @@ for(ii in list.files('trees/10trees','\\.txt$',full.name=TRUE)){
   colnames(edge)<-c('parent','node','edge_num')
   lengthBak<-tree$edge.length
   if(!unique(subject) %in% noCensor)tree$edge.length[tree$edge.length>censorLength]<-censorLength
+  if(any(tree$tip.label %in% recomb$Sequence))message('RECOMB ',paste(tree$tip.label[tree$tip.label %in% recomb$Sequence],collapse=', '))
   out<-ggtree(tree,size=.2)+#,ladderize=FALSE)+ 
     #geom_tippoint(color=timeCols[times],show.legend=TRUE,size=5/log(length(days)))+
     geom_tiplab(color=timeCols[times],size=min(7.5,1500/length(tree$tip.label)),label='-',vjust=.35)+
     #geom_tiplab(color=timeCols[times],size=7.5,label=ifelse(times=='voa','  *',NA),vjust=.8)+
-    geom_tiplab(color=timeCols[times],size=3,label=ifelse(tree$tip.label %in% recomb$Sequence,'         r',NA))+
+    #geom_tiplab(color=timeCols[times],size=3,label=ifelse(tree$tip.label %in% recomb$Sequence,'         r',NA))+
     ggtitle(unique(subject))+
     theme(plot.title = element_text(hjust = .5,size=12,margin=margin(b=-10,unit='pt')),plot.margin=margin(2,0,20,0))+
-    geom_treescale(offset=-length(days)/90,fontsize=2.5,x=.01,y=-.01*length(tree$tip.label),width=.05)+
+    geom_treescale(offset=-length(days)/55,fontsize=2.5,x=.01,y=-.01*length(tree$tip.label),width=.05)+
     scale_x_continuous(limits = c(0,maxDepth[2]*1.2))
     #geom_treescale(offset=-length(days)/90,fontsize=2.5,x=.01,y=-.01*length(tree$tip.label),width=.05)+
   censoredEdges<-out$data[out$data$branch.length==censorLength,]
@@ -306,19 +309,26 @@ for(ii in list.files('trees/10trees','\\.txt$',full.name=TRUE)){
     #scale_color_manual('',breaks=names(timeCols),values=timeCols)
   #out$data[out$data$branch.length>censorLength,'x']<-out$data[out$data$branch.length>censorLength,'x']-out$data[out$data$branch.length>censorLength,'branch.length']+censorLength
   makeLegend(out,tree)
-  tree$edge.length<-lengthBak
+  #tree$edge.length<-lengthBak
   out<-ggtree(tree,size=.2)+
     #geom_tippoint(color=timeCols[times],show.legend=TRUE,size=5/log(length(days)))+
     #1.4/(max(1,length(tree$tip.label)/17))^.4
-    geom_tiplab(color=timeCols[times],size=min(1.5,100/length(tree$tip.label)),vjust=.5)+
+    geom_tiplab(color=timeCols[times],size=min(1.5,100/length(tree$tip.label)),label=sprintf('%s%s',tree$tip.label,ifelse(tree$tip.label %in% recomb$Sequence,'','')),vjust=.5)+
     ggtitle(unique(subject))+
     theme(plot.title = element_text(hjust = .5,size=12),plot.margin=margin(2,0,20,0))+
     #geom_treescale(offset=-length(days)/90,fontsize=2.5,x=.01,y=-1)+
-    geom_treescale(offset=-length(days)/90,fontsize=2.5,x=.01,y=-.01*length(tree$tip.label),width=.05)+
+    geom_tiplab(color=timeCols[times],size=3,label=ifelse(tree$tip.label %in% recomb$Sequence,'*',NA),vjust=.8,offset=ifelse(unique(subject)=='MM14',0.15,ifelse(unique(subject)=='MM23',.073,0))*strwidth(tree$tip.label)/strwidth(tree$tip.label[1]))+ #magic numbers
+    geom_treescale(offset=-length(days)/55,fontsize=2.5,x=.01,y=-.01*length(tree$tip.label),width=.05)+
     scale_x_continuous(limits = c(0,maxDepth[2]*1.2))
+    if(nrow(censoredEdges)>0){
+      message('CENSORING')
+      out<-out+
+        annotate('rect',xmin=left,xmax=right,ymin=censoredEdges$y-.6,ymax=censoredEdges$y+.6,fill='white')+
+        annotate('segment',x=c(left,right),xend=c(left,right),y=rep(censoredEdges$y,2)-.6,yend=rep(censoredEdges$y,2)+.6,size=.2)
+    }
     #scale_x_continuous(limits = c(0,max(node.depth.edgelength(tree))*2))+
     #geom_treescale(offset=-length(days)/90,fontsize=2.5,x=.01,y=-1,width=.05)
-    geom_treescale(offset=-length(days)/90,fontsize=2.5,x=.01,y=5)
+    #geom_treescale(offset=-length(days)/90,fontsize=2.5,x=.01,y=5)
     #scale_color_manual('',breaks=names(timeCols),values=timeCols)
   makeLegend(out,tree)
   #display tree with equal length branches
@@ -340,6 +350,7 @@ system('pdftk out/lindsey_trees2.pdf cat 1 4 7 13 19 output tmp.pdf')
 system('pdfjam tmp.pdf --nup 5x1 --landscape --outfile out/voaStackedTrees.pdf')
 system('pdftk out/lindsey_trees2.pdf cat 2 4 6 8 10 12 14 16 18 20 output tmp.pdf')
 system('pdfjam tmp.pdf --nup 5x2 --landscape --outfile out/allStackedTrees.pdf')
+file.copy('out/allStackedTrees.pdf','out/Fig. S2.pdf')
 #system('pdftk out/lindsey_trees2.pdf cat 9 output out/treeMM34.pdf')
 
 pdf('out/treeMM34.pdf',width=3.5,height=5)
