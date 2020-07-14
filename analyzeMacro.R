@@ -206,7 +206,7 @@ miss<-c(unique(fixLabs[!fixLabs %in% rownames(tmp)]),'FILL__')
 fill<-cbind(area[1:length(miss),,drop=FALSE],'average'=NA);fill[,]<-NA
 rownames(fill)<-miss
 tmp<-rbind(tmp,fill)
-tmp<-round(tmp,2)
+tmp<-round(tmp)
 tmp[tmp<9&!is.na(tmp)]<-'<9'
 tmp[is.na(tmp)]<-''
 colnames(tmp)<-sprintf('AUC_%s',toupper(colnames(tmp)))
@@ -407,7 +407,7 @@ pdf('out/macroComparePlusExample.pdf',width=3.5,height=5)
   selectExamples<-c('YU2','UG021','TYBE','601.REB.r1','A09.REB.1A2','9244.REB.9E6','9244.VOA.K2','9244.VOA.P11','9244.VOA.12J17','A08.REB.6D6','A08.REB.7C1','A08.VOA.1B5')
   thisDat<-macro[macro$virus %in% selectExamples&macro$donor=='zb31',]
   thisAvg<-tapply(thisDat$p24,list(thisDat$virus,thisDat$day),function(xx)exp(mean(log(xx))))
-  par(mar=c(3.5,3.,.1,3.4))
+  par(mar=c(3.5,3.,.1,3.7))
   plot(thisDat$day,thisDat$p24,type='n',log='y',yaxt='n',xlab='',ylab='p24 (ng/ml)',bty='l',mgp=c(2.15,.3,0),tcl=-.3,xlim=c(0,max(thisDat$day)))
   title(xlab='Days after infection',mgp=c(1.3,1,0))
   dnar::logAxis(las=1,mgp=c(1,.6,0))
@@ -422,7 +422,7 @@ pdf('out/macroComparePlusExample.pdf',width=3.5,height=5)
   thisLast<-sort(thisAvg[,ncol(thisAvg)])
   lastPos<-10^seq(.9,2.75,length.out=length(thisLast))
   lastPos[thisLast<30]<-10^seq(-1,log10(.25),length.out=sum(thisLast<30))
-  for(kk in 1:length(thisLast))axis(4,lastPos[kk],names(thisLast)[kk],las=1,cex.axis=.4,mgp=c(1,.2,0),xpd=NA,tick=FALSE,col.axis=cols[thisTypes[names(thisLast)[kk]]],cex.axis=.5)
+  for(kk in 1:length(thisLast))axis(4,lastPos[kk],sub('VOA','QVOA',names(thisLast)[kk]),las=1,cex.axis=.4,mgp=c(1,.2,0),xpd=NA,tick=FALSE,col.axis=cols[thisTypes[names(thisLast)[kk]]],cex.axis=.5)
   #,col=cols[thisTypes[names(thisLast)]])
   segments(20.54,thisLast,dnar::convertLineToUser(.15,4),lastPos,xpd=NA,lwd=1,col='#999999')
   par(mar=c(1.05,3.6,.8,0.6),lheight=.8)
