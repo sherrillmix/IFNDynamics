@@ -21,7 +21,7 @@ acuteChronicMM$infectivity<-acuteChronicMM$p24Release<-NA
 #voa$study<-'MM'
 #voa$virus<-voa$id
 #rebound2<-read.csv('data/Table S4.05.08.2020.csv',stringsAsFactors=FALSE,skip=2)
-rebound2<-read.csv('data/TableS4_062720.csv',stringsAsFactors=FALSE,skip=2)
+rebound2<-read.csv('data/TableS4_071420.csv',stringsAsFactors=FALSE,skip=2)
 rebound2<-rebound2[!is.na(rebound2$Isolate.ID2)&rebound2$Isolate.ID2!='',]
 rebound2<-rebound2[,!apply(is.na(rebound2),2,all)]
 studyLookup<-c('MNU-0628'='RESERVOIR','NCT00051818'='INTERRUPT','NCT02227277'='IFNa2b treatment','NCT02463227'='VRC01','NCT02588586'='3BNC117','NCT02825797'='3BNC117/10-1074')
