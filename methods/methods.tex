@@ -16,17 +16,20 @@
 \newcommand{\ifna}{IFN\hspace{-.08em}${\upalpha 2}$}
 \newcommand{\ifnb}{IFN\hspace{-.03em}${\upbeta}$}
 \newcommand{\icFifty}{IC$_{50}$}
+\newcommand{\iyerRef}{(50)}
+\newcommand{\stanRef}{(91)}
+\newcommand{\azzRef}{(38)}
 \begin{document}
 \begin{center}
  \Large\textbf{}
 \end{center}
-\section*{Bayesian models of IFN-I resistance in plasma isolates from longitudinally sampled participants}
-To create a simple model of the temporal dynamics of type I interferons (IFN-I) \ifna{} and \ifnb{} resistance, \icFifty{} values were each modeled using a Bayesian change point hierarchical model.
-  The model is based on a segmented regression of the log \icFifty{} making the following assumptions:
+\section*{Bayesian models of IFN-I resistance of HIV-1 plasma isolates from longitudinally sampled participants}
+To create a simple model of the temporal dynamics of type I interferons (IFN-I) resistance, \ifna{} and \ifnb{} \icFifty{} values were each modeled using a Bayesian change point hierarchical model.
+  The model is based on a segmented regression of the log \icFifty{} making the following simplifying assumptions:
     \begin{itemize}
           \item Each participant has a level of resistance at the acute infection stage drawn from separate population-level distributions for typical, non- or fast progressors.
           \item Each participant has a drop (or rise) in IFN-I resistance from acute levels drawn from separate population-level distributions for typical, non- or fast progressors.
-          \item Each participant has a time to nadir drawn from a population-level distribution shared among all progression types.
+          \item Each participant has a time to nadir drawn from separate population-level distributions for typical, non- or fast progressors.
           \item Resistance changes linearly from onset of symptoms to time of nadir.
           \item After the nadir, the level of IFN-I resistance changes linearly with fluctuations in CD4+ T cell counts away from the level found at nadir, with the effect for each participant drawn from separate population-level distributions for typical, non- or fast progressors.
           \item CD4+ T cell counts were linearly interpolated between observations.
@@ -35,8 +38,8 @@ To create a simple model of the temporal dynamics of type I interferons (IFN-I) 
  The log \icFifty{} observation from each viral isolate $i$ was modeled as a normal distribution $\text{IC50}_i\sim\text{Normal}(\mu_i,\sigma)$ with mean $\mu_i$ where:
 \begin{align*}
   \mu_i=\begin{cases} 
-    \alpha_{\text{person}_i}+\delta_{\text{person}_i}\times\frac{\text{time}_i}{s_{\text{person}_i}} & \text{if } \text{time}_i<s_{\text{person}_i}\\
-    \alpha_{\text{person}_i}+\delta_{\text{person}_i} + \beta_{\text{person}_i}\times(\text{CD4}_{\text{person$_i$},\text{time}_i}-\text{CD4}_{\text{person$_i$},s_\text{person$_i$}}) & \text{if } \text{time}_i\ge s_{\text{person}_i}\\
+    \alpha_{\text{person}_i}+\delta_{\text{person}_i}\frac{\text{time}_i}{s_{\text{person}_i}} & \text{if } \text{time}_i<s_{\text{person}_i}\\
+    \alpha_{\text{person}_i}+\delta_{\text{person}_i} + \beta_{\text{person}_i}(\text{CD4}_{\text{person$_i$},\text{time}_i}-\text{CD4}_{\text{person$_i$},s_\text{person$_i$}}) & \text{if } \text{time}_i\ge s_{\text{person}_i}\\
   \end{cases}
 \end{align*}
 where the parameters $\alpha_j$ represent the level of IFN-I resistance at symptom onset, $\delta_j$ represents the change from symptom onset to nadir and $s_j$ represents the time of nadir in person $j$. Study participant data is represented by $\text{time}_i$ corresponding to the time since onset of symptoms and $\text{person}_i$ recording the participant from which isolate $i$ was collected, $\text{CD4}_{j,k}$ containing the estimated CD4+ T cell count for person $j$ at time $k$ and $\text{progression}_j$ is the disease progression type (fast/non/typical) for participant $j$. The hierarchical probabilities for these parameters were:
@@ -52,14 +55,19 @@ where the parameters $\alpha_j$ represent the level of IFN-I resistance at sympt
     \text{Normal}(\theta_{\delta,\text{typical}}+\theta_{\delta,\text{fast}},\tau_{\delta}) &\text{ if } \text{progression}_j=\text{fast}\\
     \text{Normal}(\theta_{\delta,\text{typical}}+\theta_{\delta,\text{non}},\tau_{\delta}) &\text{ if } \text{progression}_j=\text{non}\\
   \end{cases}\\
-  s_j & \sim \text{NegativeBinomial}(\theta_s,\tau_s)\\
+  %s_j & \sim \text{NegativeBinomial}(\theta_s,\tau_s)\\
+  s_j& \sim \begin{cases}
+    \text{NegativeBinomial}(\theta_{s,\text{typical}},\tau_s)  &\text{ if } \text{progression}_j=\text{typical}\\
+    \text{NegativeBinomial}(\theta_{s,\text{typical}}\exp(\theta_{s,\text{fast}}),\tau_s)  &\text{ if } \text{progression}_j=\text{fast}\\
+    \text{NegativeBinomial}(\theta_{s,\text{typical}}\exp(\theta_{s,\text{non}}),\tau_s) &\text{ if } \text{progression}_j=\text{non}\\
+  \end{cases}\\
   \beta_j& \sim \begin{cases}
     \text{Normal}(\theta_{\beta,\text{typical}},\tau_{\beta})  &\text{ if } \text{progression}_j=\text{typical}\\
     \text{Normal}(\theta_{\beta,\text{fast}},\tau_{\beta})  &\text{ if } \text{progression}_j=\text{fast}\\
     \text{Normal}(\theta_{\beta,\text{non}},\tau_{\beta})  &\text{ if } \text{progression}_j=\text{non}\\
   \end{cases}\\
 \end{align*}
-where $j$ indicates each participant and $\text{NegativeBinomial(x,y)}$ represents a negative binomial distribution parameterized such that the expected value is $x$ and the variance is $x+\frac{x^2}{y}$. All hyperparameters were given prior probabilities of $\theta_x \sim \text{Normal(0,10)}$ for parameters representing the means of a distribution and $\tau_x \sim \text{Gamma}(1,0.1)$ for parameters representing standard deviations other than $\theta_{\alpha,\text{typical}}$ and $\theta_s$ which were given a flat prior and $\tau_s \sim \text{Cauchy}(0,10)$.
+where $j$ indicates each participant and $\text{NegativeBinomial(x,y)}$ represents a negative binomial distribution parameterized such that the expected value is $x$ and the variance is $x+\frac{x^2}{y}$. All hyperparameters were given prior probabilities of $\theta_x \sim \text{Normal(0,10)}$ for parameters representing the means of a distribution and $\tau_x \sim \text{Gamma}(1,0.1)$ for parameters representing standard deviations other than $\theta_{\alpha,\text{typical}}$ and $\theta_{s,\text{typical}}$ which were given a flat prior and $\tau_s \sim \text{Cauchy}(0,10)$.
 
 For computational efficiency, the nadir time parameter $s$ was discretized to weekly intervals, assumed to fall within 1 to 150 weeks after symptom onset and marginalized out of the joint probability:
 \[p(\text{IC50},\text{...})=p(\text{...})\prod_{i=1}^n\sum_{s=1}^{150}\text{Normal}(\text{IC50}_i|\mu_{i,s},\sigma)\text{NegativeBinomial}(s|\theta_s,\tau_s)\]
@@ -70,16 +78,18 @@ where $\text{...}$ represents all parameters other than $s$ and $\mu_{i,s}$ is d
   \end{cases}
 \]
 
+Posterior probabilities were estimated with 50 Markov chain Monte Carlo chains of 5000 iterations each using Stan \stanRef{}.
 
-\section*{Bayesian models of IFN-I resistance of outgrowth and rebound isolates}
+
+\section*{Bayesian models of the IFN-I resistance of outgrowth and rebound HIV-1 isolates}
   To compare the IFN-I resistance of viral isolates derived from plasma samples collected during acute, chronic and rebound infections as well as from viably frozen PBMCs collected during ART suppression (QVOA), \ifna{} and \ifnb{} \icFifty{} values were modeled using a Bayesian hierarchical model. The model is based on the assumptions that:
   \begin{itemize}
     \item Isolates found at  acute infection form a base level of IFN-I resistance for a given person. Virus isolated from chronic, rebound and QVOA for this person are modelled as changes from this initial level.
     \item The mean \icFifty{} level within each person for a given virus type (acute, chronic, rebound, QVOA) was assumed to be drawn from a population-level distribution for that type. 
     \item QVOA virus are separated into to two populations; a ``pre'' group composed of QVOA viruses isolated from study participants prior to or in the absence of treatment interruption (ATI) and a ``post'' group of QVOA viruses isolated from participants following ATI and reinitiation of ART.
     \item In both QVOA populations, the viruses can include some proportion of rebound-like isolates. This mixture is modeled in both pre- and post-treatment so that differences in mixture proportion between the two populations can be assessed.
-    \item  Batch-to-batch variation in IFN-I potency may need correction between isolates tested in Iyer et al. 2017 and the current study.
-    \item Isolates from patients treated with exogenous \ifna{} may differ from those not receiving such treatment.
+    \item Variation in the potency of INF-I used to experimentally determine \icFifty{} may shift the inferred resistance for isolates tested in other studies. This effect was modeled as a multiplicative shift in \icFifty{} for all isolates measured outside this study (acute recipient and chronic donor isolates from ref.\ \iyerRef{}).
+    \item Isolates from participants who received exogenous \ifna{} during treatment interruption may display altered interferon resistance. This effect was modeled as a multiplicative shift in \icFifty{} for all rebound isolates from such participants (participants 004, 030, and 044 from ref.\ \azzRef{}).
   \end{itemize}
 
   The log \icFifty{} observation from each viral isolate $i$ from acute, chronic and rebound isolates was modeled as a normal distribution:
@@ -92,7 +102,7 @@ where $\text{...}$ represents all parameters other than $s$ and $\mu_{i,s}$ is d
       \text{Normal}(\alpha_{k}+\beta_{j,k}+\beta_{\text{batch}}\text{batch}_k,\psi_j) & \text{otherwise}
     \end{cases}
   \end{align*}
-  where $\text{type}_i$ indicates whether isolate $i$ was isolated during acute, chronic, QVOA or rebound infection from participant $\text{person}_i$, $\text{batch}_k$ indicates when isolates from person $k$ were tested in Iyer et al. 2017 (to account for batch variation in IFN potency) and $\text{IFN}_k$ indicates when person $k$ was treated with exogenous \ifna{} prior to and during treatment interruption. Parameters are included for the mean resistance level during acute infection for each person $\alpha_k$, standard deviation of isolates of type $j$ within a person $\sigma_j$, standard deviation of mean resistance for type $j$ isolates among people $\psi_j$, change from acute levels in isolates of type $j$ in a given participant $\beta_{j,k}$, the effects of exogenous IFN treatment $\beta_{\textsc{ifn}}$ and batch to batch variation in IFN in isolates previously assayed by Iyer et al. 2017 $\beta_{\text{batch}}$. 
+  where $\text{type}_i$ indicates whether isolate $i$ was isolated during acute, chronic, QVOA or rebound infection from participant $\text{person}_i$, $\text{batch}_k$ indicates when isolates from person $k$ were tested in another study and $\text{IFN}_k$ indicates when person $k$ was treated with exogenous \ifna{} prior to and during treatment interruption. Parameters are included for the mean resistance level during acute infection for each person $\alpha_k$, standard deviation of isolates of type $j$ within a person $\sigma_j$, standard deviation of mean resistance for type $j$ isolates among people $\psi_j$, change from acute levels in isolates of type $j$ in a given participant $\beta_{j,k}$, the effects of exogenous IFN treatment $\beta_{\textsc{ifn}}$ and batch to batch variation in IFN in isolates assayed in previous studies $\beta_{\text{batch}}$. 
 
 
   For QVOA isolates, the \icFifty{} was modeled as a mixture of two populations such that:
@@ -113,8 +123,9 @@ The hierarchical parameter priors were modeled as:
     \phi_{\text{pre}} & \sim \text{Uniform}(0,1)\\
     \phi_{\text{post}} & \sim \text{Uniform}(0,1)\\
   \end{align*}
-where $j$ indicates the isolate type (acute, chronic, QVOA, rebound). $\alpha_k$, $\beta_{j,k}$, $\beta_{\text{\textsc{ifn}}}$ and $\beta_{\text{batch}}$ were all given flat priors.
+where $j$ indicates the isolate type (acute, chronic, QVOA, rebound). All $\alpha_k$, $\beta_{j,k}$ were given flat priors and $\beta_{\text{\textsc{ifn}}}\sim\text{Normal}(0,10)$ and $\beta_{\text{batch}}\sim\text{Normal}(0,10)$.
 
+Posterior probabilities were estimated with 50 Markov chain Monte Carlo chains of 5,000 iterations each using Stan \stanRef{}.
 
 \end{document}
 
