@@ -9,6 +9,7 @@ artStarts<-tapply(meta$daysBeforeArt+meta$time,meta$mm,unique)
 founders<-read.csv('out/founders.csv',stringsAsFactors=FALSE,row.names=1)
 superTimes<-structure(founders$superTime,.Names=rownames(founders))
 
+if(!exists('fit')){
 ic50_bp_mar<-'
   data {
     int<lower=0> nVirus;
@@ -173,6 +174,7 @@ dat$week<-as.integer(round(dat$time/7))
 
 fit<-dnar::withAs(xx=dat[!is.na(dat$ic50)&!dat$qvoa,],bayesIC50_3(ic50Mod,xx$ic50,xx$time,xx$timeBeforeArt,xx$pat,fastProgressors=c('MM15','WEAU'),nonProgressors=c('MM55','MM62'),cd4=(xx$fillCD4)/100,vl=log(xx$fillVl),baseVl=baseVl,nIter=5000,chains=50,meta=meta,superTimes=superTimes<50))
 fitB<-dnar::withAs(xx=dat[!is.na(dat$beta)&!dat$qvoa,],bayesIC50_3(ic50Mod,xx$beta,xx$time,xx$timeBeforeArt,xx$pat,fastProgressors=c('MM15','WEAU'),nonProgressors=c('MM55','MM62'),cd4=(xx$fillCD4)/100,vl=log(xx$fillVl),baseVl=baseVl,nIter=5000,chains=50,meta=meta,superTimes=superTimes))
+}
 #fitR<-dnar::withAs(xx=dat[!is.na(dat$replication)&!dat$qvoa,],bayesIC50_3(ic50Mod,xx$replication,xx$time,xx$timeBeforeArt,xx$pat,fastProgressors=c('MM15','WEAU'),nonProgressors=c('MM55','MM62'),cd4=(xx$fillCD4)/100,vl=log(xx$fillVl),baseVl=baseVl,nIter=5000,chains=50,meta=meta,superTimes=superTimes))
 #save(fit,file='out/bayesFit_20200602.Rdat') #CD4 marginalized
 #save(fit,file='out/bayesFit_20200602.Rdat') #CD4 marginalized
@@ -300,7 +302,7 @@ plotPointsLine<-function(dat,ic50,ii,ylab,addTitle=TRUE,sims=NULL,addFit=TRUE,fi
 }
 plotCondenseIfn<-function(dat,ic50,ylab,showLegend=TRUE,sims=NULL,addFit=TRUE,filterAfter=TRUE,subplotLetters=LETTERS[1:3],superTimes=superTimes,artStarts=NULL,ylimExpand=c(1,1)){
   par(mar=c(0,0,0,0))
-  layout(lay2,width=c(.4,rep(1,2),.01),height=c(.16,c(1,1,1,.2,1,.2,1),ifelse(showLegend,1.3,.32)))
+  layout(lay2,width=c(.42,rep(1,2),.01),height=c(.16,c(1,1,1,.2,1,.2,1),ifelse(showLegend,1.3,.32)))
   counter<-1
   for(ii in patOrder){
     plotPointsLine(dat,ic50,ii,ylab,sims=sims,addFit=addFit,filterAfter=filterAfter,superTimes=superTimes,ylim=range(ic50,na.rm=TRUE)*ylimExpand)
@@ -308,12 +310,12 @@ plotCondenseIfn<-function(dat,ic50,ylab,showLegend=TRUE,sims=NULL,addFit=TRUE,fi
     if(counter>4)axis(1,seq(1:3)*100,rep('',3),cex.axis=1.2,mgp=c(2.75,.7,0),tcl=-.3)
     if(counter%%2==1)logAxis(2,las=1,cex.axis=1.1,mgp=c(3,.7,0),axisMax=max(ic50,na.rm=TRUE)*1.3)
     labCex<-1.7
-    if(counter==5)text(par('usr')[1]-.33*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),ylab,srt=90,xpd=NA,cex=labCex)
+    if(counter==5)text(par('usr')[1]-.35*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),ylab,srt=90,xpd=NA,cex=labCex)
     if(counter==9)text(max(par('usr')[1:2]),10^(par('usr')[3]-.25*diff(par('usr')[3:4])),'Weeks from onset of symptoms',xpd=NA,cex=labCex)
     if(counter==9&showLegend)legend(par('usr')[1]-diff(par('usr')[1:2])*.3,10^(par('usr')[3]-diff(par('usr')[3:4])*.45),c(ifelse(is.null(sims),'Quadratic regression','Bayesian model'),ifelse(is.null(sims),'95% confidence interval','95% credible interval'),'95% prediction interval','Limiting dilution isolate','Bulk isolate'),col=c(patCols[1],NA,NA,'black','black'),pt.bg=c(NA,patCols2[1],patCols3[1],patCols[1],patCols[1]),lty=c(1,NA,NA,NA,NA),pch=c(NA,22,22,21,22),border=NA,pt.cex=c(3.2,3.2,3.2,1.4,1.4),cex=1.1,xjust=0,yjust=1,xpd=NA)
-    if(counter==1)text(grconvertX(-.28,from='npc'),grconvertY(1.11,from='npc'),subplotLetters[1],xpd=NA,adj=c(0,1),cex=2.5) 
-    if(counter==7)text(grconvertX(-.28,from='npc'),grconvertY(1.13,from='npc'),subplotLetters[2],xpd=NA,adj=c(0,1),cex=2.5)
-    if(counter==9)text(grconvertX(-.28,from='npc'),grconvertY(1.13,from='npc'),subplotLetters[3],xpd=NA,adj=c(0,1),cex=2.5)
+    if(counter==1)text(grconvertX(-.29,from='npc'),grconvertY(1.11,from='npc'),subplotLetters[1],xpd=NA,adj=c(0,1),cex=2.5) 
+    if(counter==7)text(grconvertX(-.29,from='npc'),grconvertY(1.13,from='npc'),subplotLetters[2],xpd=NA,adj=c(0,1),cex=2.5)
+    if(counter==9)text(grconvertX(-.29,from='npc'),grconvertY(1.13,from='npc'),subplotLetters[3],xpd=NA,adj=c(0,1),cex=2.5)
     counter<-counter+1
   }
 }
