@@ -15,6 +15,7 @@ stanCode4_withMixture<-'
     int<lower=1,upper=nPatient> patients[nVirus];
     int<lower=1,upper=nState+1> states[nVirus];
     int<lower=1,upper=nStudy> studies[nPatient];
+    int<lower=0,upper=1> isTreat[nPatient];
   }
   parameters {
     matrix[nPatient,nState] baseIc50Raw;
@@ -24,6 +25,7 @@ stanCode4_withMixture<-'
     vector<lower=0>[nState] stateIsoSds;
     real<lower=0,upper=1> postProp;
     real<lower=0,upper=1> preProp;
+    real treatMean;
   }
   transformed parameters{
     matrix[nPatient,nState] expectedIC50;
@@ -34,6 +36,7 @@ stanCode4_withMixture<-'
       for(jj in 1:(nState)){
         expectedIC50[ii,jj]=studyMeans[studies[ii]]+stateMeans[1]+baseIc50Raw[ii,1]*stateSds[1];
         if(jj>1)expectedIC50[ii,jj]=expectedIC50[ii,jj]+stateMeans[jj]+baseIc50Raw[ii,jj]*stateSds[jj];
+        if(jj==2 && isTreat[ii])expectedIC50[ii,jj]=expectedIC50[ii,jj]+treatMean;
       }
     }
   }
@@ -60,97 +63,22 @@ stanCode4_withMixture<-'
     for(ii in 1:nState){
       baseIc50Raw[,ii]~normal(0,1);
     }
+    treatMean~normal(0,10);
+    studyMeansRaw~normal(0,10);
   }
 '
 mod4 <- stan_model(model_code = stanCode4_withMixture)
 
-stanCode3<-'
-  data {
-    int<lower=0> nVirus;
-    int<lower=0> nPatient;
-    int<lower=0> nState;
-    int<lower=0> nStudy;
-    real ic50[nVirus];
-    int<lower=1,upper=nPatient> patients[nVirus];
-    int<lower=1,upper=nState> states[nVirus];
-    int<lower=1,upper=nStudy> studies[nVirus];
-  }
-  parameters {
-    matrix[nPatient,nState] baseIc50Raw;
-    vector[nState] stateMeans;
-    vector[nStudy-1] studyMeansRaw;
-    vector<lower=0>[nState] stateSds;
-    vector<lower=0>[nState] stateIsoSds;
-  }
-  transformed parameters{
-    real expectedIC50[nVirus];
-    vector[nStudy] studyMeans;
-    studyMeans[1]=0;
-    studyMeans[2:nStudy]=studyMeansRaw;
-    for(ii in 1:nVirus){
-      expectedIC50[ii]=studyMeans[studies[ii]]+stateMeans[1]+baseIc50Raw[patients[ii],1]*stateSds[1];
-      if(states[ii]>1)expectedIC50[ii]=expectedIC50[ii]+stateMeans[states[ii]]+baseIc50Raw[patients[ii],states[ii]]*stateSds[states[ii]];
-    }
-  }
-  model {
-    ic50~normal(expectedIC50,stateIsoSds[states]);
-    stateIsoSds~gamma(1,.1);
-    stateSds~gamma(1,.1);
-    for(ii in 1:nState){
-      baseIc50Raw[,ii]~normal(0,1);
-    }
-  }
-'
-mod3 <- stan_model(model_code = stanCode3)
-
-stanCodeNoDiff<-'
-  data {
-    int<lower=0> nVirus;
-    int<lower=0> nPatient;
-    int<lower=0> nState;
-    int<lower=0> nStudy;
-    real ic50[nVirus];
-    int<lower=1,upper=nPatient> patients[nVirus];
-    int<lower=1,upper=nState> states[nVirus];
-    int<lower=1,upper=nStudy> studies[nVirus];
-  }
-  parameters {
-    matrix[nPatient,nState] baseIc50Raw;
-    vector[nState] stateMeans;
-    vector[nStudy-1] studyMeansRaw;
-    vector<lower=0>[nState] stateSds;
-    vector<lower=0>[nState] stateIsoSds;
-  }
-  transformed parameters{
-    real expectedIC50[nVirus];
-    vector[nStudy] studyMeans;
-    studyMeans[1]=0;
-    studyMeans[2:nStudy]=studyMeansRaw;
-    for(ii in 1:nVirus){
-      expectedIC50[ii]=studyMeans[studies[ii]]+stateMeans[states[ii]]+baseIc50Raw[patients[ii],states[ii]]*stateSds[states[ii]];
-      //if(states[ii]>1)expectedIC50[ii]=expectedIC50[ii]+stateMeans[states[ii]]+baseIc50Raw[patients[ii],states[ii]]*stateSds[states[ii]];
-    }
-  }
-  model {
-    ic50~normal(expectedIC50,stateIsoSds[states]);
-    stateIsoSds~gamma(1,.1);
-    stateSds~gamma(1,.1);
-    for(ii in 1:nState){
-      baseIc50Raw[,ii]~normal(0,1);
-    }
-  }
-'
-mod5 <- stan_model(model_code = stanCodeNoDiff)
-
-
 
 source('readReboundData.R')
-fitBayes2<-function(model,patient,states,studies,ic50,baseState='Acute',mixState='Post-ATI',chains=50,baseStudy='Other',logFunc=log,stateId=NULL,iter=6000,...){
+if(!exists('fitA_withMix')){
+fitBayes2<-function(model,patient,states,studies,treats,ic50,baseState='Acute',mixState='Post-ATI',chains=50,baseStudy='Other',logFunc=log,stateId=NULL,iter=6000,...){
   patientId<-structure(1:length(unique(patient)),.Names=sort(unique(patient)))
   studyId<-structure(1:length(unique(studies)),.Names=unique(studies[order(studies!=baseStudy)]))
   if(is.null(stateId))stateId=structure(1:length(unique(states)),.Names=unique(states[order(states!=baseState,states==mixState)]))
   if(any(!states %in% names(stateId)))stop('Missing state IDs')
-  patientStudy<-tapply(studies,patient,unique)
+  patientStudy<-tapply(studies,patient,unique)[names(patientId)]
+  isTreat<-tapply(treats,patient,unique)[names(patientId)]
   if(any(sapply(patientStudy,length)!=1))stop('Multiple studies for a single patient')
   dat=list(
     nVirus=length(ic50),
@@ -160,18 +88,23 @@ fitBayes2<-function(model,patient,states,studies,ic50,baseState='Acute',mixState
     ic50=logFunc(ic50),
     patients=patientId[patient],
     states=stateId[states],
-    studies=studyId[patientStudy[names(patientId)]]
+    studies=studyId[patientStudy[names(patientId)]],
+    isTreat=isTreat
   )
   fit <- sampling(model, data = dat, iter=iter, chains=chains,thin=2,control=list(adapt_delta=.99,max_treedepth=15),...)
   return(list('fit'=fit,pats=patientId,states=stateId,studies=studyId,patientStudy=patientStudy,dat=dat))
 }
-fitA_withMix<-withAs(combined=combined[!is.na(combined$ic50_IFNa2),],fitBayes2(mod4,combined$pat,combined$simpleClass,ifelse(combined$study %in% c('Transmission','BEAT','IFNa2b treatment'),combined$study,'Other'),combined$ic50_IFNa2,chains=50,stateId=structure(1:5,.Names=c('Acute','Rebound','Chronic','Outgrowth','Post-ATI')),iter=20000))
-fitB_withMix<-withAs(combined=combined[!is.na(combined$ic50_IFNb),],fitBayes2(mod4,combined$pat,combined$simpleClass,ifelse(combined$study %in% c('Transmission','BEAT','IFNa2b treatment'),combined$study,'Other'),combined$ic50_IFNb,chains=50,stateId=structure(1:5,.Names=c('Acute','Rebound','Chronic','Outgrowth','Post-ATI')),iter=20000))
+fitA_withMix<-withAs(combined=combined[!is.na(combined$ic50_IFNa2),],fitBayes2(mod4,combined$pat,combined$simpleClass,ifelse(combined$study %in% c('Transmission'),combined$study,'Other'),combined$study %in% c('BEAT','IFNa2b treatment'),combined$ic50_IFNa2,chains=50,stateId=structure(1:5,.Names=c('Acute','Rebound','Chronic','Outgrowth','Post-ATI')),iter=5000))
+fitB_withMix<-withAs(combined=combined[!is.na(combined$ic50_IFNb),],fitBayes2(mod4,combined$pat,combined$simpleClass,ifelse(combined$study %in% c('Transmission'),combined$study,'Other'),combined$study %in% c('BEAT','IFNa2b treatment'),combined$ic50_IFNb,chains=50,stateId=structure(1:5,.Names=c('Acute','Rebound','Chronic','Outgrowth','Post-ATI')),iter=5000))
+alphaAdjust<-exp(mean(as.matrix(fitA_withMix$fit)[,sprintf('studyMeans[%d]',fitA_withMix$studies['Transmission'])]))
 betaAdjust<-exp(mean(as.matrix(fitB_withMix$fit)[,sprintf('studyMeans[%d]',fitB_withMix$studies['Transmission'])]))
 #save(fitA_withMix,fitB_withMix,file='work/mixFits_2020-05-14.Rdat')
-load('work/mixFits_2020-05-14.Rdat')
+#load('work/mixFits_2020-05-14.Rdat')
+#save(fitA_withMix,fitB_withMix,file='work/mixFitsUpdate_2020-07-20.Rdat')
 
-pdf('test.pdf');plotSummary(fitA_withMix,addAcute=FALSE);plotSummary(fitB_withMix,addAcute=FALSE);dev.off()
+}
+
+#pdf('test.pdf');plotSummary(fitA_withMix,addAcute=FALSE);plotSummary(fitB_withMix,addAcute=FALSE);dev.off()
 
 
 zz<-as.matrix(fitB_withMix$fit)
@@ -186,8 +119,12 @@ mean(zz[,'preProp',drop=FALSE]*zz[,'stateMeans[2]']+(1-zz[,'preProp',drop=FALSE]
 ordering<-c('Pre-ATI A06','Post-ATI A06','Pre-ATI A08','Rebound A08','Post-ATI A08','Pre-ATI A09','Rebound A09','Post-ATI A09','Pre-ATI 9241','Rebound 9241','Pre-ATI 9242','Rebound 9242','Pre-ATI 9243','Rebound 9243','Pre-ATI 9244','Rebound 9244','Rebound A08','Rebound S22','Rebound S23','Rebound S30','Rebound 601','Rebound 004','Rebound 030','Rebound 044','Outgrowth B106','Outgrowth B199','Outgrowth MM14','Outgrowth MM15','Outgrowth MM23','Outgrowth MM34','Outgrowth MM40','Outgrowth MM34','Acute','Chronic','Acute Recipients','Chronic Donors')
 pos<-structure(1:length(unique(combined$label[!is.na(combined$label)])),.Names=unique(combined$label[!is.na(combined$label)][orderIn(combined$label[!is.na(combined$label)],ordering)]))
 posStudy<-sapply(names(pos),function(xx)combined[combined$label==xx&!is.na(combined$label),'study'][1])
+posPat<-sapply(names(pos),function(xx)combined[combined$label==xx&!is.na(combined$label),'pat'][1])
+posPat['Chronic']<-'XXX'
 studySpace<-.5
+patSpace<--.25
 pos<-pos+cumsum(c(0,posStudy[-length(posStudy)]!=posStudy[-1]))*studySpace
+pos<-pos+cumsum(c(0,posPat[-length(posPat)]==posPat[-1]))*patSpace
 plotSummary<-function(fit,ylab='IFNa2 IC50 (pg/ml)',mar=c(6.9,4,.1,.1),xWidth=.4,addAcute=TRUE,xaxis=TRUE,logYAxis=TRUE,reps=2,cols=structure(rep('#00000033',nStates),.Names=stateNames),combine24=FALSE,cols2=cols,quantRange=c(.025,.975),subtract12=FALSE){
   if(combine24){
     extraState<-tail(names(fit$states),1)
@@ -265,10 +202,10 @@ plotSummary<-function(fit,ylab='IFNa2 IC50 (pg/ml)',mar=c(6.9,4,.1,.1),xWidth=.4
   if(!addAcute)abline(h=1,lty=2)
   return(stateNames)
 }
-pdf('out/voaRebound_bayesSummary.pdf',height=7,width=7)
+pdf('out/voaRebound_bayesSummary.pdf',height=6,width=7)
   layout(rbind(1:2,0,3:4),width=c(8,2.2),height=c(1,.01,1))
   #classCols<-structure(c(rep("#9EC0E1E6",3),rep("#77BCA9B3",2), rep("#9FB755B3",2), "#84C47DB3", "#B99A4BB3", "#C77C62B3", "#E581A0E6"), .Names = c("Outgrowth","Pre-ATI","Post-ATI","Acute Recipients","Acute", "Chronic Donors", "Chronic","1 Year", "Nadir", "Last", "Rebound")) 
-  classCols<-structure(c(rep(classCol['qvoa'],3),rep("#aaaaaa",2), rep("#DDDDDD",2), "#aaaaaa", "#aaaaaa", "#aaaaaa", classCol['rebound']), .Names = c("Outgrowth","Pre-ATI","Post-ATI","Acute Recipients","Acute", "Chronic Donors", "Chronic","1 Year", "Nadir", "Last", "Rebound")) 
+  classCols<-structure(c(rep(classCol['qvoa'],2),classCol['postQvoa'],rep("#aaaaaa",2), rep("#DDDDDD",2), "#aaaaaa", "#aaaaaa", "#aaaaaa", classCol['rebound'],patCols), .Names = c("Outgrowth","Pre-ATI","Post-ATI","Acute Recipients","Acute", "Chronic Donors", "Chronic","1 Year", "Nadir", "Last", "Rebound",names(patCols))) 
   stCols<-sprintf('%s99',substring(classCols,1,7))
   stCols2<-sprintf('%s33',substring(classCols,1,7))
   names(stCols)<-names(stCols2)<-names(classCols)
@@ -276,7 +213,7 @@ pdf('out/voaRebound_bayesSummary.pdf',height=7,width=7)
   plotFunc<-function(combined,ic50Col,fit,ylab='IFNa2 IC50 (pg/ml)',letters=LETTERS[1:2]){
     cex.axis<-1
     out<-withAs(combined=combined[!is.na(combined[,ic50Col])&!is.na(combined$label),],
-      plotQvoa2(combined[,ic50Col],combined$label,pos,combined$displayClass,combined$study,combined$speed,ylab=ylab,mar=c(5.5,3.5,.1,.1),cex.axis=cex.axis,startDown=TRUE,pats=ifelse(combined$study %in% c('Transmission','MM'),NA,combined$pat),classCols=classCols,labelXAxis=FALSE)
+      plotQvoa2(combined[,ic50Col],combined$label,pos,ifelse(combined$displayClass %in% c(),combined$pat,combined$displayClass),combined$study,combined$speed,ylab=ylab,mar=c(5.5,3.7,.1,.1),cex.axis=cex.axis,startDown=TRUE,pats=ifelse(combined$study %in% c('Transmission','MM'),NA,combined$pat),classCols=classCols,labelXAxis=FALSE)
     )
     patPos<-tapply(out$pos,sub('BEAT-','',sub('.* ','',names(out$pos))),mean)
     patPos<-patPos[!grepl('^Acute|^Month|^Recipient|^Donor|^Nadir|^Year|^Last|^Chronic',names(patPos))]
@@ -287,10 +224,11 @@ pdf('out/voaRebound_bayesSummary.pdf',height=7,width=7)
     slantAxis(1,1:length(states),sub('Outgrowth','Pre-ATI',states),textOffsets=c(-.2,-.2,-.2,-.2),location=.7,axisArgs=list(tcl=-.4),srt=-45,cex=cex.axis)
     text(grconvertX(par('fig')[1]+diff(par('fig')[1:2])*.03,from='ndc'),grconvertY(par('fig')[4]-diff(par('fig')[3:4])*.005,from='ndc'),letters[2],xpd=NA,adj=c(0,1),cex=2)
   }
-  plotFunc(combined,'ic50_IFNa2',fitA_withMix)
   tmp<-combined
+  tmp$alphaAdjust<-tmp$ic50_IFNa2/ifelse(tmp$study=='Transmission',alphaAdjust,1)
   tmp$betaAdjust<-tmp$ic50_IFNb/ifelse(tmp$study=='Transmission',betaAdjust,1)
-  plotFunc(tmp,'betaAdjust',fitB_withMix,ylab='IFNb IC50 (pg/ml)',letters=LETTERS[3:4])
+  plotFunc(tmp,'alphaAdjust',fitA_withMix,ylab=expression('IFN'*alpha*'2 IC'[50]*' (pg/ml)'))
+  plotFunc(tmp,'betaAdjust',fitB_withMix,ylab=expression('IFN'*beta*' IC'[50]*' (pg/ml)'),letters=LETTERS[3:4])
   #remove adjustment based on single IC50 and use bayesian estimated
   #combined$ic50_IFNb[combo$study=='Transmission']<-combo$beta[combo$study=='Transmission']/6386*2230
   #plotSummary(fitB,ylab='IFNb IC50 (pg/ml)')
