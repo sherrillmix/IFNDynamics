@@ -2,7 +2,8 @@ plotQvoa2<-function(ic50,label,pos,class,study,speed,ylab='IFNa2 IC50 (pg/ml)',m
   speedPch<-c('Fast'=22,'Slow'=21,'Standard'=21,'Other'=21)
   speedCex<-c('Fast'=1,'Slow'=1,'Standard'=1,'Other'=1)
   deemphasize<-c("Acute","6 Month","Donor","Nadir","Last","Acute Recipients","Chronic Donors","Acute Recipient","Chronic Donor",'1 Year','Acute','Chronic')
-  spread<-vipor::offsetX(log10(ic50),label,width=.45)
+  spread<--vipor::offsetX(log10(ic50),label,width=.45)
+  spread[ic50>.9&class=='Post-ATI']<-0 #manual tweak to improve figure
   ii<-'all'
   marSpace<-0
   if(ii!='all')selector<-label %in% subsets[[ii]]
@@ -32,7 +33,7 @@ plotQvoa2<-function(ic50,label,pos,class,study,speed,ylab='IFNa2 IC50 (pg/ml)',m
     axis(2,las=1,mgp=c(3,.5,0),tcl=-.3)
   }
   abline(v=pos,col='#00000055',lty=3)
-  points(pos[label[selector]]+spread[selector],ic50[selector],pch=speedPch[speed[selector]],bg=classCols[class[selector]],col=ifelse(speedPch[speed[selector]]>20,ifelse(class[selector] %in% deemphasize,'#00000066','#000000CC'),classCols[class[selector]]),lwd=ifelse(class[selector]=='Rebound',1,1),cex=ifelse(class[selector]=='QVOA',max(speedCex),speedCex[speed[selector]]))
+  points(pos[label[selector]]+spread[selector],ic50[selector],pch=speedPch[speed[selector]],bg=classCols[class[selector]],col=ifelse(speedPch[speed[selector]]>20,ifelse(class[selector] %in% deemphasize,'#00000066','#00000088'),classCols[class[selector]]),lwd=ifelse(class[selector]=='Rebound',1,1),cex=ifelse(class[selector]=='QVOA',max(speedCex),speedCex[speed[selector]]))
   abline(v=pos['Acute Recipients']-(pos['Acute Recipients']-pos[which(names(pos)=='Acute Recipients')-1])/2,lty=1,col='#000000')
   #abline(v=pos['Acute']-(pos['Acute']-pos[which(names(pos)=='Acute')-1])/2,lty=1,col='#000000')
   #abline(v=pos['Outgrowth MM14']-(pos['Outgrowth MM14']-pos[which(names(pos)=='Outgrowth MM14')-1])/2,lty=1,col='#00000099')

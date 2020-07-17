@@ -159,9 +159,9 @@ pdf('out/mm33_curves.pdf',width=5,height=5)
   plotFunc<-function(concBeta,propBeta,xlab='IFNb concentration (pg/ml)',col='#00000033',...){
     if(length(col)==1)col<-rep(col,nrow(propBeta))
     else if(length(col)!=nrow(propBeta))stop('Color length mismatch with proportions')
-    par(mar=c(3.5,3,1.5,.5))
+    par(mar=c(3.5,3,.9,.5))
     origConcs<-concs<-concBeta
-    zeroOffset<-.01
+    zeroOffset<-concs[concs>0][1]/concs[concs>0][3]
     fakeZero<-min(concs[concs>0])*zeroOffset
     concs[concs==0]<-fakeZero
     plot(1,1,type='n',xlab=xlab,ylab='',log='x',las=1,xaxt='n',mgp=c(1.8,1,0),ylim=c(0,1),yaxt='n',xlim=range(concs),bty='l',...)
@@ -175,20 +175,25 @@ pdf('out/mm33_curves.pdf',width=5,height=5)
   plotFunc(concAlpha,propAlpha,xlab='IFNa2 concentration (pg/ml)')
   plotFunc(concBeta,propBeta)
 dev.off()
-pdf('out/mm33_curves_by_time.pdf',width=10,height=5)
-  par(mfrow=c(2,4))
+pdf('out/mm33_curves_by_time.pdf',width=8,height=9)
+  layout(matrix(c(1:8,rep(0,4),9:16),ncol=4,byrow=TRUE),heights=c(1,1,.15,1,1))
   for(ii in unique(alphaDays)){
     theseIds<-dat[dat$time==ii&dat$pat=='MM33','id']
     plotFunc(concAlpha,propAlpha[rownames(propAlpha) %in% theseIds,],xlab='IFNa2 concentration (pg/ml)',main=sprintf('%d DFOSx',ii),col=cols[as.character(ii)])
+    if(ii==unique(betaDays)[1])text(grconvertX(par('fig')[1]+diff(par('fig')[1:2])*.001,from='ndc'),grconvertY(par('fig')[4]-diff(par('fig')[3:4])*.01,from='ndc'),'A',xpd=NA,adj=c(0,1),cex=2)
   }
   plotFunc(concAlpha,propAlpha,xlab='IFNa2 concentration (pg/ml)',col=cols[as.character(alphaDays)],main='Combined')
-  par(mfrow=c(2,4))
   for(ii in unique(betaDays)){
     theseIds<-dat[dat$time==ii&dat$pat=='MM33','id']
     plotFunc(concBeta,propBeta[rownames(propBeta) %in% theseIds,],main=sprintf('%d DFOSx',ii),col=cols[as.character(ii)])
+    if(ii==unique(betaDays)[1])text(grconvertX(par('fig')[1]+diff(par('fig')[1:2])*.001,from='ndc'),grconvertY(par('fig')[4]-diff(par('fig')[3:4])*.01,from='ndc'),'B',xpd=NA,adj=c(0,1),cex=2)
   }
   plotFunc(concBeta,propBeta,col=cols[as.character(betaDays)],main='Combined')
 dev.off()
+file.copy('out/mm33_curves_by_time.pdf','out/Fig._S3.pdf',overwrite=TRUE)
+#system('pdfcrop --margin "0 40 0 0" out/mm33_curves_by_time.pdf tmp2.pdf')
+#system('pdfjam out/mm33_curves_by_time.pdf --nup 1x2 --outfile tmp3.pdf')
+#system('pdfcrop tmp3.pdf out/Fig._S3.pdf')
 
 
 

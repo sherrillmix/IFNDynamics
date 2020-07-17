@@ -32,7 +32,7 @@ To create a simple model of the temporal dynamics of type I interferon (IFN-I) r
           \item Each participant has a time to nadir drawn from separate population-level distributions for typical, non- or fast progressors.
           \item Resistance changes linearly from onset of symptoms to time of nadir.
           \item The nadir of IFN-I resistance represents a changepoint in the data. Following this point, changes in IFN-I resistance are modeled as a linear function of CD4+ T cell count changes away from the count found at nadir.
-          \item CD4+ T cell counts were linearly interpolated between observations.
+          \item Where data is not present, CD4+ T cell counts are assumed to be linearly interpolated between adjacent observations.
     \end{itemize}
   
  The log \icFifty{} observation from each viral isolate $i$ was modeled as a normal distribution $\text{IC50}_i\sim\text{Normal}(\mu_i,\sigma)$ with mean $\mu_i$ where:
@@ -84,12 +84,12 @@ Posterior probabilities were estimated with 50 Markov chain Monte Carlo chains o
 \section*{Bayesian models of IFN-I resistance of outgrowth and rebound HIV-1 isolates}
   To compare the IFN-I resistance of viral isolates derived from plasma samples collected during acute, chronic and rebound infections, as well as from viably frozen PBMCs collected during ART suppression (QVOA), \ifna{} and \ifnb{} \icFifty{} values were modeled using a Bayesian hierarchical model. The model is based on the assumptions that:
   \begin{itemize}
-    \item Isolates found at acute infection form a base level of IFN-I resistance for a given person.  Virus isolated from chronic, ART suppressed and rebound infection for this person are modelled as changes from this initial level.
-    \item The mean \icFifty{} level within each person for a given virus type (acute, chronic, rebound, QVOA) was assumed to be drawn from a population-level distribution for that type. 
+    \item Isolates found at acute infection form a base level of IFN-I resistance for a given person.  Resistances in virus isolated from chronic, ART suppressed and rebound infection for this person are modelled as changes from this initial level.
+    \item The mean \icFifty{} level within each person for acute isolates and the change from acute levels for chronic, QVOA and rebound isolates are drawn from a population-level distribution for that type. 
     \item QVOA isolates are separated into to two populations; a ``pre'' group composed of QVOA viruses isolated from study participants prior to or in the absence of treatment interruption (ATI) and a ``post'' group of QVOA viruses isolated from participants following ATI and reinitiation of ART.
     \item In both QVOA populations, the viruses can include some proportion of rebound-like isolates. This mixture is modeled in both pre- and post-treatment so that differences in mixture proportion between the two populations can be assessed.
-    \item Variation in the potency of INF-I used to experimentally determine \icFifty{} values may shift the inferred resistance for isolates tested in other studies. This effect was modeled as a multiplicative shift in \icFifty{} for all isolates measured outside this study (acute recipient and chronic donor isolates from ref.\ \iyerRef{}).
-    \item Isolates from participants who received exogenous \ifna{} during treatment interruption may display altered interferon resistance. This effect was modeled as a multiplicative shift in \icFifty{} for all rebound isolates from such participants (participants 004, 030, and 044 from ref.\ \azzRef{}).
+    \item Variation in the potency of INF-I used to experimentally determine \icFifty{} values may shift the inferred resistance for isolates tested in other studies. This effect is modeled as a multiplicative shift in \icFifty{} for all isolates measured outside this study (acute recipient and chronic donor isolates from ref.\ \iyerRef{}).
+    \item Isolates from participants who received exogenous \ifna{} during treatment interruption may display altered interferon resistance. This effect is modeled as a multiplicative shift in \icFifty{} for all rebound isolates from such participants (participants 004, 030, and 044 from ref.\ \azzRef{}).
   \end{itemize}
 
   The log \icFifty{} observation from each viral isolate $i$ from acute, chronic and rebound isolates was modeled as a normal distribution:

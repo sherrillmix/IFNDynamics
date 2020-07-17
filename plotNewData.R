@@ -78,7 +78,7 @@ plotVlCd4<-function(thisMeta,main,xlim,cd4Lim,vlLim,xAxis=TRUE,vlAxis=TRUE,cd4Ax
   if(vlAxis)logAxis(2,mgp=c(3,.8,0),las=1,col.axis='red',cex.axis=1.3)
 }
 for(showLegend in c(TRUE,FALSE)){
-pdf(sprintf('out/subjects_condense_new%s.pdf',ifelse(showLegend,'_legend','')),width=3.54,height=8)
+pdf(sprintf('out/subjects_condense_new%s.pdf',ifelse(showLegend,'_legend','')),width=3.5,height=8)
   par(mar=c(0,0,0,0))
   layout(lay2,width=c(.47,rep(1,2),.53),height=c(.13,c(1,1,1,.2,1,.2,1),ifelse(showLegend,.8,.28)))
   #layout(lay,width=c(.5,rep(1,2),.5),height=c(.01,rep(1,5),.35))

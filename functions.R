@@ -9,11 +9,18 @@ lowerLimit<-50
 concAlpha6<-concAlpha[c(1,seq(2,length(concAlpha),2))]
 concBeta6<-concBeta[c(1,seq(2,length(concBeta),2))]
 
+patOrder<-c("MM14","MM23","MM33","MM34","MM39","MM40","MM55","MM62","MM15","WEAU")
 
-patCols<-c('MM23'='#e41a1c','MM33'='#4daf4a','MM34'='#984ea3','MM39'='#377eb8','MM40'='#FF7f00','MM14'='#FFD700','MM15'='#f781bf','MM55'='#a65628','MM62'='#00CED1')
-patCols<-c(patCols,'WEAU'='#708090')
-patCols2<-sprintf('%s33',patCols)
-patCols3<-sprintf('%s11',patCols)
+#,'postQvoa'='#1cd0e2'
+# green 4daf4a
+classCol<-c('rebound'='#e41a1c','qvoa'='#377eb8','typical'='#ff7f00','slow'='#4daf4a','fast'='#f781bf','postQvoa'='#3fe0d0')
+patCols<-structure(rep(classCol[c('typical','slow','fast')],c(6,2,2)),.Names=patOrder)
+
+#patCols<-c('MM23'='#e41a1c','MM33'='#4daf4a','MM34'='#984ea3','MM39'='#377eb8','MM40'='#FF7f00','MM14'='#FFD700','MM15'='#f781bf','MM55'='#a65628','MM62'='#00CED1')
+#patCols<-c(patCols,'WEAU'='#708090')
+#patCols<-c('MM23'='#e41a1c','MM33'='#4daf4a','MM34'='#984ea3','MM39'='#377eb8','MM40'='#FF7f00','MM14'='#FFD700','MM15'='#f781bf','MM55'='#a65628','MM62'='#00CED1')
+patCols2<-sprintf('%s44',patCols)
+patCols3<-sprintf('%s22',patCols)
 names(patCols2)<-names(patCols3)<-names(patCols)
 lay<-matrix(0,nrow=7,ncol=4)
 lay[2:6,2:3]<-matrix(1:10,nrow=5,byrow=TRUE)
@@ -21,7 +28,6 @@ lay[2:6,2:3]<-matrix(1:10,nrow=5,byrow=TRUE)
 lay2<-matrix(0,nrow=7+2,ncol=4)
 lay2[c(2,3,4,6,8),2:3]<-matrix(1:10,nrow=5,byrow=TRUE)
 lowerP24Limit<-60
-patOrder<-c("MM14","MM23","MM33","MM34","MM39","MM40","MM55","MM62","MM15","WEAU")
 
 
 

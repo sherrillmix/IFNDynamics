@@ -6,7 +6,204 @@ source('functions.R')
 
 #if(!exists('dat'))source('readNewData.R')
 dat<-read.csv('out/allLongitudinal.csv',stringsAsFactors=FALSE)
+meta<-read.csv('out/allLongitudinalMeta.csv')
 
+
+ic50CodeWithFastVlCd4<-'
+  data {
+    int<lower=0> nVirus;
+    int<lower=0> nPatient;
+    int<lower=0> nArt;
+    real cd4[nVirus];
+    real vl[nVirus];
+    real ic50[nVirus];
+    int<lower=0,upper=nPatient> patients[nVirus];
+    vector<lower=0,upper=1>[nPatient] isFast;
+    int<lower=0> artIds[nVirus];
+    real<lower=0> days[nVirus];
+    real daysBeforeArt[nVirus];
+    real artStart[nArt];
+    real<lower=0> hasArt[nVirus];
+    int<lower=0> nSample;
+    int<lower=0,upper=nSample> sample[nVirus];
+  }
+  parameters {
+    vector[nPatient] acuteRaw;
+    //vector[nPatient] nadirTimeRaw;
+    //vector[nPatient] nadirChangeRaw;
+    //DEFSSUB
+    real<lower=0> sigma;
+    //real nadirTimeMean;
+    //real<lower=0> nadirTimeSD;
+    real acuteMean;
+    real<lower=0> acuteSD;
+    //real nadirChangeMean;
+    //real<lower=0> nadirChangeSD;
+    real fastChangeMean;
+    //vector[nPatient] vlBetaRaw;
+    vector[nPatient] cd4BetaRaw;
+    //real vlBetaMean;
+    real cd4BetaMean;
+    //real<lower=0> vlBetaSD;
+    real<lower=0> cd4BetaSD;
+  }
+  transformed parameters{
+    vector[nPatient] acute;
+    real expectedIC50[nVirus];
+    //vector[nPatient] nadirTime;
+    //vector[nPatient] nadirChange;
+    acute=acuteMean+acuteRaw*acuteSD;
+    //nadirChange=fastChangeMean*isFast+nadirChangeMean+nadirChangeRaw*nadirChangeSD;
+    //nadirTime=nadirTimeMean+nadirTimeRaw*nadirTimeSD;
+    //TRANSSUB
+    for(ii in 1:nVirus){
+      expectedIC50[ii]=acute[patients[ii]]+(cd4BetaMean+cd4BetaRaw[patients[ii]]*cd4BetaSD)*(cd4[ii]);
+      //if(days[ii]<exp(nadirTime[patients[ii]])){
+        //expectedIC50[ii]=expectedIC50[ii]+nadirChange[patients[ii]]*days[ii]/exp(nadirTime[patients[ii]]);
+      //}else{
+        //expectedIC50[ii]=expectedIC50[ii]+nadirChange[patients[ii]]+(vlBetaMean+vlBetaRaw[patients[ii]]*vlBetaSD)*(vl[ii])+(cd4BetaMean+cd4BetaRaw[patients[ii]]*cd4BetaSD)*(cd4[ii]);
+        //expectedIC50[ii]=expectedIC50[ii]+nadirChange[patients[ii]]+(cd4BetaMean+cd4BetaRaw[patients[ii]]*cd4BetaSD)*(cd4[ii]);
+      //}
+    }
+  }
+  model {
+    //MODELSUB
+    ic50~normal(expectedIC50,sigma);
+    sigma~gamma(1,.1);
+    //nadirTimeSD~gamma(1,.1);
+    //nadirTimeRaw~normal(0,1);
+    acuteSD~gamma(1,.1);
+    acuteRaw~normal(0,1);
+    //nadirChangeSD~gamma(1,.1);
+    //nadirChangeRaw~normal(0,1);
+    //nadirTimeMean~normal(0,10);
+    fastChangeMean~normal(0,10);
+    cd4BetaMean~normal(0,10);
+    //vlBetaSD~gamma(1,.1);
+    cd4BetaSD~gamma(1,.1);
+    //vlBetaRaw~normal(0,1);
+    cd4BetaRaw~normal(0,1);
+  }
+'
+
+ic50_bp<-'
+  data {
+    int<lower=0> nVirus;
+    int<lower=0> nPatient;
+    int<lower=0> nArt;
+    real cd4[nVirus];
+    real vl[nVirus];
+    real ic50[nVirus];
+    int<lower=0,upper=nPatient> patients[nVirus];
+    vector<lower=0,upper=1>[nPatient] isFast;
+    int<lower=0> artIds[nVirus];
+    real<lower=0> days[nVirus];
+    real daysBeforeArt[nVirus];
+    real artStart[nArt];
+    real<lower=0> hasArt[nVirus];
+    int<lower=0> nSample;
+    int<lower=0,upper=nSample> sample[nVirus];
+  }
+  parameters {
+    vector[nPatient] acuteRaw;
+    real acuteMean;
+    real<lower=0> acuteSD;
+    vector[nPatient] nadirTimeRaw;
+    real<lower=0,upper=8> nadirTimeMean;
+    real<lower=0> nadirTimeSD;
+    vector[nPatient] nadirChangeRaw;
+    real nadirChangeMean;
+    real<lower=0> nadirChangeSD;
+    real<lower=0> sigma;
+    real fastChangeMean;
+    //vector[nPatient] cd4BetaRaw;
+    real cd4BetaMean;
+    //real<lower=0> cd4BetaSD;
+    //DEFSSUB
+    //vector[nPatient] vlBetaRaw;
+    //real vlBetaMean;
+    //real<lower=0> vlBetaSD;
+  }
+  transformed parameters{
+    vector[nPatient] acute;
+    real expectedIC50[nVirus];
+    vector<lower=0,upper=8>[nPatient] nadirTime;
+    vector[nPatient] nadirChange;
+    acute=acuteMean+acuteRaw*acuteSD;
+    nadirChange=nadirChangeMean*(1-isFast)+nadirChangeRaw*nadirChangeSD+fastChangeMean*isFast;
+    //nadirChange=nadirChangeMean+nadirChangeRaw*nadirChangeSD;
+    nadirTime=exp(nadirTimeMean+nadirTimeRaw*nadirTimeSD);
+    //TRANSSUB
+    for(ii in 1:nVirus){
+      expectedIC50[ii]=acute[patients[ii]]; //+(cd4BetaMean+cd4BetaRaw[patients[ii]]*cd4BetaSD)*(cd4[ii]);
+      if(days[ii]<(nadirTime[patients[ii]])){
+        expectedIC50[ii]=expectedIC50[ii]+nadirChange[patients[ii]]*days[ii]/(nadirTime[patients[ii]]);
+      }else{
+        //expectedIC50[ii]=expectedIC50[ii]+nadirChange[patients[ii]]+(vlBetaMean+vlBetaRaw[patients[ii]]*vlBetaSD)*(vl[ii])+(cd4BetaMean+cd4BetaRaw[patients[ii]]*cd4BetaSD)*(cd4[ii]);
+        expectedIC50[ii]=expectedIC50[ii]+nadirChange[patients[ii]]+(cd4BetaMean)*(cd4[ii]);//+(cd4BetaMean+cd4BetaRaw[patients[ii]]*cd4BetaSD)*(cd4[ii]);
+      }
+    }
+  }
+  model {
+    //MODELSUB
+    ic50~normal(expectedIC50,sigma);
+    sigma~gamma(1,.1);
+    nadirTimeSD~gamma(1,.1);
+    nadirTimeRaw~normal(0,1);
+    nadirChangeSD~gamma(1,.1);
+    nadirChangeRaw~normal(0,1);
+    acuteSD~gamma(1,.1);
+    acuteRaw~normal(0,1);
+    nadirChangeMean~normal(0,10);
+    fastChangeMean~normal(0,10);
+    cd4BetaMean~normal(0,10);
+    //cd4BetaSD~gamma(1,.1);
+    //cd4BetaRaw~normal(0,1);
+    //nadirTimeMean~normal(0,10);
+    //fastChangeMean~normal(0,10);
+    //vlBetaSD~gamma(1,.1);
+    //vlBetaRaw~normal(0,1);
+  }
+'
+#log time has tree depth problem but not divergence
+#linear time has divergence but not tree problem
+#adding heirarchical CD4 causes divergence
+#adding straight CD4 causes divergence (even if divided by 100)
+bayesIC50_2<-function(mod,ic50,time,timePreArt,patient,chains=50,nIter=30000,fastProgressors=c(),cd4=c(),vl=c(),baseVl=c(),...){
+  #treating all postART as one group (currently only WEAU)
+  patientId<-structure(1:length(unique(patient)),.Names=sort(unique(patient)))
+  artId<-structure(1:length(unique(patient[!is.na(timePreArt)])),.Names=sort(unique(patient[!is.na(timePreArt)])))
+  artStart<-tapply(time+timePreArt,patient,unique)
+  sample<-paste(patient,time,sep='_')
+  sampleId<-structure(1:length(unique(sample)),.Names=unique(sample[order(patient,time)]))
+  dat=list(
+    nVirus=length(ic50),
+    nArt=max(artId),
+    nPatient=max(patientId),
+    ic50=log(ic50),
+    patients=patientId[patient],
+    artIds=ifelse(is.na(artId[patient]),9999,artId[patient]),
+    days=ifelse(time<0,0,time),
+    artStart=artStart[names(artId)],
+    nSample=max(sampleId),
+    sample=sampleId[sample],
+    daysBeforeArt=ifelse(is.na(timePreArt),9999,timePreArt),
+    hasArt=!is.na(timePreArt),
+    isFast=names(patientId) %in% fastProgressors,
+    cd4=as.numeric(cd4),
+    vl=as.numeric(vl),
+    baseVl=baseVl[names(patientId)]
+  )
+  fit <- sampling(mod, data = dat, iter=nIter, chains=chains,thin=2,control=list(adapt_delta=.99,max_treedepth=15),...)
+  return(list('fit'=fit,pats=patientId,arts=artId,code=filledCode,artStart=artStart,sample=sampleId,dat=dat))
+}
+#fit<-withAs(xx=dat[!is.na(dat$ic50)&!dat$qvoa,],bayesIC50(ic50Mod,xx$ic50,xx$time,xx$timeBeforeArt,xx$pat,ic50Code=ic50CodeWithFast,fastProgressors=c('MM15','WEAU'),nIter=10000))
+withAs(xx=dat[!is.na(dat$ic50)&!dat$qvoa,],table(is.na(xx$CD4),xx$pat))
+withAs(xx=dat[!is.na(dat$ic50)&!dat$qvoa,],table(is.na(xx$vl),xx$pat))
+baseVl<-withAs(xx=unique(meta[meta$time<365*2&meta$time>180,c('time','vl','mm')]),tapply(xx$vl,xx$mm,function(xx)mean(log(xx),na.rm=TRUE)))
+fit<-withAs(xx=dat[!is.na(dat$ic50)&!dat$qvoa,],bayesIC50_2(NULL,xx$ic50,xx$time,xx$timeBeforeArt,xx$pat,ic50Code=ic50_bp,fastProgressors=c('MM15','WEAU'),cd4=(xx$fillCD4-500)/100,vl=xx$fillVl-baseVl[xx$pat],baseVl=baseVl,nIter=3000))
+#
+print(fit$fit,pars=c('nadirTimeRaw','nadirChangeRaw','expectedIC50','acuteRaw'),include=FALSE)
 
 ic50CodeWithFast<-'
   data {
@@ -94,10 +291,9 @@ ic50CodeWithFast<-'
     fastChangeMean~normal(0,10);
   }
 '
-
 #ic50Mod <- stan_model(model_code = ic50Code)
 
-bayesIC50<-function(mod,ic50,time,timePreArt,patient,chains=50,nIter=30000,fastProgressors=c(),ic50Code,...){
+bayesIC50<-function(mod,ic50,time,timePreArt,patient,chains=50,nIter=30000,fastProgressors=c(),cd4=c(),vl=c(),ic50Code,...){
   #treating all postART as one group (currently only WEAU)
   patientId<-structure(1:length(unique(patient)),.Names=sort(unique(patient)))
   artId<-structure(1:length(unique(patient[!is.na(timePreArt)])),.Names=sort(unique(patient[!is.na(timePreArt)])))
@@ -122,7 +318,9 @@ bayesIC50<-function(mod,ic50,time,timePreArt,patient,chains=50,nIter=30000,fastP
     sample=sampleId[sample],
     daysBeforeArt=ifelse(is.na(timePreArt),9999,timePreArt),
     hasArt=!is.na(timePreArt),
-    isFast=names(patientId) %in% fastProgressors
+    isFast=names(patientId) %in% fastProgressors,
+    cd4=(cd4),
+    vl=log(vl)
   )
   fit <- sampling(ic50Mod, data = dat, iter=nIter, chains=chains,thin=2,control=list(adapt_delta=.99,max_treedepth=15),...)
   return(list('fit'=fit,pats=patientId,arts=artId,code=filledCode,artStart=artStart,sample=sampleId,dat=dat))
@@ -130,7 +328,7 @@ bayesIC50<-function(mod,ic50,time,timePreArt,patient,chains=50,nIter=30000,fastP
 #fit<-withAs(xx=dat[!is.na(dat$ic50)&!dat$qvoa,],bayesIC50(ic50Mod,xx$ic50,xx$time,xx$timeBeforeArt,xx$pat,ic50Code=ic50CodeWithFast,fastProgressors=c('MM15','WEAU'),nIter=10000))
 withAs(xx=dat[!is.na(dat$ic50)&!dat$qvoa,],table(is.na(xx$CD4),xx$pat))
 withAs(xx=dat[!is.na(dat$ic50)&!dat$qvoa,],table(is.na(xx$vl),xx$pat))
-#fit<-withAs(xx=dat[!is.na(dat$ic50)&!dat$qvoa,],bayesIC50(ic50Mod,xx$ic50,xx$time,xx$timeBeforeArt,xx$pat,ic50Code=ic50CodeWithFast,fastProgressors=c('MM15','WEAU')))
+fit<-withAs(xx=dat[!is.na(dat$ic50)&!dat$qvoa,],bayesIC50(NULL,xx$ic50,xx$time,xx$timeBeforeArt,xx$pat,ic50Code=ic50CodeWithFastVlCd4,fastProgressors=c('MM15','WEAU'),cd4=(xx$fillcd4),vl=xx$fillVl))
 #sims<-calcSims(fit,dat)
 #pdf('test.pdf',width=4,height=8)
 #noQvoa<-dat[!dat$qvoa,]
