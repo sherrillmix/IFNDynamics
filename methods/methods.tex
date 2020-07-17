@@ -5,7 +5,7 @@
 \usepackage{upgreek}
 \usepackage[hidelinks]{hyperref}
 \usepackage{titlesec}
-%usepackage{helvet}
+%\usepackage{helvet}
 %\renewcommand{\familydefault}{\sfdefault}
 %usepackage{setspace}
 %\linespread{1.25}
@@ -16,22 +16,22 @@
 \newcommand{\ifna}{IFN\hspace{-.08em}${\upalpha 2}$}
 \newcommand{\ifnb}{IFN\hspace{-.03em}${\upbeta}$}
 \newcommand{\icFifty}{IC$_{50}$}
-\newcommand{\iyerRef}{(50)}
-\newcommand{\stanRef}{(91)}
-\newcommand{\azzRef}{(38)}
+\newcommand{\iyerRef}{\textit{50}}
+\newcommand{\stanRef}{\textit{91}}
+\newcommand{\azzRef}{\textit{38}}
 \begin{document}
 \begin{center}
  \Large\textbf{}
 \end{center}
 \section*{Bayesian models of IFN-I resistance of HIV-1 plasma isolates from longitudinally sampled participants}
-To create a simple model of the temporal dynamics of type I interferons (IFN-I) resistance, \ifna{} and \ifnb{} \icFifty{} values were each modeled using a Bayesian change point hierarchical model.
+To create a simple model of the temporal dynamics of type I interferon (IFN-I) resistance, \ifna{} and \ifnb{} \icFifty{} values were each modeled using a Bayesian change point hierarchical model.
   The model is based on a segmented regression of the log \icFifty{} making the following simplifying assumptions:
     \begin{itemize}
           \item Each participant has a level of resistance at the acute infection stage drawn from separate population-level distributions for typical, non- or fast progressors.
           \item Each participant has a drop (or rise) in IFN-I resistance from acute levels drawn from separate population-level distributions for typical, non- or fast progressors.
           \item Each participant has a time to nadir drawn from separate population-level distributions for typical, non- or fast progressors.
           \item Resistance changes linearly from onset of symptoms to time of nadir.
-          \item After the nadir, the level of IFN-I resistance changes linearly with fluctuations in CD4+ T cell counts away from the level found at nadir, with the effect for each participant drawn from separate population-level distributions for typical, non- or fast progressors.
+          \item The nadir of IFN-I resistance represents a changepoint in the data. Following this point, changes in IFN-I resistance are modeled as a linear function of CD4+ T cell count changes away from the count found at nadir.
           \item CD4+ T cell counts were linearly interpolated between observations.
     \end{itemize}
   
@@ -78,17 +78,17 @@ where $\text{...}$ represents all parameters other than $s$ and $\mu_{i,s}$ is d
   \end{cases}
 \]
 
-Posterior probabilities were estimated with 50 Markov chain Monte Carlo chains of 5000 iterations each using Stan \stanRef{}.
+Posterior probabilities were estimated with 50 Markov chain Monte Carlo chains of 5000 iterations each using Stan (\stanRef{}).
 
 
-\section*{Bayesian models of the IFN-I resistance of outgrowth and rebound HIV-1 isolates}
-  To compare the IFN-I resistance of viral isolates derived from plasma samples collected during acute, chronic and rebound infections as well as from viably frozen PBMCs collected during ART suppression (QVOA), \ifna{} and \ifnb{} \icFifty{} values were modeled using a Bayesian hierarchical model. The model is based on the assumptions that:
+\section*{Bayesian models of IFN-I resistance of outgrowth and rebound HIV-1 isolates}
+  To compare the IFN-I resistance of viral isolates derived from plasma samples collected during acute, chronic and rebound infections, as well as from viably frozen PBMCs collected during ART suppression (QVOA), \ifna{} and \ifnb{} \icFifty{} values were modeled using a Bayesian hierarchical model. The model is based on the assumptions that:
   \begin{itemize}
-    \item Isolates found at  acute infection form a base level of IFN-I resistance for a given person. Virus isolated from chronic, rebound and QVOA for this person are modelled as changes from this initial level.
+    \item Isolates found at acute infection form a base level of IFN-I resistance for a given person.  Virus isolated from chronic, ART suppressed and rebound infection for this person are modelled as changes from this initial level.
     \item The mean \icFifty{} level within each person for a given virus type (acute, chronic, rebound, QVOA) was assumed to be drawn from a population-level distribution for that type. 
-    \item QVOA virus are separated into to two populations; a ``pre'' group composed of QVOA viruses isolated from study participants prior to or in the absence of treatment interruption (ATI) and a ``post'' group of QVOA viruses isolated from participants following ATI and reinitiation of ART.
+    \item QVOA isolates are separated into to two populations; a ``pre'' group composed of QVOA viruses isolated from study participants prior to or in the absence of treatment interruption (ATI) and a ``post'' group of QVOA viruses isolated from participants following ATI and reinitiation of ART.
     \item In both QVOA populations, the viruses can include some proportion of rebound-like isolates. This mixture is modeled in both pre- and post-treatment so that differences in mixture proportion between the two populations can be assessed.
-    \item Variation in the potency of INF-I used to experimentally determine \icFifty{} may shift the inferred resistance for isolates tested in other studies. This effect was modeled as a multiplicative shift in \icFifty{} for all isolates measured outside this study (acute recipient and chronic donor isolates from ref.\ \iyerRef{}).
+    \item Variation in the potency of INF-I used to experimentally determine \icFifty{} values may shift the inferred resistance for isolates tested in other studies. This effect was modeled as a multiplicative shift in \icFifty{} for all isolates measured outside this study (acute recipient and chronic donor isolates from ref.\ \iyerRef{}).
     \item Isolates from participants who received exogenous \ifna{} during treatment interruption may display altered interferon resistance. This effect was modeled as a multiplicative shift in \icFifty{} for all rebound isolates from such participants (participants 004, 030, and 044 from ref.\ \azzRef{}).
   \end{itemize}
 
@@ -125,7 +125,7 @@ The hierarchical parameter priors were modeled as:
   \end{align*}
 where $j$ indicates the isolate type (acute, chronic, QVOA, rebound). All $\alpha_k$, $\beta_{j,k}$ were given flat priors and $\beta_{\text{\textsc{ifn}}}\sim\text{Normal}(0,10)$ and $\beta_{\text{batch}}\sim\text{Normal}(0,10)$.
 
-Posterior probabilities were estimated with 50 Markov chain Monte Carlo chains of 5,000 iterations each using Stan \stanRef{}.
+Posterior probabilities were estimated with 50 Markov chain Monte Carlo chains of 5,000 iterations each using Stan (\stanRef{}).
 
 \end{document}
 
