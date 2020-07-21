@@ -2,7 +2,7 @@ acuteCut<-30
 chronicCut<-300
 
 dat<-read.csv('out/allLongitudinal.csv',stringsAsFactors=FALSE)
-acuteChronicMM<-dat[dat$qvoa|(dat$time<30|dat$time>=chronicCut),]
+acuteChronicMM<-dat[dat$qvoa|(dat$time<acuteCut|dat$time>=chronicCut),]
 acuteChronicMM$study<-'MM'
 acuteChronicMM$virus<-acuteChronicMM$id
 acuteChronicMM$ic50_IFNa2<-acuteChronicMM$ic50
