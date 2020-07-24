@@ -5,11 +5,34 @@
 \usepackage{upgreek}
 \usepackage[hidelinks]{hyperref}
 \usepackage{titlesec}
-%\usepackage{helvet}
+%\usepackage{euler}
+%\renewcommand\rmdefault{helvet}
 %\renewcommand{\familydefault}{\sfdefault}
+\usepackage{fontspec}
+\setmainfont{Arial}
+%\usepackage{fontspec}
+%\renewcommand{\familydefault}{\sfdefault}
+%\usepackage{xfrac,unicode-math}
+%\defaultfontfeatures{Scale=MatchLowercase}
+%\setmainfont{Latin Modern Roman}
+%\setmainfont{TeX Gyre Heros}
+%\setmathfont{Latin Modern Math}
+%\setmathsf{Latin Modern Math}
+%\setmathtt{Latin Modern Math}
+%\setmainfont[Numbers={Proportional, OldStyle} ]{Libertinus Serif}
+%\setmathfont{Libertinus Math}
+%\setmathfont{Latin Modern Math}
+%\setmathfont{Latin Modern Math}
+%\mathversion{lm}
+%\renewcommand{\rmdefault}{helvet}
+%\renewcommand{\familydefault}{ptm}
+%\renewcommand{\familydefault}{\sfdefault}
+%\renewcommand{\rmdefault}{}
 %usepackage{setspace}
 %\linespread{1.25}
 \titlespacing{\section}{0pt}{0pt}{-.5em}
+\titleformat*{\section}{\large\bfseries}
+\titleformat*{\subsection}{\itshape}
 \usepackage[top=1in,bottom=1in,right=1in,left=1in]{geometry}
 \setlength{\parindent}{0em}
 \setlength{\parskip}{1em}
@@ -20,10 +43,11 @@
 \newcommand{\stanRef}{\textit{91}}
 \newcommand{\azzRef}{\textit{38}}
 \begin{document}
-\begin{center}
- \Large\textbf{}
-\end{center}
-\section*{Bayesian models of IFN-I resistance of HIV-1 plasma isolates from longitudinally sampled participants}
+%\begin{center}
+ %\Large\textbf{}
+%\end{center}
+\section*{Supplementary Methods}
+\subsection*{Bayesian models of IFN-I resistance of HIV-1 plasma isolates from longitudinally sampled participants}
 To create a simple model of the temporal dynamics of type I interferon (IFN-I) resistance, \ifna{} and \ifnb{} \icFifty{} values were each modeled using a Bayesian change point hierarchical model.
   The model is based on a segmented regression of the log \icFifty{} making the following simplifying assumptions:
     \begin{itemize}
@@ -37,6 +61,7 @@ To create a simple model of the temporal dynamics of type I interferon (IFN-I) r
   
  The log \icFifty{} observation from each viral isolate $i$ was modeled as a normal distribution $\text{IC50}_i\sim\text{Normal}(\mu_i,\sigma)$ with mean $\mu_i$ where:
 \begin{align*}
+  \rm
   \mu_i=\begin{cases} 
     \alpha_{\text{person}_i}+\delta_{\text{person}_i}\frac{\text{time}_i}{s_{\text{person}_i}} & \text{if } \text{time}_i<s_{\text{person}_i}\\
     \alpha_{\text{person}_i}+\delta_{\text{person}_i} + \beta_{\text{person}_i}(\text{CD4}_{\text{person$_i$},\text{time}_i}-\text{CD4}_{\text{person$_i$},s_\text{person$_i$}}) & \text{if } \text{time}_i\ge s_{\text{person}_i}\\
@@ -81,7 +106,7 @@ where $\text{...}$ represents all parameters other than $s$ and $\mu_{i,s}$ is d
 Posterior probabilities were estimated with 50 Markov chain Monte Carlo chains of 5000 iterations each using Stan (\stanRef{}).
 
 
-\section*{Bayesian models of IFN-I resistance of outgrowth and rebound HIV-1 isolates}
+\subsection*{\it Bayesian models of IFN-I resistance of outgrowth and rebound HIV-1 isolates}
   To compare the IFN-I resistance of viral isolates derived from plasma samples collected during acute, chronic and rebound infections, as well as from viably frozen PBMCs collected during ART suppression (QVOA), \ifna{} and \ifnb{} \icFifty{} values were modeled using a Bayesian hierarchical model. The model is based on the assumptions that:
   \begin{itemize}
     \item Isolates found at acute infection form a base level of IFN-I resistance for a given person.  Resistances in virus isolated from chronic, ART suppressed and rebound infection for this person are modelled as changes from this initial level.
