@@ -239,7 +239,8 @@ sourceCex<-c('PBMC'=1,'PLAS'=2)
 vir<-unique(read.csv('ice/2020-02-01_plateIds.csv',stringsAsFactors=FALSE)[,c('virus','animal')])
 vir$virus[vir$virus=='MT145.Q171K']<-'MT145'
 rownames(vir)<-vir$animal
-pdf('out/macIfnOptions.pdf',width=15,height=6)
+pdf('out/macIfnDoses.pdf',width=15,height=6)
+#pdf('out/macIfnOptions.pdf',width=15,height=6)
 par(mfrow=c(2,3)) 
 par(mar=c(5,4,1,1))
 for(ii in 2:6){
@@ -323,6 +324,7 @@ dev.off()
 #looks like garbage
 
 
+#too low repCap
 p27<-read.csv('macaque/03.19.2020 - IC50 Beta Mac.Isol. - Macaque CD4 cells. csv .csv',stringsAsFactors=FALSE,check.names=FALSE)
 p27<-p27[,!grepl('Standard',colnames(p27))]
 p27[,grep('UT|untreat',colnames(p27))] #"not so good" cells sucked. ignoring
@@ -438,11 +440,18 @@ p27Stack<-data.frame(
   'virus'=rep(virus,12),
   'ifn'=rep(rep(ifns,2),each=nrow(p27)),
   'orig'=unlist(p27[,2:13]),
+  'batch'=rep(rep(1:2,each=6),each=nrow(p27)),
   stringsAsFactors=FALSE
 )
 p27Stack$p27<-as.numeric(sub('[><]','',p27Stack$orig))
 p27Stack$censor<-p27Stack$p27
 p27Stack$censor[p27Stack$censor<50]<-50
+p27Stack$day<-as.numeric(ifelse(grepl('d[0-9]',p27Stack$virus),sub('d','',sapply(strsplit(p27Stack$virus,'\\.'),'[',2)),0))
+p27Stack$monkey<-sub('d','',sapply(strsplit(p27Stack$virus,'\\.'),'[',1))
+p27Stack$source<-sub('d','',sapply(strsplit(p27Stack$virus,'\\.'),'[',3))
+p27Stack$source<-ifelse(grepl('PLAS|PBMC',p27Stack$source),p27Stack$source,'IMC')
+p27Stack<-p27Stack[order(p27Stack$virus=='SL92b',p27Stack$day,p27Stack$virus,p27Stack$ifn!='untreated',p27Stack$ifn,p27Stack$batch),]
+p27Stack$vres<-ave(p27Stack$p27,p27Stack$virus,FUN=function(xx)xx/exp(mean(log(xx[1:2][xx[1:2]>0]))))
 colPos<-structure(1:length(unique(ifns)),.Names=ifns)
 pdf('out/macIc50_20200624.pdf',height=8,width=18)
 par(mfrow=c(2,4))
@@ -459,6 +468,34 @@ par(mfrow=c(2,4))
     abline(h=exp(mean(log(thisDat[thisDat$ifn=='untreated'&thisDat$censor>50,'p27'])))/c(1,2),lty=2)
     abline(h=50,lty=3)
   }
+dev.off()
+
+vir<-unique(read.csv('ice/2020-02-01_plateIds.csv',stringsAsFactors=FALSE)[,c('virus','animal')])
+vir$virus[vir$virus=='MT145.Q171K']<-'MT145'
+rownames(vir)<-vir$animal
+sourceCol<-c('PBMC'=NA,'PLAS'='#FF000099')
+sourceCex<-c('PBMC'=1,'PLAS'=2,'IMC'=1)
+pdf('out/macIfnDoses2.pdf',width=15,height=6)
+par(mfrow=c(2,3)) 
+par(mar=c(5,4,1,1))
+for(ii in 2:6){
+  pos<-structure(1:length(unique(paste(p27Stack$virus,p27Stack$day))),.Names=unique(paste(p27Stack$virus,p27Stack$day)))
+  thisDat<-p27Stack[p27Stack$ifn==ifns[ii],]
+  plot(pos[paste(thisDat$virus,thisDat$day)],thisDat$vres,xaxt='n',xlab='',ylab='Proportion of untreated p27',main=ifns[ii],las=1,xlim=range(pos)+c(-.5,.5),ylim=c(0,2),bg=sourceCol[thisDat$source],pch=21,cex=sourceCex[as.character(thisDat$source)])
+  posInfo<-sapply(names(pos),function(xx){
+    monkeys<-sub('[ .].*','',xx)
+    monkeys[!grepl('RM',monkeys)]<-''
+    days<-sub('^0$','IMC',sub('.* ','',xx))
+    viruses<-ifelse(monkeys=='',sub(' 0','',sub('SHIV.A','',xx)),vir[monkeys,'virus'])
+    paste(days,monkeys,viruses,sep='\n',collapse='\n')
+  })
+  #print(posInfo)
+  for(jj in 1:length(pos))axis(1,pos[jj],posInfo[jj],padj=1,mgp=c(3,.1,0))
+  mtext('Day:',1,line=.7,at=dnar::convertLineToUser(-.5,2),cex=.8,adj=1)
+  mtext('Animal:',1,line=1.7,at=dnar::convertLineToUser(-.5,2),cex=.8,adj=1)
+  mtext('Virus:',1,line=2.7,at=dnar::convertLineToUser(-.5,2),cex=.8,adj=1)
+  abline(h=1,lty=2)
+}
 dev.off()
 
 
