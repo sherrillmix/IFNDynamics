@@ -435,7 +435,7 @@ dev.off()
 
 virus<-c( "SL92b", "SHIV.A.BG505.375Y", "RM10N011.d56.PLAS.C7", "RM10N011.d942.PLAS.E5", "RM10N011.d942.PLAS.F4", "RM6563.d1065.PBMC.D7", "RM6563.d1456.PBMC.C7")
 p27<-read.csv('data/p27 ResMac beta IC50 06.19.2020.csv',stringsAsFactors=FALSE,check.names=FALSE,nrow=7)
-ifns<-c( "untreated", "0.044pg IFNb", "4.4pg IFNb", "4,400pg IFNb", "440,000pg IFNb", "5.5pg IFNa2")
+ifns<-c( "untreated", "0.044pg/ml IFNb", "4.4pg/ml IFNb", "4,400pg/ml IFNb", "440,000pg/ml IFNb", "5.5pg/ml IFNa2")
 p27Stack<-data.frame(
   'virus'=rep(virus,12),
   'ifn'=rep(rep(ifns,2),each=nrow(p27)),
@@ -499,3 +499,43 @@ for(ii in 2:6){
 dev.off()
 
 
+tmp<-p27Stack[!grepl('IFNa2',p27Stack$ifn),]
+tmp$dose<-as.numeric(sub('untreated','0',gsub(',|pg/ml IFNb','',tmp$ifn)))
+#exclude odd sl92b point
+tmp<-tmp[!(tmp$dose==0&tmp$p27==0),]
+calcIc50<-function(dose,p27){
+  means<-exp(tapply(p27,dose,function(xx)mean(log(xx))))
+  tmp<-means[!duplicated(means)]
+  return(cbind(data.frame('ic50'=exp(approx(tmp[names(tmp)!='0'],log(as.numeric(names(tmp)[names(tmp)!='0'])),means['0']/2)$y),'max'=means['0']),t(means)))
+}
+ic50s<-do.call(rbind,by(tmp[,c('dose','p27')],tmp$virus,function(xx)calcIc50(xx$dose,xx$p27)))
+pdf('out/macIc50_20200828.pdf')
+for(ii in unique(tmp$virus)){
+  thisDat<-tmp[tmp$virus==ii,]
+  minDose<-min(thisDat$dose[thisDat$dose>0])
+  plot(ifelse(thisDat$dose==0,minDose/100,thisDat$dose),thisDat$p27,log='x',xaxt='n',ylab='p27',las=1,xlab='IFNb',main=sprintf('%s IC50: %0.1f pg/ml',ii,ic50s[ii,'ic50']))
+  dnar::logAxis(1,axisMin=minDose)
+  abline(v=ic50s[ii,'ic50'],lty=2)
+  abline(h=ic50s[ii,'max']/1:2,lty=2)
+  axis(1,minDose/100,'0')
+  lines(c(minDose/100,as.numeric(colnames(ic50s)[-1:-3])),ic50s[ii,-1:-2])
+}
+dev.off()
+pdf('out/macIc50_RM10N011.pdf',height=4,width=8)
+par(mfrow=c(1,2),mar=c(3.4,3.5,5,1))
+for(ii in c('RM10N011.d942.PLAS.E5','RM10N011.d942.PLAS.F4')){
+  thisDat<-tmp[tmp$virus==ii,]
+  thisMac<-sub('\\..*','',ii)
+  thisDay<-sub('^.*d([0-9]+).*$','\\1',ii)
+  thisVirus<-sub('^.*\\.','\\1',ii)
+  minDose<-min(thisDat$dose[thisDat$dose>0])
+  #200 fold dilution for p27 and in pg/ml
+  plot(ifelse(thisDat$dose==0,minDose/100,thisDat$dose),thisDat$p27*200/1000,log='x',xaxt='n',ylab='p27 concentration (ng/ml)',las=1,xlab='IFNb (pg/ml)',main='',mgp=c(2.4,.5,0),tcl=-.3,bg='#00000033',pch=21,cex=1.1)
+  dnar::logAxis(1,axisMin=minDose)
+  title(sprintf('Macaque: %s\nDay: %s\nIsolate: %s\nIC50: %0.1f pg/ml',thisMac,thisDay,thisVirus,ic50s[ii,'ic50']))
+  abline(v=ic50s[ii,'ic50'],lty=2)
+  abline(h=ic50s[ii,'max']/(1:2)*200/1000,lty=3)
+  axis(1,minDose/100,'0')
+  lines(c(minDose/100,as.numeric(colnames(ic50s)[-1:-3])),ic50s[ii,-1:-2]*200/1000)
+}
+dev.off()
