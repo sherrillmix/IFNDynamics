@@ -1,0 +1,38 @@
+dat<-read.csv('out/allLongitudinal.csv',stringsAsFactors=FALSE)
+dat$pTime<-apply(dat[,c('pat','time')],1,paste,collapse=' ')
+bulkTimes<-unique(dat[dat$bulk,'pTime'])
+bulkTimes<- bulkTimes[bulkTimes%in% dat[!dat$bulk,'pTime']]
+thisDat<-dat[dat$pTime %in% bulkTimes,]
+pos<-structure(1:length(bulkTimes),.Names=bulkTimes)
+ylabA<-expression('IFN'*alpha*' IC'[50]*' (pg/ml)')
+ylabB<-expression('IFN'*beta*' IC'[50]*' (pg/ml)')
+pdf('out/bulk_vs_single.pdf',height=5,width=15)
+  par(mfrow=c(1,2),mar=c(3,4.9,.1,.4),lheight=1.1)
+  for(ifn in c('ic50','beta')){
+    spreadX<-vipor::offsetX(pos[thisDat$pTime],thisDat$bulk,width=.05)
+    plot(pos[thisDat$pTime]+.15*(thisDat$bulk*2-1)+ifelse(thisDat$bulk,0,spreadX),thisDat[,ifn],log='y',yaxt='n',bg=ifelse(thisDat$bulk,'#FF000088','#00000088'),ylab=ifelse(ifn=='ic50',ylabA,ylabB),xlab='',xaxt='n',pch=21,cex=1.2,mgp=c(2.7,.9,0))
+    dnar::logAxis(las=1)
+    for(ii in 1:length(pos))axis(1,pos[ii],sub(' +','\n',names(pos))[ii],tcl=0,mgp=c(3,1.3,0))
+    abline(v=pos[-1]-.6,col='#00000022')
+    if(ifn=='ic50'){
+      text(dnar::convertLineToUser(.2,2),dnar::convertLineToUser(.7),'Participant:',xpd=NA,adj=1,cex=1.05)
+      text(dnar::convertLineToUser(.2,2),dnar::convertLineToUser(1.8),'DFOSx:',xpd=NA,adj=1,cex=1.02)
+    }
+  }
+dev.off()
+meanA<-tapply(thisDat[!thisDat$bulk,'ic50'],thisDat[!thisDat$bulk,'pTime'],function(xx)exp(mean(log(xx),na.rm=TRUE)))
+meanB<-tapply(thisDat[!thisDat$bulk,'beta'],thisDat[!thisDat$bulk,'pTime'],function(xx)exp(mean(log(xx),na.rm=TRUE)))
+pdf('out/bulk_vs_singleMean.pdf',height=5,width=10)
+  par(mfrow=c(1,2),mar=c(4,4.2,.1,1),lheight=1.1)
+  plot(meanA[thisDat[thisDat$bulk,'pTime']],thisDat[thisDat$bulk,'ic50'],log='xy',ylab=expression('IFN'*alpha*' IC'[50]*' of bulk isolate (pg/ml)'),xlab=expression('Mean IFN'*alpha*' IC'[50]*' of corresponding single isolates (pg/ml)'),xaxt='n',yaxt='n',pch=21,bg='#00000033',xlim=range(thisDat$ic50,na.rm=TRUE),ylim=range(thisDat$ic50,na.rm=TRUE),cex=1.2)
+  dnar::logAxis(las=1)
+  dnar::logAxis(1)
+  abline(0,1,lty=2)
+  plot(meanB[thisDat[thisDat$bulk,'pTime']],thisDat[thisDat$bulk,'beta'],log='xy',ylab=expression('IFN'*beta*' IC'[50]*' of bulk isolate (pg/ml)'),xlab=expression('Mean IFN'*beta*' IC'[50]*' of corresponding single isolates (pg/ml)'),xaxt='n',yaxt='n',pch=21,bg='#00000033',ylim=range(thisDat$beta,na.rm=TRUE),xlim=range(thisDat$beta,na.rm=TRUE),cex=1.2)
+  dnar::logAxis(las=1)
+  dnar::logAxis(1)
+  abline(0,1,lty=2)
+  text(grconvertX(.001,from='ndc'),grconvertY(0.99,from='ndc'),'A',xpd=NA,adj=c(0,1),cex=2)
+  text(grconvertX(.5,from='ndc'),grconvertY(0.99,from='ndc'),'B',xpd=NA,adj=c(0,1),cex=2)
+dev.off()
+
