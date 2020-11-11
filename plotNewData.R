@@ -80,7 +80,7 @@ plotVlCd4<-function(thisMeta,main,xlim,cd4Lim,vlLim,xAxis=TRUE,vlAxis=TRUE,cd4Ax
 for(showLegend in c(TRUE,FALSE)){
 pdf(sprintf('out/subjects_condense_new%s.pdf',ifelse(showLegend,'_legend','')),width=3.5,height=8)
   par(mar=c(0,0,0,0))
-  layout(lay2,width=c(.47,rep(1,2),.53),height=c(.13,c(1,1,1,.2,1,.2,1),ifelse(showLegend,.8,.28)))
+  layout(lay2,width=c(.62,rep(1,2),.53),height=c(.13,c(1,1,1,.2,1,.2,1),ifelse(showLegend,.8,.28)))
   #layout(lay,width=c(.5,rep(1,2),.5),height=c(.01,rep(1,5),.35))
   counter<-1
   xlim<-range(c(dat$time/7,lastDfosx/7))
@@ -89,7 +89,7 @@ pdf(sprintf('out/subjects_condense_new%s.pdf',ifelse(showLegend,'_legend','')),w
     #if(counter>=5&counter<9)axis(1,pretty(xlim),rep('',length(pretty(xlim))))
     #title(sprintf('%s %s',ii,ifelse(ii %in% rownames(founders),sprintf(' (%s)',founders[ii,'tf']),'')),line=-1)
     labCex<-1.7
-    if(counter==6)text(par('usr')[2]+.41*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),expression(paste('CD4 count (cells/mm'^3,')')),srt=-90,xpd=NA,col='blue',cex=labCex)
+    if(counter==6)text(par('usr')[2]+.41*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),expression(paste('CD4 count (cells/',mu,'l)')),srt=-90,xpd=NA,col='blue',cex=labCex)
     if(counter==5)text(par('usr')[1]-.38*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),'Viral load (copies/ml)',srt=90,xpd=NA,col='red',cex=labCex)
     par(lheight=.7)
     if(counter==9)text(max(par('usr')[1:2]),10^(par('usr')[3]-ifelse(showLegend,.33,.22)*diff(par('usr')[3:4])),ifelse(showLegend,'Weeks from onset\nof symptoms','Weeks from onset of symptoms'),xpd=NA,cex=labCex)
@@ -108,9 +108,9 @@ pdf(sprintf('out/subjects_condense_new%s.pdf',ifelse(showLegend,'_legend','')),w
       text(xRight+annotWidth/5,annotYPos,c('Viral load','CD4 count','VOA isolation','Superinfection','cART treatment','AZT treatment'),xpd=NA,adj=0)
       rect(xRight-annotWidth-24,min(annotYPos)/10^(yStep*.7),grconvertX(.995,'ndc','user'),max(annotYPos)*10^(yStep*.7),xpd=NA,border='#00000099')
     }
-    if(counter==1)text(grconvertX(-.31,from='npc'),grconvertY(1.1,from='npc'),'A',xpd=NA,adj=c(0,1),cex=2.5)
-    if(counter==7)text(grconvertX(-.31,from='npc'),grconvertY(1.12,from='npc'),'B',xpd=NA,adj=c(0,1),cex=2.5)
-    if(counter==9)text(grconvertX(-.31,from='npc'),grconvertY(1.12,from='npc'),'C',xpd=NA,adj=c(0,1),cex=2.5)
+    if(counter==1)text(grconvertX(.001,from='ndc'),grconvertY(1.1,from='npc'),'A',xpd=NA,adj=c(0,1),cex=2.5)
+    if(counter==7)text(grconvertX(.001,from='ndc'),grconvertY(1.12,from='npc'),'B',xpd=NA,adj=c(0,1),cex=2.5)
+    if(counter==9)text(grconvertX(.001,from='ndc'),grconvertY(1.12,from='npc'),'C',xpd=NA,adj=c(0,1),cex=2.5)
     counter<-counter+1
     #thisLast<-lastDfosx[ii]
     thisLast<-max(compiledMeta[compiledMeta$mm==ii&(!is.na(compiledMeta$cd4)|!is.na(compiledMeta$vl)),'time'])
@@ -267,13 +267,14 @@ pdf('out/VL_vs_IC50_condense.pdf',width=7,height=4)
   condenseArrows(dat[!dat$qvoa&dat$time>nadirsBeta[dat$pat]-100,],'beta','vl','Viral load','Interferon beta IC50 (pg/ml)',xlog=TRUE) 
 dev.off()
 
-pdf('out/ifna2_vs_ifnb.pdf',width=5,height=5)
+oldPatCols<-c('MM23'='#e41a1c','MM33'='#4daf4a','MM34'='#984ea3','MM39'='#377eb8','MM40'='#FF7f00','MM14'='#FFD700','MM15'='#f781bf','MM55'='#a65628','MM62'='#00CED1','WEAU'='#708090')
+cairo_pdf('out/ifna2_vs_ifnb.pdf',width=5,height=5)
   par(mar=c(3,3.6,.1,.1))
-  plot(dat$ic50,dat$beta,log='xy',bg=sprintf('%sDD',patCols[dat$pat]),xaxt='n',yaxt='n',pch=21,ylab='IFN beta IC50 (pg/ml)',xlab='',mgp=c(2.7,1,0),cex=1.2)
+  plot(dat$ic50,dat$beta,log='xy',bg=sprintf('%sDD',oldPatCols[dat$pat]),xaxt='n',yaxt='n',pch=21,ylab='IFN beta IC50 (pg/ml)',xlab='',mgp=c(2.7,1,0),cex=1.2)
   title(xlab='IFN alpha 2 IC50 (pg/ml)',mgp=c(2,1,0))
   logAxis(1,mgp=c(2.5,.8,0))
   logAxis(2,las=1,mgp=c(2.5,.8,0))
-  legend('bottomright',names(patCols),pch=21,pt.bg=patCols,inset=.01,ncol=3,x.intersp=.5,pt.cex=1.2)
+  legend('bottomright',names(oldPatCols),pch=21,pt.bg=oldPatCols,inset=.01,ncol=3,x.intersp=.5,pt.cex=1.2)
 dev.off()
 
 tmp<-dat[order(dat$pat,dat$time,dat$id,decreasing=TRUE),]
