@@ -67,20 +67,20 @@ plotVlCd4<-function(thisMeta,main,xlim,cd4Lim,vlLim,xAxis=TRUE,vlAxis=TRUE,cd4Ax
   #abline(h=c(350),col='orange',lty=3)
   #abline(v=less350Time[thisMeta$mm[1]]/7,col='orange')
   thisDat<-unique(thisMeta[!is.na(thisMeta$vl),c('time','vl')])
-  if(cd4Axis)axis(4,pretty(compiledMeta$cd4,n=5),las=1,col.axis='blue',cex.axis=1.1,mgp=c(3,.6,0),tcl=-.3)
+  if(cd4Axis)axis(4,pretty(compiledMeta$cd4,n=5),las=1,col.axis='blue',cex.axis=1.05,mgp=c(3,.4,0),tcl=-.3)
   par(new=TRUE)
   plot(thisDat$time/7,thisDat$vl,type='n',log='y',yaxt='n',xlab='',ylab='',xlim=xlim,ylim=vlLim,xaxt='n',col='red',lwd=2)
   reduceDat<-thisDat[c(TRUE,!sapply(2:(nrow(thisDat)-1),function(zz)all(thisDat[zz+-1:1,'vl']<=50)),TRUE),]
   #connects two <50 or big gap to <50
   isDashed<-(reduceDat$vl[-nrow(reduceDat)]<=lowerP24Limit&reduceDat$vl[-1]<=lowerP24Limit)|(reduceDat$vl[-1]<=lowerP24Limit&reduceDat$time[-1]-reduceDat$time[-nrow(reduceDat)]>120)
   segments(reduceDat$time[-nrow(reduceDat)]/7,reduceDat$vl[-nrow(reduceDat)],reduceDat$time[-1]/7,reduceDat$vl[-1],col='red',lwd=ifelse(isDashed,1.5,2),lty=ifelse(isDashed,3,1))
-  if(xAxis)axis(1,pretty(xlim),cex.axis=1.2,tcl=-.3,mgp=c(3,.5,0))
-  if(vlAxis)logAxis(2,mgp=c(3,.8,0),las=1,col.axis='red',cex.axis=1.3)
+  if(xAxis)axis(1,pretty(xlim),cex.axis=1.05,tcl=-.3,mgp=c(3,.3,0))
+  if(vlAxis)logAxis(2,mgp=c(3,.5,0),las=1,col.axis='red',cex.axis=1.05,tcl=-.4)
 }
 for(showLegend in c(TRUE,FALSE)){
-pdf(sprintf('out/subjects_condense_new%s.pdf',ifelse(showLegend,'_legend','')),width=3.5,height=8)
+pdf(sprintf('out/subjects_condense_new%s.pdf',ifelse(showLegend,'_legend','')),width=3.5,height=7)
   par(mar=c(0,0,0,0))
-  layout(lay2,width=c(.62,rep(1,2),.53),height=c(.13,c(1,1,1,.2,1,.2,1),ifelse(showLegend,.8,.28)))
+  layout(lay2,width=c(.48,rep(1,2),.43),height=c(.01,c(1,1,1,.2,1,.2,1),ifelse(showLegend,.8,.28)))
   #layout(lay,width=c(.5,rep(1,2),.5),height=c(.01,rep(1,5),.35))
   counter<-1
   xlim<-range(c(dat$time/7,lastDfosx/7))
@@ -88,9 +88,9 @@ pdf(sprintf('out/subjects_condense_new%s.pdf',ifelse(showLegend,'_legend','')),w
     plotVlCd4(compiledMeta[compiledMeta$mm==ii,],ii,xlim,range(compiledMeta$cd4,na.rm=TRUE),range(compiledMeta$vl,na.rm=TRUE),counter>4,counter%%2==1,counter%%2==0)
     #if(counter>=5&counter<9)axis(1,pretty(xlim),rep('',length(pretty(xlim))))
     #title(sprintf('%s %s',ii,ifelse(ii %in% rownames(founders),sprintf(' (%s)',founders[ii,'tf']),'')),line=-1)
-    labCex<-1.7
-    if(counter==6)text(par('usr')[2]+.41*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),expression(paste('CD4 count (cells/',mu,'l)')),srt=-90,xpd=NA,col='blue',cex=labCex)
-    if(counter==5)text(par('usr')[1]-.38*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),'Viral load (copies/ml)',srt=90,xpd=NA,col='red',cex=labCex)
+    labCex<-1.5
+    if(counter==6)text(par('usr')[2]+.34*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),expression(paste('CD4 count (cells/',mu,'l)')),srt=-90,xpd=NA,col='blue',cex=labCex)
+    if(counter==5)text(par('usr')[1]-.29*diff(par('usr')[1:2]),10^mean(par('usr')[3:4]),'Viral load (copies/ml)',srt=90,xpd=NA,col='red',cex=labCex)
     par(lheight=.7)
     if(counter==9)text(max(par('usr')[1:2]),10^(par('usr')[3]-ifelse(showLegend,.33,.22)*diff(par('usr')[3:4])),ifelse(showLegend,'Weeks from onset\nof symptoms','Weeks from onset of symptoms'),xpd=NA,cex=labCex)
     if(counter==10&showLegend){
@@ -108,9 +108,9 @@ pdf(sprintf('out/subjects_condense_new%s.pdf',ifelse(showLegend,'_legend','')),w
       text(xRight+annotWidth/5,annotYPos,c('Viral load','CD4 count','VOA isolation','Superinfection','cART treatment','AZT treatment'),xpd=NA,adj=0)
       rect(xRight-annotWidth-24,min(annotYPos)/10^(yStep*.7),grconvertX(.995,'ndc','user'),max(annotYPos)*10^(yStep*.7),xpd=NA,border='#00000099')
     }
-    if(counter==1)text(grconvertX(.001,from='ndc'),grconvertY(1.1,from='npc'),'A',xpd=NA,adj=c(0,1),cex=2.5)
-    if(counter==7)text(grconvertX(.001,from='ndc'),grconvertY(1.12,from='npc'),'B',xpd=NA,adj=c(0,1),cex=2.5)
-    if(counter==9)text(grconvertX(.001,from='ndc'),grconvertY(1.12,from='npc'),'C',xpd=NA,adj=c(0,1),cex=2.5)
+    if(counter==1)text(grconvertX(.001,from='ndc'),grconvertY(1,from='npc'),'A',xpd=NA,adj=c(0,1),cex=2.5)
+    if(counter==7)text(grconvertX(.001,from='ndc'),grconvertY(1,from='npc'),'B',xpd=NA,adj=c(0,1),cex=2.5)
+    if(counter==9)text(grconvertX(.001,from='ndc'),grconvertY(1,from='npc'),'C',xpd=NA,adj=c(0,1),cex=2.5)
     counter<-counter+1
     #thisLast<-lastDfosx[ii]
     thisLast<-max(compiledMeta[compiledMeta$mm==ii&(!is.na(compiledMeta$cd4)|!is.na(compiledMeta$vl)),'time'])
