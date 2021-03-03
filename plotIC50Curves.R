@@ -156,10 +156,10 @@ fakeDays<-0:max(dat[dat$pat=='MM33'&!dat$qvoa,'time'])
 cols<-rainbow.lab(length(fakeDays),alpha=.4)
 names(cols)<-fakeDays
 pdf('out/mm33_curves.pdf',width=5,height=5)
-  plotFunc<-function(concBeta,propBeta,xlab='IFNb concentration (pg/ml)',col='#00000033',...){
+  plotFunc<-function(concBeta,propBeta,xlab='IFNb concentration (pg/ml)',col='#00000033',lwd=1.75,...){
     if(length(col)==1)col<-rep(col,nrow(propBeta))
     else if(length(col)!=nrow(propBeta))stop('Color length mismatch with proportions')
-    par(mar=c(3.5,3,.9,.5))
+    par(mar=c(3.5,3,.9,.6))
     origConcs<-concs<-concBeta
     zeroOffset<-concs[concs>0][1]/concs[concs>0][3]
     fakeZero<-min(concs[concs>0])*zeroOffset
@@ -168,29 +168,36 @@ pdf('out/mm33_curves.pdf',width=5,height=5)
     title(ylab='Proportion of untreated p24',mgp=c(2.1,1,0))
     axis(2,pretty(c(0,1.2)),las=1,tcl=-.2,mgp=c(3,.5,0))
     abline(h=.5,lty=2)
-    sapply(1:nrow(propBeta),function(xx)lines(concs,propBeta[xx,],col=col[xx]))
+    sapply(1:nrow(propBeta),function(xx)lines(concs,propBeta[xx,],col=col[xx],lwd=lwd))
     dnar::logAxis(1,axisMin=min(origConcs[origConcs>0]),mgp=c(2.5,.7,0))
     axis(1,min(origConcs[origConcs>0])*zeroOffset,0,mgp=c(2.5,.7,0))
   }
   plotFunc(concAlpha,propAlpha,xlab='IFNa2 concentration (pg/ml)')
   plotFunc(concBeta,propBeta)
 dev.off()
-pdf('out/mm33_curves_by_time.pdf',width=8,height=9)
-  layout(matrix(c(1:8,rep(0,4),9:16),ncol=4,byrow=TRUE),heights=c(1,1,.15,1,1))
+cairo_pdf('out/mm33_curves_by_time.pdf',width=8,height=9)
+  allPlot<-function(){
+  layout(cbind(0,matrix(c(1:8,rep(0,4),9:16),ncol=4,byrow=TRUE)),heights=c(1,1,.15,1,1),widths=c(.08,rep(1,4)))
   for(ii in unique(alphaDays)){
     theseIds<-dat[dat$time==ii&dat$pat=='MM33','id']
-    plotFunc(concAlpha,propAlpha[rownames(propAlpha) %in% theseIds,],xlab='IFNa2 concentration (pg/ml)',main=sprintf('%d DFOSx',ii),col=cols[as.character(ii)])
-    if(ii==unique(betaDays)[1])text(grconvertX(par('fig')[1]+diff(par('fig')[1:2])*.001,from='ndc'),grconvertY(par('fig')[4]-diff(par('fig')[3:4])*.01,from='ndc'),'A',xpd=NA,adj=c(0,1),cex=2)
+    plotFunc(concAlpha,propAlpha[rownames(propAlpha) %in% theseIds,],xlab=expression('IFN'*alpha*'2 concentration (pg/ml)'),main=sprintf('%d DFOSx',ii),col=cols[as.character(ii)])
+    if(ii==unique(betaDays)[1])text(grconvertX(par('fig')[1]-diff(par('fig')[1:2])*.08,from='ndc'),grconvertY(par('fig')[4]-diff(par('fig')[3:4])*.003,from='ndc'),'A',xpd=NA,adj=c(0,1),cex=2)
   }
-  plotFunc(concAlpha,propAlpha,xlab='IFNa2 concentration (pg/ml)',col=cols[as.character(alphaDays)],main='Combined')
+  plotFunc(concAlpha,propAlpha,xlab=expression('IFN'*alpha*'2 concentration (pg/ml)'),col=cols[as.character(alphaDays)],main='Combined',lwd=1)
   for(ii in unique(betaDays)){
     theseIds<-dat[dat$time==ii&dat$pat=='MM33','id']
-    plotFunc(concBeta,propBeta[rownames(propBeta) %in% theseIds,],main=sprintf('%d DFOSx',ii),col=cols[as.character(ii)])
-    if(ii==unique(betaDays)[1])text(grconvertX(par('fig')[1]+diff(par('fig')[1:2])*.001,from='ndc'),grconvertY(par('fig')[4]-diff(par('fig')[3:4])*.01,from='ndc'),'B',xpd=NA,adj=c(0,1),cex=2)
+    plotFunc(concBeta,propBeta[rownames(propBeta) %in% theseIds,],xlab=expression('IFN'*beta*' concentration (pg/ml)'),main=sprintf('%d DFOSx',ii),col=cols[as.character(ii)])
+    if(ii==unique(betaDays)[1])text(grconvertX(par('fig')[1]-diff(par('fig')[1:2])*.08,from='ndc'),grconvertY(par('fig')[4]-diff(par('fig')[3:4])*.003,from='ndc'),'B',xpd=NA,adj=c(0,1),cex=2)
   }
-  plotFunc(concBeta,propBeta,col=cols[as.character(betaDays)],main='Combined')
+  plotFunc(concBeta,propBeta,col=cols[as.character(betaDays)],xlab=expression('IFN'*beta*' concentration (pg/ml)'),main='Combined',lwd=1)
+  }
+  allPlot()
 dev.off()
-file.copy('out/mm33_curves_by_time.pdf','out/Fig._S3.pdf',overwrite=TRUE)
+file.copy('out/mm33_curves_by_time.pdf','out/Fig._S3_cairo.pdf',overwrite=TRUE)
+pdf('out/mm33_curves_by_time.pdf',width=8,height=9,useDingbats=FALSE)
+  allPlot()
+dev.off()
+file.copy('out/mm33_curves_by_time.pdf','out/Fig._S3_base.pdf',overwrite=TRUE)
 #system('pdfcrop --margin "0 40 0 0" out/mm33_curves_by_time.pdf tmp2.pdf')
 #system('pdfjam out/mm33_curves_by_time.pdf --nup 1x2 --outfile tmp3.pdf')
 #system('pdfcrop tmp3.pdf out/Fig._S3.pdf')
