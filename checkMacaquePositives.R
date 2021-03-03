@@ -2,6 +2,8 @@ source('functions.R')
 
 plateLookup<-read.csv('ice/2020-02-01_plateIds.csv',stringsAsFactors=FALSE)
 plateLookup$type<-ifelse(grepl('[A-Z]',plateLookup$plate),'plasma','PBMC')
+virusLookup<-unique(plateLookup[,c('animal','virus')])
+virusLookup<-structure(virusLookup$virus,.Names=virusLookup$animal)
 
 spots<-read.csv('ice/2020-01-31_positiveSpots.csv',stringsAsFactors=FALSE)
 convert<-convert96To48(spots$Well)
@@ -142,10 +144,20 @@ attempted$positivesRetro<-sapply(paste(attempted$animal,attempted$day,attempted$
 attempted$positivesRetroEFC<-sapply(paste(attempted$animal,attempted$day,attempted$type),function(xx)sum(xx == paste(comboSpots$animal,comboSpots$day,comboSpots$type)&grepl('[CD]',comboSpots$plate48)))
 attempted<-attempted[order(attempted$animal,suppressWarnings(as.numeric(attempted$day))),]
 attempted$vl<-round(attempted$vl)
+attempted$virus<-virusLookup[attempted$animal]
 write.csv(attempted,'out/positive_vs_attempted_macaque.csv',row.names=FALSE)
-write.csv(attempted[,c('animal','day','vl','type','confirmedPositives')],'out/confirmed_vs_attempted_macaque.csv',row.names=FALSE)
+write.csv(attempted[,c('animal','virus','day','vl','type','confirmedPositives')],'out/confirmed_vs_attempted_macaque.csv',row.names=FALSE)
 tmp<-bak[bak$date=='2020/01/24',c('animal','well48','day','type')]
 tmp<-tmp[order(tmp$animal,tmp$well48),]
 rownames(tmp)<-1:nrow(tmp)
 write.csv(tmp,'out/positives_2020-01-24.csv',row.names=FALSE)
 
+xx<-read.csv('out/confirmed_vs_attempted_macaque.csv')
+xx$virus<-
+xx$virus<-
+pdf('out/macIso.pdf',width=4,height=4)
+par(mar=c(3.5,3.5,.1,.1))
+plot(xx$vl,xx$confirmedPositives,log='x',pch=21,bg=ifelse(xx$type=='plasma','red','blue'),cex=1.2,xaxt='n',xlab='Viral load',ylab='Number of isolates',mgp=c(2.5,.8,0),las=1)
+dnar::logAxis(1)
+legend('topright',c('PBMC','Plasma'),pch=21,pt.cex=1.2,pt.bg=c('blue','red'),inset=.01)
+dev.off()
