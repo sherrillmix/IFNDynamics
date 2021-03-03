@@ -34,8 +34,8 @@ isoNames<-c('MM33.TF'='MM33.01','MM33.13'='MM33.13.2D6','MM33.17'='MM33.17.2A4',
 pos<-structure(1:length(imcNames),.Names=imcNames)
 
 
-plotFunc<-function(imcVals,isoVals,ylab='IFNa2 IC50 (pg/ml)',pos,log='y',showLegend=TRUE,showBar=FALSE){
-  plot(1,1,type='n',xlab='',ylab=ylab,xlim=range(pos)+c(-.5,.5),xaxs='i',ylim=range(c(unlist(imcVals),unlist(isoVals)),na.rm=TRUE),xaxt='n',log=log,yaxt=ifelse(log=='','s','n'),mgp=c(2.5,.5,0),las=1,tcl=-.3)
+plotFunc<-function(imcVals,isoVals,ylab='IFNa2 IC50 (pg/ml)',pos,log='y',showLegend=TRUE,showBar=FALSE,cex=1,cols=c('#FF000033','#0000FF33'),showIndividual=TRUE){
+  plot(1,1,type='n',xlab='',ylab=ylab,xlim=range(pos)+c(-.5,.5),xaxs='i',ylim=range(c(unlist(imcVals),unlist(isoVals)),na.rm=TRUE),xaxt='n',log=log,yaxt=ifelse(log=='','s','n'),mgp=c(2.4,.5,0),las=1,tcl=-.3)
   if(log=='y')dnar::logAxis(las=1,mgp=c(3,.6,0))
   #dnar::slantAxis(1,pos,names(pos))
   for(ii in 1:0)axis(1,pos[1:length(pos)%%2==ii],names(pos)[1:length(pos)%%2==ii],mgp=c(3,1.9+ii*-1.5,0),tcl=-1.8+ii*1.5)
@@ -43,41 +43,46 @@ plotFunc<-function(imcVals,isoVals,ylab='IFNa2 IC50 (pg/ml)',pos,log='y',showLeg
   isoX<-rep(pos,sapply(isoVals,function(xx)length(unlist(xx))))
   #spreadImc<-ave(unlist(imcVals),imcX,FUN=function(xx)beeswarm::swarmx(rep(0,length(xx)),xx,cex=.45)$x)
   #spreadIso<-ave(unlist(isoVals),isoX,FUN=function(xx)beeswarm::swarmx(rep(0,length(xx)),xx,cex=.45)$x)
-  spreadImc<-ave(unlist(imcVals),imcX,FUN=function(xx){zz<-rep(NA,length(xx));zz[!is.na(xx)]<-vipor::offsetX(xx[!is.na(xx)],width=.2);zz})
+  #spreadImc<-ave(unlist(imcVals),imcX,FUN=function(xx){zz<-rep(NA,length(xx));zz[!is.na(xx)]<-vipor::offsetX(xx[!is.na(xx)],width=.2*cex);zz})
+  spreadImc<-ave(unlist(imcVals),imcX,FUN=function(xx){beeswarm::swarmx(rep(0,length(xx)),xx,cex=ifelse(showBar,cex*.4*1.2,1))$x})
   spreadIso<-ave(unlist(isoVals),isoX,FUN=function(xx){
     if(sum(!is.na(xx))<10){
-      beeswarm::swarmx(rep(0,length(xx)),xx)$x
+      beeswarm::swarmx(rep(0,length(xx)),xx,cex=.9*sqrt(cex))$x
     }else{
-      zz<-rep(NA,length(xx));zz[!is.na(xx)]<-vipor::offsetX(xx[!is.na(xx)],width=.2);zz
+      zz<-rep(NA,length(xx));zz[!is.na(xx)]<-vipor::offsetX(xx[!is.na(xx)],width=.2*cex);zz
   }})
   if(showBar){
     ranges<-do.call(rbind,tapply(unlist(imcVals),imcX,range,na.rm=TRUE))
     ranges<-ranges[ranges[,1]!=ranges[,2],]
-    segments(as.numeric(rownames(ranges))+.23,ranges[,1],as.numeric(rownames(ranges))+.23,ranges[,2],col='#00000033',lwd=2)
+    if(showIndividual)segments(as.numeric(rownames(ranges))+.23,ranges[,1],as.numeric(rownames(ranges))+.23,ranges[,2],col='#00000033',lwd=2)
     isSingle<-ave(!is.na(unlist(imcVals)),imcX,FUN=sum)==1
-    points(imcX[isSingle]+spreadImc[isSingle]*.3+.23,unlist(imcVals)[isSingle],pch=21,bg='#FF000033')
-    #segments(imcX[!isSingle]+.18,unlist(imcVals)[!isSingle],imcX[!isSingle]+.28,unlist(imcVals)[!isSingle],pch=21,col='#FF000033',lwd=2)
+    points(imcX[isSingle]+spreadImc[isSingle]*.3+.23,unlist(imcVals)[isSingle],pch=21,bg=cols[1],cex=cex)
+    #segments(imcX[!isSingle]+.18,unlist(imcVals)[!isSingle],imcX[!isSingle]+.28,unlist(imcVals)[!isSingle],pch=21,col=cols[2],lwd=2)
     means<-tapply(unlist(imcVals)[!isSingle],imcX[!isSingle],function(xx)exp(mean(log(xx),na.rm=TRUE)))
-    print(means)
-    points(as.numeric(names(means))+.23,means,pch=21,bg='#FF000033')
-    points(imcX[!isSingle]+spreadImc[!isSingle]*.3+.23,unlist(imcVals)[!isSingle],pch=21,bg='#FF000033',col='#000000CC',cex=.4,lwd=.2)
-    #segments(imcX[!isSingle]+.18,unlist(imcVals)[!isSingle],imcX[!isSingle]+.28,unlist(imcVals)[!isSingle],pch=21,col='#FF000033',lwd=2)
-    #segments(imcX[!isSingle]+.18,unlist(imcVals)[!isSingle],imcX[!isSingle]+.28,unlist(imcVals)[!isSingle],pch=21,col='#FF000033',lwd=2)
+    if(showIndividual)points(imcX[!isSingle]+spreadImc[!isSingle]*.3+.23,unlist(imcVals)[!isSingle],pch=21,bg=cols[1],col='#000000CC',cex=cex*.4,lwd=.2)
+    points(as.numeric(names(means))+.23,means,pch=21,bg=cols[1],cex=cex)
+    #segments(imcX[!isSingle]+.18,unlist(imcVals)[!isSingle],imcX[!isSingle]+.28,unlist(imcVals)[!isSingle],pch=21,col=cols[2],lwd=2)
+    #segments(imcX[!isSingle]+.18,unlist(imcVals)[!isSingle],imcX[!isSingle]+.28,unlist(imcVals)[!isSingle],pch=21,col=cols[2],lwd=2)
   }else{
-    points(imcX+spreadImc+.23,unlist(imcVals),pch=21,bg='#FF000033')
+    points(imcX+spreadImc+.23,unlist(imcVals),pch=21,bg=cols[1],cex=cex)
   }
-  points(isoX+spreadIso-.23,unlist(isoVals),pch=21,bg='#0000FF33')
+  points(isoX+spreadIso-.23,unlist(isoVals),pch=21,bg=cols[2],cex=cex)
   abline(v=pos[-1]-.5,col='#00000033')
-  if(showLegend)legend('bottomleft',c('Isolate','IMC'),pch=21,pt.bg=c('#0000FF33','#FF000033'),inset=c(-.092,-.39),xpd=NA)
+  if(showLegend)legend('bottomleft',c('Isolate','IMC'),pch=21,pt.bg=c(cols[2],cols[1]),inset=c(-.092,-.4),xpd=NA,pt.cex=cex)
 }
 imcIsos<-lapply(isoNames,function(xx)combined[grep(xx,combined$virus),])
 pdf('out/Fig._S7.pdf',width=8,height=7)
-par(mar=c(5.1,3.5,.1,.1),mfrow=c(2,1))
-plotFunc(by(standardized[,'ic50.IFNa2'],standardized$virus,function(xx)xx)[imcNames],lapply(imcIsos,function(xx)xx[,'ic50_IFNa2'])[imcNames],pos=pos,showLegend=FALSE,showBar=TRUE)
-text(grconvertX(par('fig')[1]+diff(par('fig')[1:2])*.001,from='ndc'),grconvertY(par('fig')[4]-diff(par('fig')[3:4])*.005,from='ndc'),'A',xpd=NA,adj=c(0,1),cex=2)
-plotFunc(by(standardized[,'ic50.IFNb'],standardized$virus,function(xx)xx)[imcNames],lapply(imcIsos,function(xx)xx[,'ic50_IFNb'])[imcNames],pos=pos,ylab='IFNb IC50 (pg/ml)',showBar=TRUE)
-text(grconvertX(par('fig')[1]+diff(par('fig')[1:2])*.001,from='ndc'),grconvertY(par('fig')[4]-diff(par('fig')[3:4])*.005,from='ndc'),'B',xpd=NA,adj=c(0,1),cex=2)
+  par(mar=c(5.1,3.5,.1,.1),mfrow=c(2,1))
+  plotFunc(by(standardized[,'ic50.IFNa2'],standardized$virus,function(xx)xx)[imcNames],lapply(imcIsos,function(xx)xx[,'ic50_IFNa2'])[imcNames],pos=pos,showLegend=FALSE,showBar=TRUE)
+  text(grconvertX(par('fig')[1]+diff(par('fig')[1:2])*.001,from='ndc'),grconvertY(par('fig')[4]-diff(par('fig')[3:4])*.005,from='ndc'),'A',xpd=NA,adj=c(0,1),cex=2)
+  plotFunc(by(standardized[,'ic50.IFNb'],standardized$virus,function(xx)xx)[imcNames],lapply(imcIsos,function(xx)xx[,'ic50_IFNb'])[imcNames],pos=pos,ylab='IFNb IC50 (pg/ml)',showBar=TRUE)
+  text(grconvertX(par('fig')[1]+diff(par('fig')[1:2])*.001,from='ndc'),grconvertY(par('fig')[4]-diff(par('fig')[3:4])*.005,from='ndc'),'B',xpd=NA,adj=c(0,1),cex=2)
 dev.off()
+pdf('out/Fig._S10.pdf',width=8,height=3.5)
+  par(mar=c(5.1,3.5,.1,.1),mfrow=c(1,1))
+  plotFunc(by(standardized[,'ic50.IFNb'],standardized$virus,function(xx)xx)[imcNames],lapply(imcIsos,function(xx)xx[,'ic50_IFNb'])[imcNames],pos=pos,ylab=expression('IFN'*beta*' concentration (pg/ml)'),showBar=TRUE,cex=1.6,cols=c('#FF0000CC','#0000FFCC'),showIndividual=FALSE)
+dev.off()
+
 
 
 #infectivity
@@ -111,30 +116,34 @@ tmp$study<-'MM'
 tmp$ic50_IFNa2<-tmp$ic50
 tmp$ic50_IFNb<-tmp$beta
 tmp$class<-'Long'
-allIc50<-rbind(combined[!combined$study %in% c('MM','Transmission'),c('study','pat','ic50_IFNa2','ic50_IFNb','class')],tmp[,c('study','pat','ic50_IFNa2','ic50_IFNb','class')])
+#allIc50<-rbind(combined[!combined$study %in% c('MM','Transmission'),c('study','pat','ic50_IFNa2','ic50_IFNb','class')],tmp[,c('study','pat','ic50_IFNa2','ic50_IFNb','class')])
+allIc50<-tmp[!tmp$qvoa,c('study','pat','ic50_IFNa2','ic50_IFNb','class')]
 allIc50<-allIc50[!(is.na(combined$ic50_IFNb)&is.na(combined$ic50_IFNa2)),]
 allIc50$display<-ifelse(allIc50$study=='MM',allIc50$pat,ifelse(allIc50$class=='Rebound','Rebound','Outgrowth'))
 #cols<-structure(c('#8dd3c7','#ffffb3','#bebada','#80b1d3','#fdb462','#b3de69','#fccde5','#d9d9d9','#bc80bd','#ccebc5','#ffed6f','#fb8072'),.Names=c(sort(unique(tmp$pat)),"Rebound","Outgrowth"))
-cols<-structure(c(sprintf('%saa',c(
-        "#af7890",
-        "#7262cf",
-        "#afb441",
-        "#4eb491",
-        "#d24f37",
-        "#d59948",
-        "#7181ca",
-        "#62813c",
-        "#3e9cb7",
-        "#9c6631"
-        )),'#9EC0E1ee','#E581A0ee'),.Names=c(sort(unique(tmp$pat)),"Outgrowth","Rebound"))
-pdf('out/ifna2_vs_ifnb.pdf',width=5,height=6)
-  par(mar=c(8,3.4,.1,.1))
-  plot(1,1,type='n',xaxt='n',yaxt='n',xlim=range(allIc50$ic50_IFNa2,na.rm=TRUE),ylim=range(allIc50$ic50_IFNb,na.rm=TRUE),log='xy',ylab='IFNb IC50 (pg/ml)',mgp=c(2.5,1,0),xlab='',cex=1.3)
-  title(xlab='IFNa2 IC50 (pg/ml)',mgp=c(2,1,0))
+#cols<-structure(c(sprintf('%saa',c(
+        #"#af7890",
+        #"#7262cf",
+        #"#afb441",
+        #"#4eb491",
+        #"#d24f37",
+        #"#d59948",
+        #"#7181ca",
+        #"#62813c",
+        #"#3e9cb7",
+        #"#9c6631"
+        #)),'#9EC0E1ee','#E581A0ee'),.Names=c(sort(unique(tmp$pat)),"Outgrowth","Rebound"))
+cols<-c('MM23'='#e41a1c','MM33'='#4daf4a','MM34'='#984ea3','MM39'='#377eb8','MM40'='#FF7f00','MM14'='#FFD700','MM15'='#f781bf','MM55'='#a65628','MM62'='#00CED1','WEAU'='#708090')
+pdf('out/ifna2_vs_ifnb.pdf',width=5,height=6,useDingbats=FALSE)
+  par(mar=c(7,3.6,.1,.1))
+  plot(1,1,type='n',xaxt='n',yaxt='n',xlim=range(allIc50$ic50_IFNa2,na.rm=TRUE),ylim=range(allIc50$ic50_IFNb,na.rm=TRUE),log='xy',mgp=c(2.5,1,0),cex=1.3,xlab='',ylab=expression('IFN'*beta*' IC'[50]*' (pg/ml)'))
+  title(xlab=expression('IFN'*alpha*' IC'[50]*' (pg/ml)'),mgp=c(2,1,0))
   dnar::logAxis(1,mgp=c(3,.7,0))
   dnar::logAxis(las=1,mgp=c(3,.7,0))
   dnar::withAs(allIc50=allIc50[allIc50$class=='Long',],points(allIc50$ic50_IFNa2,allIc50$ic50_IFNb,pch=21,bg=cols[allIc50$display]))
   dnar::withAs(allIc50=allIc50[allIc50$class!='Long',],points(allIc50$ic50_IFNa2,allIc50$ic50_IFNb,pch=21,bg=cols[allIc50$display]))
-  legend('bottom',names(cols),pch=21,pt.bg=cols,pt.cex=1.3,ncol=4,inset=-.35,xpd=NA,x.intersp=.9,text.width=NULL)
+  legend('bottom',names(cols),pch=21,pt.bg=cols,pt.cex=1.3,ncol=5,inset=-.3,xpd=NA,x.intersp=.9,text.width=NULL)
 dev.off()
+file.copy('out/ifna2_vs_ifnb.pdf','out/Fig._S5.pdf',TRUE)
+cor(log(allIc50$ic50_IFNa2),log(allIc50$ic50_IFNb),use='pair')
 
