@@ -249,7 +249,7 @@ makeLegend<-function(out,tree,insetPos=c(0.025, 0.1, 0.04, 0.7)){
     legend(grconvertX(insetPos[4]+.02,'npc','user'),grconvertY(mean(c(.025,.04)),'npc','user'),c('VOA isolate','PBMC sequence')[selector],fill=c('purple','grey')[selector],cex=.65,yjust=.4,bty='n',title='Post-ART')
   }
 }
-pdf('out/lindsey_trees2.pdf',width=4.,height=6)
+pdf('out/lindsey_trees2.pdf',width=4,height=6)
 for(ii in list.files('trees/10trees','\\.txt$',full.name=TRUE)){
   message(ii)
   tree<-read.tree(ii)
@@ -287,7 +287,7 @@ for(ii in list.files('trees/10trees','\\.txt$',full.name=TRUE)){
   if(any(tree$tip.label %in% recomb$Sequence))message('RECOMB ',paste(tree$tip.label[tree$tip.label %in% recomb$Sequence],collapse=', '))
   out<-ggtree(tree,size=.2)+#,ladderize=FALSE)+ 
     #geom_tippoint(color=timeCols[times],show.legend=TRUE,size=5/log(length(days)))+
-    geom_tiplab(color=timeCols[times],size=min(7.5,1500/length(tree$tip.label)),label='-',vjust=.35)+
+    geom_tiplab(color=timeCols[times],size=min(7.5,1500/length(tree$tip.label)),label='-',vjust=.325,hjust=.1)+
     #geom_tiplab(color=timeCols[times],size=7.5,label=ifelse(times=='voa','  *',NA),vjust=.8)+
     #geom_tiplab(color=timeCols[times],size=3,label=ifelse(tree$tip.label %in% recomb$Sequence,'         r',NA))+
     ggtitle(unique(subject))+
@@ -298,17 +298,18 @@ for(ii in list.files('trees/10trees','\\.txt$',full.name=TRUE)){
   censoredEdges<-out$data[out$data$branch.length==censorLength,]
   if(nrow(censoredEdges)>0){
     message('CENSORING')
+    slash<-.005
     left<-censoredEdges$x-censorLength/20-censorLength/2
     right<-censoredEdges$x+censorLength/20-censorLength/2
     out<-out+
-      annotate('rect',xmin=left,xmax=right,ymin=censoredEdges$y-.6,ymax=censoredEdges$y+.6,fill='white')+
-      annotate('segment',x=c(left,right),xend=c(left,right),y=rep(censoredEdges$y,2)-.6,yend=rep(censoredEdges$y,2)+.6,size=.2)
+      annotate('rect',xmin=left,xmax=right,ymin=censoredEdges$y-.4,ymax=censoredEdges$y+.4,fill='white')+
+      annotate('segment',x=c(left,right)-slash,xend=c(left,right)+slash,y=rep(censoredEdges$y,2)-.7,yend=rep(censoredEdges$y,2)+.7,size=.2)
   }
   #out<-out %<+% edge + geom_point(aes(x=branch,y=edge_num))
     #scale_x_continuous(limits = c(0,max(node.depth.edgelength(tree))*1.2))
     #scale_color_manual('',breaks=names(timeCols),values=timeCols)
   #out$data[out$data$branch.length>censorLength,'x']<-out$data[out$data$branch.length>censorLength,'x']-out$data[out$data$branch.length>censorLength,'branch.length']+censorLength
-  makeLegend(out,tree)
+  makeLegend(out,tree,insetPos=c(0.035, 0.05, 0.05, 0.45))
   #tree$edge.length<-lengthBak
   out<-ggtree(tree,size=.2)+
     #geom_tippoint(color=timeCols[times],show.legend=TRUE,size=5/log(length(days)))+
@@ -348,10 +349,16 @@ for(ii in list.files('trees/10trees','\\.txt$',full.name=TRUE)){
 dev.off()
 system('pdftk out/lindsey_trees2.pdf cat 1 4 7 13 19 output tmp.pdf')
 system('pdfjam tmp.pdf --nup 5x1 --landscape --outfile out/voaStackedTrees.pdf')
-system('pdftk out/lindsey_trees2.pdf cat 2 4 6 8 10 12 14 16 18 20 output tmp.pdf')
-system('pdfjam tmp.pdf --nup 5x2 --landscape --outfile out/allStackedTrees.pdf')
-file.copy('out/allStackedTrees.pdf','out/Fig. S2.pdf')
-#system('pdftk out/lindsey_trees2.pdf cat 9 output out/treeMM34.pdf')
+system('pdftk out/lindsey_trees2.pdf cat 2 4 6 8 10 12 14 16 18 20 output out/separateTrees.pdf')
+system('pdfjam out/separateTrees.pdf --nup 5x2 --landscape --outfile out/allStackedTrees.pdf')
+#file.copy('out/allStackedTrees.pdf','out/Fig. S2.pdf')
+file.copy('out/separateTrees.pdf','out/Fig. S2.pdf',overwrite=TRUE)
+#system('pdftk out/lindsey_trees2.pdf cat 9 output out/Fig._4.pdf') #tweaked in inkscape
+
+zz<-lapply(list.files('trees/10trees','\\.txt$',full.name=TRUE),function(ii)read.tree(ii)$tip.label)
+lapply(zz,function(zz)zz[grep('PBMC',zz)])
+#note that 430 is VOA not SGS
+#1512,641,1152,997,647,736,430
 
 pdf('out/treeMM34.pdf',width=3.5,height=5)
   ii<-'trees/10trees/MM34.bs100.txt'
@@ -396,10 +403,78 @@ pdf('out/treeMM34.pdf',width=3.5,height=5)
     message('CENSORING')
     left<-censoredEdges$x-censorLength/20-censorLength/2
     right<-censoredEdges$x+censorLength/20-censorLength/2
+    slant<-.003
     out<-out+
       annotate('rect',xmin=left,xmax=right,ymin=censoredEdges$y-.6,ymax=censoredEdges$y+.6,fill='white')+
-      annotate('segment',x=c(left,right),xend=c(left,right),y=rep(censoredEdges$y,2)-.6,yend=rep(censoredEdges$y,2)+.6,size=.2)
+      #annotate('segment',x=c(left,right),xend=c(left,right),y=rep(censoredEdges$y,2)-.6,yend=rep(censoredEdges$y,2)+.6,size=.2)
+      annotate('segment',x=c(left-slant,right-slant),xend=c(left+slant,right+slant),y=rep(censoredEdges$y,2)-.8,yend=rep(censoredEdges$y,2)+.8,size=.2)
   }
   makeLegend(out,tree,insetPos=c(0.025, 0.1, 0.04, 0.6))
+dev.off()
+#file.copy('out/treeMM34.pdf','out/Fig._4.pdf',TRUE)
+
+pdf('out/lindsey_treesCircular.pdf',width=4,height=6)
+for(ii in list.files('trees/10trees','\\.txt$',full.name=TRUE)){
+  message(ii)
+  tree<-read.tree(ii)
+  #if(grepl('MM34',ii))tree<-drop.tip(tree,which(node.depth.edgelength(tree)>.5))
+  #which(node.depth.edgelength(tree)>.5)
+  #which(tree$edge.length>.5)
+  tree$tip.label<-gsub("'",'',tree$tip.label)
+  days<-as.numeric(sapply(strsplit(tree$tip.label,'\\.'),'[[',4))
+  ids<-sapply(strsplit(tree$tip.label,'\\.'),function(xx)paste(xx[2:3],collapse='.'))
+  print(unique(ids))
+  isVoa<-grepl('VOA',ids)
+  isSgs<-grepl('SGS',ids)
+  isPbmc<-grepl('PBMC',ids)&!isVoa
+  fakeDays<-min(c(0,days)):max(days[!isVoa&!isPbmc])
+  cols<-rainbow.lab(length(fakeDays))
+  timeCols<-cols[fakeDays %in% days[!isVoa&!isPbmc]]
+  names(timeCols)<-sort(unique(days[!isVoa&!isPbmc]))
+  timeCols<-c(timeCols,c('voa'='purple','pbmc'='grey'))
+  times<-as.character(ifelse(isPbmc,'pbmc',ifelse(isVoa,'voa',days)))
+  subject<-sub("'",'',dnar::mostAbundant(sapply(strsplit(tree$tip.label,'[-.]'),'[[',1)))
+  firsts<-which(days==min(days))
+  firsts<-firsts[order(!grepl('consensus',tree$tip.label[firsts]),!grepl('[Vv]1',tree$tip.label[firsts]))]
+  #lindsey order
+  if(subject %in% names(reroot)){
+    tree<-root(tree,reroot[subject])
+  }
+  #if(subject %in% names(rotate)){
+  #  tree<-reorder(ladderize(tree,FALSE))
+  #  tree<-rotate(tree,rotate[[subject]])
+  #}
+  edge<-data.frame(tree$edge,edge_num=1:nrow(tree$edge))
+  colnames(edge)<-c('parent','node','edge_num')
+  lengthBak<-tree$edge.length
+  if(!unique(subject) %in% noCensor)tree$edge.length[tree$edge.length>censorLength]<-censorLength
+  if(any(tree$tip.label %in% recomb$Sequence))message('RECOMB ',paste(tree$tip.label[tree$tip.label %in% recomb$Sequence],collapse=', '))
+  out<-ggtree(tree,layout='circular',size=.2)+#,ladderize=FALSE)+ 
+    geom_tippoint(color=timeCols[times],show.legend=TRUE,size=.1/log(length(days)))+
+    #geom_tiplab(color=timeCols[times],size=min(7.5,1500/length(tree$tip.label)),label='-',vjust=.325,hjust=.1)+
+    #geom_tiplab(color=timeCols[times],size=7.5,label=ifelse(times=='voa','  *',NA),vjust=.8)+
+    #geom_tiplab(color=timeCols[times],size=3,label=ifelse(tree$tip.label %in% recomb$Sequence,'         r',NA))+
+    ggtitle(unique(subject))+
+    theme(plot.title = element_text(hjust = .5,size=12,margin=margin(b=-10,unit='pt')),plot.margin=margin(2,0,2,0))
+    #geom_treescale(offset=-length(days)/55,fontsize=2.5,x=.01,y=-.01*length(tree$tip.label),width=.05)+
+    #scale_x_continuous(limits = c(0,maxDepth[2]*1.2))
+    #geom_treescale(offset=-length(days)/90,fontsize=2.5,x=.01,y=-.01*length(tree$tip.label),width=.05)+
+  censoredEdges<-out$data[out$data$branch.length==censorLength,]
+  if(nrow(censoredEdges)>0){
+    message('CENSORING')
+    slash<-.005
+    left<-censoredEdges$x-censorLength/20-censorLength/2
+    right<-censoredEdges$x+censorLength/20-censorLength/2
+    out<-out+
+      annotate('rect',xmin=left,xmax=right,ymin=censoredEdges$y-.4,ymax=censoredEdges$y+.4,fill='white')+
+      annotate('segment',x=c(left,right)-slash,xend=c(left,right)+slash,y=rep(censoredEdges$y,2)-.7,yend=rep(censoredEdges$y,2)+.7,size=.2)
+  }
+  #out<-out %<+% edge + geom_point(aes(x=branch,y=edge_num))
+    #scale_x_continuous(limits = c(0,max(node.depth.edgelength(tree))*1.2))
+    #scale_color_manual('',breaks=names(timeCols),values=timeCols)
+  #out$data[out$data$branch.length>censorLength,'x']<-out$data[out$data$branch.length>censorLength,'x']-out$data[out$data$branch.length>censorLength,'branch.length']+censorLength
+  print(out)
+  #makeLegend(out,tree,insetPos=c(0.035, 0.05, 0.05, 0.45))
+}
 dev.off()
 
