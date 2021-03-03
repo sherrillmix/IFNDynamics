@@ -188,7 +188,7 @@ fitB<-dnar::withAs(xx=dat[!is.na(dat$beta)&!dat$qvoa,],bayesIC50_3(ic50Mod,xx$be
 #save(fit,fitB,file='out/bayesFit_20200623.Rdat')#  neg binom time back in 
 #save(fit,fitB,file='out/bayesFit_20200711.Rdat')# seperate cd4 beta for typ and non
 #save(fit,fitB,file='out/bayesFit_20200714.Rdat')# seperate nadir times
-#load(file='out/bayesFit_20200623.Rdat')
+#load(file='out/bayesFit_20200714.Rdat')
 #
 print(fit$fit,pars=c('nadirTimeRaw','nadirChangeRaw','expectedIC50','acuteRaw','lp','vlBetaRaw','cd4BetaRaw','superBetaRaw'),include=FALSE)
 print(fitB$fit,pars=c('nadirTimeRaw','nadirChangeRaw','expectedIC50','acuteRaw','lp','vlBetaRaw','cd4BetaRaw','superBetaRaw'),include=FALSE)
@@ -296,9 +296,10 @@ plotPointsLine<-function(dat,ic50,ii,ylab,addTitle=TRUE,sims=NULL,addFit=TRUE,fi
     segments(rep(superTimes[ii]/7,3)+c(-7,0,7),c(topY,baseY,topY),rep(superTimes[ii]/7,3)+c(0,7,-7),c(baseY,topY,topY),lwd=1.2)
   }
   #points(thisDat$time/7,thisIc50,pch=21+thisDat$bulk,bg=patCols[ii])
-  points(thisDat$time/7,thisIc50,pch=21+thisDat$bulk,bg=c(NA,ifelse(any(!thisDat$bulk&!thisDat$qvoa),'#ffff3399',NA),sprintf('%scc',classCol['qvoa']))[1+thisDat$bulk+2*thisDat$qvoa],cex=1+.2*thisDat$qvoa)
+  #points(thisDat$time/7,thisIc50,pch=21+thisDat$bulk,bg=c(NA,ifelse(any(!thisDat$bulk&!thisDat$qvoa),'#ffff3399',NA),sprintf('%scc',classCol['qvoa']))[1+thisDat$bulk+2*thisDat$qvoa],cex=1+.2*thisDat$qvoa)
   normCol<-patCols[ii]
-  for(isBulk in sort(unique(thisDat$bulk)))dnar::withAs(xx=cbind(thisDat,thisIc50)[thisDat$bulk==isBulk,],points(xx$time/7,xx$thisIc50,pch=21+xx$bulk,bg=c(normCol,ifelse(any(!thisDat$bulk&!thisDat$qvoa),'#ffff33',normCol),sprintf('%s',classCol['qvoa']))[1+xx$bulk+2*xx$qvoa],cex=1+.1*xx$qvoa))
+  for(isBulk in sort(unique(thisDat$bulk)))dnar::withAs(xx=cbind(thisDat,thisIc50)[thisDat$bulk==isBulk,],points(xx$time/7,xx$thisIc50,pch=21+xx$bulk,bg=c(normCol,ifelse(any(!thisDat$bulk&!thisDat$qvoa),normCol,normCol),sprintf('%s',classCol['qvoa']))[1+xx$bulk+2*xx$qvoa],cex=1+.1*xx$qvoa))
+  #for(isBulk in sort(unique(thisDat$bulk)))dnar::withAs(xx=cbind(thisDat,thisIc50)[thisDat$bulk==isBulk,],points(xx$time/7,xx$thisIc50,pch=21+xx$bulk,bg=c(normCol,ifelse(any(!thisDat$bulk&!thisDat$qvoa),'#ffff33',normCol),sprintf('%s',classCol['qvoa']))[1+xx$bulk+2*xx$qvoa],cex=1+.1*xx$qvoa))
 }
 plotCondenseIfn<-function(dat,ic50,ylab,showLegend=TRUE,sims=NULL,addFit=TRUE,filterAfter=TRUE,subplotLetters=LETTERS[1:3],superTimes=superTimes,artStarts=NULL,ylimExpand=c(1,1)){
   par(mar=c(0,0,0,0))
