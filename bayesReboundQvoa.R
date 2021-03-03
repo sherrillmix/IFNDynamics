@@ -101,7 +101,6 @@ betaAdjust<-exp(mean(as.matrix(fitB_withMix$fit)[,sprintf('studyMeans[%d]',fitB_
 #save(fitA_withMix,fitB_withMix,file='work/mixFits_2020-05-14.Rdat')
 #load('work/mixFits_2020-05-14.Rdat')
 #save(fitA_withMix,fitB_withMix,file='work/mixFitsUpdate_2020-07-20.Rdat')
-
 }
 
 #pdf('test.pdf');plotSummary(fitA_withMix,addAcute=FALSE);plotSummary(fitB_withMix,addAcute=FALSE);dev.off()
@@ -116,15 +115,16 @@ mean(zz[,'preProp',drop=FALSE]*zz[,'stateMeans[2]']+(1-zz[,'preProp',drop=FALSE]
 
 
 #ordering<-c('Pre-ATI A06','Post-ATI A06','Pre-ATI A08','Rebound A08','Post-ATI A08','Pre-ATI A09','Rebound A09','Post-ATI A09','Pre-ATI 9201','Rebound 9201','Pre-ATI 9202','Rebound 9202','Pre-ATI 9203','Rebound 9203','Pre-ATI 9207','Rebound 9207','Rebound A08','Rebound S-22','Rebound S-23','Rebound S-30','Rebound 601','Rebound BEAT-004','Rebound BEAT-030','Rebound BEAT-044','Outgrowth B106','Outgrowth B199','Outgrowth MM14','Outgrowth MM15','Outgrowth MM23','Outgrowth MM34','Outgrowth MM40','Outgrowth MM34','Acute','1 Year','Nadir','Last','Acute Recipients','Chronic Donors')
-ordering<-c('Pre-ATI A06','Post-ATI A06','Pre-ATI A08','Rebound A08','Post-ATI A08','Pre-ATI A09','Rebound A09','Post-ATI A09','Pre-ATI 9241','Rebound 9241','Pre-ATI 9242','Rebound 9242','Pre-ATI 9243','Rebound 9243','Pre-ATI 9244','Rebound 9244','Rebound A08','Rebound S22','Rebound S23','Rebound S30','Rebound 601','Rebound 004','Rebound 030','Rebound 044','Outgrowth B106','Outgrowth B199','Outgrowth MM14','Outgrowth MM15','Outgrowth MM23','Outgrowth MM34','Outgrowth MM40','Outgrowth MM34','Acute','Chronic','Acute Recipients','Chronic Donors')
-pos<-structure(1:length(unique(combined$label[!is.na(combined$label)])),.Names=unique(combined$label[!is.na(combined$label)][orderIn(combined$label[!is.na(combined$label)],ordering)]))
-posStudy<-sapply(names(pos),function(xx)combined[combined$label==xx&!is.na(combined$label),'study'][1])
-posPat<-sapply(names(pos),function(xx)combined[combined$label==xx&!is.na(combined$label),'pat'][1])
-posPat['Chronic']<-'XXX'
+ordering<-c('Pre-ATI A06','Post-ATI A06','Pre-ATI A08','Rebound A08','Post-ATI A08','Pre-ATI A09','Rebound A09','Post-ATI A09','Pre-ATI 9241','Rebound 9241','Pre-ATI 9242','Rebound 9242','Pre-ATI 9243','Rebound 9243','Pre-ATI 9244','Rebound 9244','Rebound A08','Rebound S22','Rebound S23','Rebound S30','Rebound 601','Rebound 004','Rebound 030','Rebound 044','Outgrowth B106','Outgrowth B199','Outgrowth MM14','Outgrowth MM15','Outgrowth MM23','Outgrowth MM34','Outgrowth MM40','Outgrowth MM34','Acute','Early','Nadir','Late','Last','Chronic','Acute Recipients','Chronic Donors')
+pos<-structure(1:length(unique(combined$labelAlpha[!is.na(combined$labelAlpha)])),.Names=unique(combined$labelAlpha[!is.na(combined$labelAlpha)][orderIn(combined$labelAlpha[!is.na(combined$labelAlpha)],ordering)]))
+posStudy<-sapply(names(pos),function(xx)combined[combined$labelAlpha==xx&!is.na(combined$labelAlpha),'study'][1])
+posPat<-sapply(names(pos),function(xx)combined[combined$labelAlpha==xx&!is.na(combined$labelAlpha),'pat'][1])
+posPat[c('Early','Late','Nadir','Last')]<-c('Early','Late','Nadir','Last')
 studySpace<-.5
 patSpace<--.25
 pos<-pos+cumsum(c(0,posStudy[-length(posStudy)]!=posStudy[-1]))*studySpace
 pos<-pos+cumsum(c(0,posPat[-length(posPat)]==posPat[-1]))*patSpace
+pos<-pos+cumsum(posPat %in% c('Acute','Early','Late','Nadir','Last','Chronic Donors'))*.2
 plotSummary<-function(fit,ylab='IFNa2 IC50 (pg/ml)',mar=c(6.9,4,.1,.1),xWidth=.4,addAcute=TRUE,xaxis=TRUE,logYAxis=TRUE,reps=2,cols=structure(rep('#00000033',nStates),.Names=stateNames),combine24=FALSE,cols2=cols,quantRange=c(.025,.975),subtract12=FALSE){
   if(combine24){
     extraState<-tail(names(fit$states),1)
@@ -190,7 +190,7 @@ plotSummary<-function(fit,ylab='IFNa2 IC50 (pg/ml)',mar=c(6.9,4,.1,.1),xWidth=.4
   denses3<-apply(statesIso,2,makeDense)
   #denses2<-lapply(1:ncol(expects),function(ii)makeDense(rnorm(n*10,expects[,ii],sds[,fit$dat$states[ii]])))
   par(mar=mar)
-  plot(1,1,log='y',yaxt='n',ylab=ylab,xlab='',xaxt='n',type='n',cex.lab=1.2,ylim=ylim,xlim=c(.5,nStates+.5),las=1,mgp=c(2.45,1,0))
+  plot(1,1,log='y',yaxt='n',ylab=ylab,xlab='',xaxt='n',type='n',cex.lab=1.2,ylim=ylim,xlim=c(.5,nStates+.5),las=1,mgp=c(2.3,1,0))
   if(logYAxis)logAxis(las=1,mgp=c(3,.6,0))
   else axis(2,c(.2,.5,1,2,5),c('0.2','0.5','1','2','5'),las=1)
   for(ii in 1:nStates){
@@ -202,10 +202,10 @@ plotSummary<-function(fit,ylab='IFNa2 IC50 (pg/ml)',mar=c(6.9,4,.1,.1),xWidth=.4
   if(!addAcute)abline(h=1,lty=2)
   return(stateNames)
 }
-pdf('out/voaRebound_bayesSummary.pdf',height=6,width=7)
+pdf('out/voaRebound_bayesSummary.pdf',height=6,width=7.3)
   layout(rbind(1:2,0,3:4),width=c(8,2.2),height=c(1,.01,1))
   #classCols<-structure(c(rep("#9EC0E1E6",3),rep("#77BCA9B3",2), rep("#9FB755B3",2), "#84C47DB3", "#B99A4BB3", "#C77C62B3", "#E581A0E6"), .Names = c("Outgrowth","Pre-ATI","Post-ATI","Acute Recipients","Acute", "Chronic Donors", "Chronic","1 Year", "Nadir", "Last", "Rebound")) 
-  classCols<-structure(c(rep(classCol['qvoa'],2),classCol['postQvoa'],rep("#aaaaaa",2), rep("#DDDDDD",2), "#aaaaaa", "#aaaaaa", "#aaaaaa", classCol['rebound'],patCols), .Names = c("Outgrowth","Pre-ATI","Post-ATI","Acute Recipients","Acute", "Chronic Donors", "Chronic","1 Year", "Nadir", "Last", "Rebound",names(patCols))) 
+  classCols<-structure(c(rep(classCol['qvoa'],2),classCol['postQvoa'],rep("#999999",2), rep("#DDDDDD",6), classCol['rebound'],patCols), .Names = c("Outgrowth","Pre-ATI","Post-ATI","Acute Recipients","Acute", "Chronic Donors", "Chronic","Early", "Nadir", "Late","Last", "Rebound",names(patCols))) 
   stCols<-sprintf('%s99',substring(classCols,1,7))
   stCols2<-sprintf('%s33',substring(classCols,1,7))
   names(stCols)<-names(stCols2)<-names(classCols)
@@ -213,16 +213,16 @@ pdf('out/voaRebound_bayesSummary.pdf',height=6,width=7)
   plotFunc<-function(combined,ic50Col,fit,ylab='IFNa2 IC50 (pg/ml)',letters=LETTERS[1:2]){
     cex.axis<-1
     out<-withAs(combined=combined[!is.na(combined[,ic50Col])&!is.na(combined$label),],
-      plotQvoa2(combined[,ic50Col],combined$label,pos,ifelse(combined$displayClass %in% c(),combined$pat,combined$displayClass),combined$study,combined$speed,ylab=ylab,mar=c(5.5,3.7,.1,.1),cex.axis=cex.axis,startDown=TRUE,pats=ifelse(combined$study %in% c('Transmission','MM'),NA,combined$pat),classCols=classCols,labelXAxis=FALSE)
+      plotQvoa2(combined[,ic50Col],combined$labelAlpha,pos,ifelse(combined$displayClassAlpha %in% c(),combined$pat,combined$displayClassAlpha),combined$study,combined$speed,ylab=ylab,mar=c(5.5,4.3,.1,.1),cex.axis=cex.axis,startDown=TRUE,pats=ifelse(combined$study %in% c('Transmission','MM'),NA,combined$pat),classCols=classCols,labelXAxis=FALSE,mgp=c(2.1,1,0))
     )
     patPos<-tapply(out$pos,sub('BEAT-','',sub('.* ','',names(out$pos))),mean)
     patPos<-patPos[!grepl('^Acute|^Month|^Recipient|^Donor|^Nadir|^Year|^Last|^Chronic',names(patPos))]
     slantAxis(1,patPos,names(patPos),cex=cex.axis,location=.8)
-    text(grconvertX(par('fig')[1]+diff(par('fig')[1:2])*.0025,from='ndc'),grconvertY(par('fig')[4]-diff(par('fig')[3:4])*.005,from='ndc'),letters[1],xpd=NA,adj=c(0,1),cex=2)
+    text(grconvertX(.0001,from='ndc'),grconvertY(par('fig')[4]-diff(par('fig')[3:4])*.005,from='ndc'),letters[1],xpd=NA,adj=c(0,1),cex=2)
     #plotSummary(fitA)
     states<-plotSummary(fit,addAcute=FALSE,ylab='Fold change from acute',mar=c(4.5,4,.1,1.35),cols=stCols,cols2=stCols2,xaxis=FALSE,combine24=TRUE)
-    slantAxis(1,1:length(states),sub('Outgrowth','Pre-ATI',states),textOffsets=c(-.2,-.2,-.2,-.2),location=.7,axisArgs=list(tcl=-.4),srt=-45,cex=cex.axis)
-    text(grconvertX(par('fig')[1]+diff(par('fig')[1:2])*.03,from='ndc'),grconvertY(par('fig')[4]-diff(par('fig')[3:4])*.005,from='ndc'),letters[2],xpd=NA,adj=c(0,1),cex=2)
+    slantAxis(1,1:length(states),sub('Outgrowth','Pre-ATI',states),textOffsets=c(-.22,-.22,-.22,-.22),location=.7,axisArgs=list(tcl=-.4),srt=-45,cex=cex.axis)
+    text(grconvertX(par('fig')[1]+diff(par('fig')[1:2])*.01,from='ndc'),grconvertY(par('fig')[4]-diff(par('fig')[3:4])*.005,from='ndc'),letters[2],xpd=NA,adj=c(0,1),cex=2)
   }
   tmp<-combined
   tmp$alphaAdjust<-tmp$ic50_IFNa2/ifelse(tmp$study=='Transmission',alphaAdjust,1)
@@ -233,7 +233,7 @@ pdf('out/voaRebound_bayesSummary.pdf',height=6,width=7)
   #combined$ic50_IFNb[combo$study=='Transmission']<-combo$beta[combo$study=='Transmission']/6386*2230
   #plotSummary(fitB,ylab='IFNb IC50 (pg/ml)')
 dev.off()
-file.copy('out/voaRebound_bayesSummary.pdf','out/Fig._4.pdf',overwrite=TRUE)
+file.copy('out/voaRebound_bayesSummary.pdf','out/Fig._5.pdf',overwrite=TRUE)
 #system('pdfjam out/voaRebound_bayesSummary.pdf --nup 1x2 --outfile tmp.pdf;pdfcrop tmp.pdf out/Fig._4.pdf')
 
 
@@ -270,3 +270,38 @@ print(meanCrI(matB[,'preProp']>matB[,'postProp']))
 
 mean(mat[,'preProp',drop=FALSE]*mat[,'stateMeans[2]']+(1-mat[,'preProp',drop=FALSE])*mat[,'stateMeans[4]']>mat[,'postProp',drop=FALSE]*mat[,'stateMeans[2]']+(1-mat[,'postProp',drop=FALSE])*mat[,'stateMeans[4]'])
 mean(matB[,'preProp',drop=FALSE]*matB[,'stateMeans[2]']+(1-matB[,'preProp',drop=FALSE])*matB[,'stateMeans[4]']>matB[,'postProp',drop=FALSE]*matB[,'stateMeans[2]']+(1-matB[,'postProp',drop=FALSE])*matB[,'stateMeans[4]'])
+
+pdf('out/reboundOnly.pdf',height=5,width=5)
+  layout(rbind(1,0,2),width=c(8),height=c(1,.01,1))
+  #classCols<-structure(c(rep("#9EC0E1E6",3),rep("#77BCA9B3",2), rep("#9FB755B3",2), "#84C47DB3", "#B99A4BB3", "#C77C62B3", "#E581A0E6"), .Names = c("Outgrowth","Pre-ATI","Post-ATI","Acute Recipients","Acute", "Chronic Donors", "Chronic","1 Year", "Nadir", "Last", "Rebound")) 
+  classCols<-structure(c(rep(classCol['qvoa'],2),classCol['postQvoa'],rep("#aaaaaa",2), rep("#DDDDDD",2), "#aaaaaa", "#aaaaaa", "#aaaaaa", classCol['rebound'],patCols), .Names = c("Outgrowth","Pre-ATI","Post-ATI","Acute Recipients","Acute", "Chronic Donors", "Chronic","1 Year", "Nadir", "Last", "Rebound",names(patCols))) 
+  stCols<-sprintf('%s99',substring(classCols,1,7))
+  stCols2<-sprintf('%s33',substring(classCols,1,7))
+  names(stCols)<-names(stCols2)<-names(classCols)
+  names(stCols2)[names(stCols2)=='Donor']<-names(stCols)[names(stCols)=='Donor']<-'Chronic'
+  plotFunc<-function(combined,ic50Col,fit,ylab='IFNa2 IC50 (pg/ml)',letters=LETTERS[1:2]){
+    cex.axis<-1
+    thisOrder<-ordering[grep('Rebound',ordering)]
+    thisOrder<-thisOrder[order(!grepl('Rebound S[23][0-9]$',thisOrder))]
+    studySpace<-1.5
+    patSpace<-1.3
+    pos<-structure(1:length(unique(combined$label[!is.na(combined$label)&combined$class=='Rebound'])),.Names=unique(combined$label[!is.na(combined$label)&combined$class=='Rebound'][orderIn(combined$label[!is.na(combined$label)&combined$class=='Rebound'],thisOrder)]))*patSpace
+    posStudy<-sapply(names(pos),function(xx)combined[combined$label==xx&!is.na(combined$label),'study'][1])
+    pos<-pos+cumsum(c(0,posStudy[-length(posStudy)]!=posStudy[-1]))*studySpace
+    studyPos<-tapply(pos,posStudy,mean)
+    studyMin<-tapply(pos,posStudy,min)
+    par(mgp=c(2.1,.6,0),tcl=-.3)
+    out<-withAs(combined=combined[!is.na(combined[,ic50Col])&!is.na(combined$label)&combined$class=='Rebound',],
+      plotQvoa2(combined[,ic50Col],combined$label,pos,combined$displayClass,combined$study,combined$speed,ylab=ylab,mar=c(3.5,3.7,.1,.1),cex.axis=cex.axis,startDown=TRUE,pats=combined$pats,classCols=classCols,labelXAxis=FALSE,addStudyLines=FALSE,mgp=c(2.1,.8,0))
+    )
+    axis(1,studyPos,sub('INTERRUPT','Interrupts',names(studyPos)),cex=cex.axis)
+    abline(v=sort(studyMin)[-1]-(patSpace+studySpace)/2)
+    #text(grconvertX(par('fig')[1]+diff(par('fig')[1:2])*.0025,from='ndc'),grconvertY(par('fig')[4]-diff(par('fig')[3:4])*.005,from='ndc'),letters[1],xpd=NA,adj=c(0,1),cex=2)
+  }
+  tmp<-combined
+  tmp$alphaAdjust<-tmp$ic50_IFNa2
+  tmp$betaAdjust<-tmp$ic50_IFNb
+  plotFunc(tmp,'alphaAdjust',fitA_withMix,ylab=expression('IFN'*alpha*'2 IC'[50]*' (pg/ml)'))
+  plotFunc(tmp,'betaAdjust',fitB_withMix,ylab=expression('IFN'*beta*' IC'[50]*' (pg/ml)'),letters=LETTERS[3:4])
+dev.off()
+
